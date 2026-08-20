@@ -6,7 +6,7 @@ import re
 
 st.set_page_config(page_title="競馬予想10 クッション値Vr", page_icon="🏇", layout="wide")
 
-# カスタムCSS（スマホ最適化）
+# カスタムCSS（スマホ最適化・順位カラーバッジ完備）
 st.markdown("""
 <style>
     .reportview-container .main .block-container { max-width: 100%; padding: 1rem; }
@@ -19,6 +19,12 @@ st.markdown("""
     .badge-wood { background-color: #3A86FF; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-combo { background-color: #7209B7; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-gtv { background-color: #FFB703; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    
+    /* 指数順位カラーバッジ */
+    .rank-1 { background-color: #FFD700; color: #000000; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .rank-2 { background-color: #0077B6; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .rank-3 { background-color: #2B9348; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .rank-other { color: #CCCCCC; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -116,6 +122,7 @@ if df_raw is not None:
                     l4, l3, l2, l1 = r[12], r[13], r[14], r[15]
                     is_acc = False
                     p_tag = "通常"
+                    # 厳格加速判定: 4F<=56.0s & 1F<=13.0s & Lap4>Lap3>Lap2>Lap1
                     if t4 <= 56.0 and l1 <= 13.0 and (l4 > l3 > l2 > l1 > 0):
                         is_acc = True
                         if l1 <= 11.9: p_tag = "A3(終い11秒台🔥)"
@@ -189,7 +196,7 @@ if df_raw is not None:
     df["Is_F1_Lap124"] = (df["FRank"] == 1) & (df["Hanro_1F"] > 0) & (df["Hanro_1F"] <= 12.4)
     df["Is_Haran_Trigger"] = (df["PopRank"] >= 10) & (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
-    # クッション値×種牡馬バイアス判定
+    # クッション値×種牡馬バイアス判定（PDF完全準拠）
     def check_sire_bias(row):
         sire = row["Sire"]
         c_cat = cushion_cat
@@ -229,17 +236,27 @@ if df_raw is not None:
 
     df["Fup2Tag"] = df.apply(check_fup2, axis=1)
 
-    # ================= レース番号の自然順（開催場×1R〜12R昇順）ソート =================
+    # 順位カラーHTML生成ヘルパー関数
+    def get_rank_badge_html(rank_val):
+        r = int(rank_val)
+        if r == 1:
+            return f"<span class='rank-1'>1位</span>"
+        elif r == 2:
+            return f"<span class='rank-2'>2位</span>"
+        elif r == 3:
+            return f"<span class='rank-3'>3位</span>"
+        elif r > 0:
+            return f"<span class='rank-other'>{r}位</span>"
+        return "<span class='rank-other'>-</span>"
+
+    # レース自然順ソート
     def parse_race_sort_key(race_id_str):
-        # 開催場優先順位（例: 札幌, 函館, 福島, 新潟, 東京, 中山, 中京, 京都, 阪神, 小倉）
         venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
         v_rank = 99
         for i, v in enumerate(venue_order):
             if race_id_str.startswith(v):
-                v_rank = i // 2  # 略称と通常名を同格化
+                v_rank = i // 2
                 break
-        
-        # レース番号（数字）を抽出
         r_nums = re.findall(r'\d+', race_id_str)
         r_num = int(r_nums[-1]) if r_nums else 0
         return (v_rank, r_num, race_id_str)
@@ -280,7 +297,7 @@ if df_raw is not None:
     c4.metric("ダミー消し馬", f"{len(race_df[race_df['Fup2Tag'].str.contains('消し')])}頭")
 
     st.write("---")
-    st.subheader("📋 出走馬カード（スマホ最適化）")
+    st.subheader("📋 出走馬カード（スマホ最適化・順位カラー表示）")
 
     search_query = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", "")
     if search_query:
@@ -303,14 +320,19 @@ if df_raw is not None:
             if h["Fup2Tag"]: tags.append(f"<span class='badge-bias'>{h['Fup2Tag']}</span>")
             
             c_tags.markdown(" ".join(tags), unsafe_allow_html=True)
-            
+
+            f_badge = get_rank_badge_html(h['FRank'])
+            arms_badge = get_rank_badge_html(h['ARMS2Rank'])
+            tua_badge = get_rank_badge_html(h['TUARank'])
+            s_badge = get_rank_badge_html(h['SRank'])
+
             st.markdown(f"""
             - **陣営/血統**: **{h['Trainer']}** 厩舎 / **{h['Jockey']}** 騎手 / 父: **{h['Sire']}**
             - **坂路調教**: 4F **{h['Hanro_4F']:.1f}s** - 3F {h['Hanro_3F']:.1f}s - 2F {h['Hanro_2F']:.1f}s - 終い **{h['Hanro_1F']:.1f}s**（{h['Hanro_Pattern']}）
             - **ウッド調教**: {h['Wood_Track']} 6F **{h['Wood_6F']:.1f}s** - 終い **{h['Wood_1F']:.1f}s**
-            - **能力指数**: F: **{h['FIndex']:.1f}** ({int(h['FRank'])}位) | ARMS2: **{h['ARMS2Index']:.1f}** ({int(h['ARMS2Rank'])}位) | TUA: **{h['TUAIndex']:.1f}** ({int(h['TUARank'])}位) | S: {h['SIndex']:.1f}
+            - **能力指数**: F: **{h['FIndex']:.1f}** ({f_badge}) | ARMS2: **{h['ARMS2Index']:.1f}** ({arms_badge}) | TUA: **{h['TUAIndex']:.1f}** ({tua_badge}) | S: **{h['SIndex']:.1f}** ({s_badge})
             - **Fup2数値**: **{int(h['Fup2Val'])}点** | 人気: {int(h['PopRank'])}番人気
-            """)
+            """, unsafe_allow_html=True)
             st.write("---")
 else:
     st.info("💡 GitHubの `data/` フォルダに有効なデータが配置されるのを待機しています。")
