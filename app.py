@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import re
 
 st.set_page_config(page_title="競馬予想10 クッション値Vr", page_icon="🏇", layout="wide")
 
@@ -45,7 +46,7 @@ def get_cushion_category(v_name, c_val):
 cushion_cat = get_cushion_category(venue, cushion_val)
 st.sidebar.info(f"📍 判定帯: **{cushion_cat}**")
 
-# CSV安全読み込み関数（複数ファイル名候補・空ファイル・文字コード自動対応）
+# CSV安全読み込み関数
 def load_csv_candidates(candidates):
     for path in candidates:
         if os.path.exists(path) and os.path.getsize(path) > 0:
@@ -60,7 +61,6 @@ def load_csv_candidates(candidates):
                     continue
     return None
 
-# 日本語名・英字名の両方を自動検知
 SHUTSUBA_CANDIDATES = ["data/出馬表_指数.csv", "data/shutsuba.csv", "data/出馬表.csv"]
 HANRO_CANDIDATES = ["data/出馬表_坂路.csv", "data/hanro.csv", "data/坂路.csv"]
 WOOD_CANDIDATES = ["data/出馬表_ウッド.csv", "data/wood.csv", "data/ウッド.csv"]
@@ -69,7 +69,6 @@ GTV_CANDIDATES = ["data/GTV馬.csv", "data/gtv.csv", "data/GTV.csv"]
 df_raw = load_csv_candidates(SHUTSUBA_CANDIDATES)
 
 if df_raw is not None:
-    # 出走表列マッピング
     col_names = [
         "RaceID", "TrackType", "Distance", "HorseNum", "HorseName", "Affiliation", 
         "Trainer", "Jockey", "PopRank", "GTV", "Fup2Val", "Fup2Rank", 
@@ -79,18 +78,15 @@ if df_raw is not None:
     df = df_raw.iloc[:, :len(col_names)].copy()
     df.columns = col_names[:df.shape[1]]
     
-    # 文字列クリーニング
     for col in ["RaceID", "TrackType", "HorseName", "Trainer", "Jockey", "Sire", "GTV"]:
         if col in df.columns:
             df[col] = df[col].astype(str).str.strip()
             
-    # 数値型変換
     num_cols = ["HorseNum", "PopRank", "Fup2Val", "Fup2Rank", "SIndex", "SRank", "FIndex", "FRank", "ARMS2Index", "ARMS2Rank", "TUAIndex", "TUARank"]
     for c in num_cols:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    # 調教初期値
     df["Hanro_4F"] = 0.0
     df["Hanro_1F"] = 0.0
     df["Hanro_2F"] = 0.0
@@ -103,7 +99,7 @@ if df_raw is not None:
     df["Wood_Track"] = "なし"
     df["Is_Wood"] = False
 
-    # ② 坂路調教CSV自動マージ
+    # ② 坂路調教マージ
     df_h = load_csv_candidates(HANRO_CANDIDATES)
     if df_h is not None:
         try:
@@ -120,7 +116,6 @@ if df_raw is not None:
                     l4, l3, l2, l1 = r[12], r[13], r[14], r[15]
                     is_acc = False
                     p_tag = "通常"
-                    # 厳格加速判定: 4F<=56.0s & 1F<=13.0s & Lap4>Lap3>Lap2>Lap1
                     if t4 <= 56.0 and l1 <= 13.0 and (l4 > l3 > l2 > l1 > 0):
                         is_acc = True
                         if l1 <= 11.9: p_tag = "A3(終い11秒台🔥)"
@@ -143,7 +138,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ③ ウッド調教CSV自動マージ
+    # ③ ウッド調教マージ
     df_w = load_csv_candidates(WOOD_CANDIDATES)
     if df_w is not None:
         try:
@@ -170,7 +165,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ④ GTV/オッズCSV自動マージ
+    # ④ GTV/オッズマージ
     df_g = load_csv_candidates(GTV_CANDIDATES)
     if df_g is not None:
         try:
@@ -194,7 +189,7 @@ if df_raw is not None:
     df["Is_F1_Lap124"] = (df["FRank"] == 1) & (df["Hanro_1F"] > 0) & (df["Hanro_1F"] <= 12.4)
     df["Is_Haran_Trigger"] = (df["PopRank"] >= 10) & (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
-    # クッション値×種牡馬バイアス判定（PDF完全同期）
+    # クッション値×種牡馬バイアス判定
     def check_sire_bias(row):
         sire = row["Sire"]
         c_cat = cushion_cat
@@ -214,7 +209,6 @@ if df_raw is not None:
 
     df["SireBias"] = df.apply(check_sire_bias, axis=1)
 
-    # Fup2地雷/確変判定
     def check_fup2(row):
         val = row["Fup2Val"]
         pop = row["PopRank"]
@@ -235,7 +229,27 @@ if df_raw is not None:
 
     df["Fup2Tag"] = df.apply(check_fup2, axis=1)
 
-    # ================= サイドバー: 指数×調教 掛け合わせ検索 =================
+    # ================= レース番号の自然順（開催場×1R〜12R昇順）ソート =================
+    def parse_race_sort_key(race_id_str):
+        # 開催場優先順位（例: 札幌, 函館, 福島, 新潟, 東京, 中山, 中京, 京都, 阪神, 小倉）
+        venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
+        v_rank = 99
+        for i, v in enumerate(venue_order):
+            if race_id_str.startswith(v):
+                v_rank = i // 2  # 略称と通常名を同格化
+                break
+        
+        # レース番号（数字）を抽出
+        r_nums = re.findall(r'\d+', race_id_str)
+        r_num = int(r_nums[-1]) if r_nums else 0
+        return (v_rank, r_num, race_id_str)
+
+    unique_races = list(df["RaceID"].unique())
+    sorted_races = sorted(unique_races, key=parse_race_sort_key)
+
+    # ================= サイドバー: 検索・選択UI =================
+    selected_race = st.sidebar.selectbox("🏁 レースを選択 (開催順・1R〜12R昇順)", sorted_races)
+
     st.sidebar.markdown("---")
     st.sidebar.subheader("🎯 指数 × 調教 掛け合わせ抽出")
     combo_sss_acc = st.sidebar.checkbox("SSS級 × 坂路完全加速 (A1〜A3)")
@@ -247,9 +261,7 @@ if df_raw is not None:
     combo_sire_acc = st.sidebar.checkbox("ナダル/スクリーンH × 坂路完全加速")
 
     # ================= UI 描画 =================
-    races = df["RaceID"].unique()
-    selected_race = st.sidebar.selectbox("🏁 レースを選択", races)
-    race_df = df[df["RaceID"] == selected_race].copy()
+    race_df = df[df["RaceID"] == selected_race].sort_values("HorseNum").copy()
 
     # フィルター適用
     if combo_sss_acc: race_df = race_df[race_df["Is_SSS"] & race_df["Is_Hanro_Acc"]]
