@@ -54,7 +54,7 @@ def load_csv_from_path(file_path):
     except:
         return pd.read_csv(file_path, encoding="utf-8", header=None)
 
-# GitHub上の data/ フォルダ内CSVを自動検知
+# パス設定
 SHUTSUBA_PATH = "data/shutsuba.csv"
 HANRO_PATH = "data/hanro.csv"
 WOOD_PATH = "data/wood.csv"
@@ -63,7 +63,7 @@ GTV_PATH = "data/gtv.csv"
 df_raw = load_csv_from_path(SHUTSUBA_PATH)
 
 if df_raw is not None:
-    # 出走表列マッピング
+    # 出走表列マッピング（全24項目完全同期）
     col_names = [
         "RaceID", "TrackType", "Distance", "HorseNum", "HorseName", "Affiliation", 
         "Trainer", "Jockey", "PopRank", "GTV", "Fup2Val", "Fup2Rank", 
@@ -296,4 +296,3 @@ if df_raw is not None:
             st.write("---")
 else:
     st.warning("⚠️ GitHubの `data/shutsuba.csv` が見つかりません。リポジトリに `data/` フォルダを作成し、CSVを配置してください。")
-Windows側での開催日運用手順（これだけでiPhoneに自動反映）
