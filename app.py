@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import os
 
 st.set_page_config(page_title="競馬予想10 クッション値Vr", page_icon="🏇", layout="wide")
 
@@ -11,7 +12,7 @@ st.markdown("""
     .stMetric { background-color: #1E222D; padding: 10px; border-radius: 8px; }
     .badge-sss { background-color: #D90429; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-four { background-color: #B5179E; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .badge-bias { background-color: #2B9348; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .badge-bias { background-color: #2B9348; color: white; padding: 2px 6px; border-radius: 4px; }
     .badge-risk { background-color: #555555; color: #FFAAAA; padding: 2px 6px; border-radius: 4px; }
     .badge-hanro { background-color: #FF8500; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-wood { background-color: #3A86FF; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
@@ -44,27 +45,24 @@ def get_cushion_category(v_name, c_val):
 cushion_cat = get_cushion_category(venue, cushion_val)
 st.sidebar.info(f"📍 判定帯: **{cushion_cat}**")
 
-# CSV 4ファイルアップローダー
-st.subheader("📂 解析データCSVアップロード（全4ファイル）")
-cu1, cu2 = st.columns(2)
-with cu1:
-    shutsuba_file = st.file_uploader("① 出走表CSV（全24項目）", type=["csv", "txt"])
-    hanro_file = st.file_uploader("② 坂路調教CSV", type=["csv", "txt"])
-with cu2:
-    wood_file = st.file_uploader("③ ウッド調教CSV（南W/CW）", type=["csv", "txt"])
-    gtv_file = st.file_uploader("④ GTV/オッズCSV", type=["csv", "txt"])
-
-# CSV読み込み共通関数
-def load_csv_safely(file):
+# CSV自動読み込み共通関数
+def load_csv_from_path(file_path):
+    if not os.path.exists(file_path):
+        return None
     try:
-        return pd.read_csv(file, encoding="cp932", header=None)
+        return pd.read_csv(file_path, encoding="cp932", header=None)
     except:
-        file.seek(0)
-        return pd.read_csv(file, encoding="utf-8", header=None)
+        return pd.read_csv(file_path, encoding="utf-8", header=None)
 
-if shutsuba_file is not None:
-    df = load_csv_safely(shutsuba_file)
-    
+# GitHub上の data/ フォルダ内CSVを自動検知
+SHUTSUBA_PATH = "data/shutsuba.csv"
+HANRO_PATH = "data/hanro.csv"
+WOOD_PATH = "data/wood.csv"
+GTV_PATH = "data/gtv.csv"
+
+df_raw = load_csv_from_path(SHUTSUBA_PATH)
+
+if df_raw is not None:
     # 出走表列マッピング
     col_names = [
         "RaceID", "TrackType", "Distance", "HorseNum", "HorseName", "Affiliation", 
@@ -72,7 +70,7 @@ if shutsuba_file is not None:
         "SIndex", "SRank", "FIndex", "FRank", "ARMS2Index", "ARMS2Rank", 
         "TUAIndex", "TUARank", "ResultRank", "Sire"
     ]
-    df = df.iloc[:, :len(col_names)]
+    df = df_raw.iloc[:, :len(col_names)].copy()
     df.columns = col_names[:df.shape[1]]
     
     # 文字列クリーニング
@@ -99,9 +97,9 @@ if shutsuba_file is not None:
     df["Wood_Track"] = "なし"
     df["Is_Wood"] = False
 
-    # ② 坂路調教CSVマージ
-    if hanro_file is not None:
-        df_h = load_csv_safely(hanro_file)
+    # ② 坂路調教CSV自動マージ
+    df_h = load_csv_from_path(HANRO_PATH)
+    if df_h is not None:
         try:
             h_name_idx = 4 if df_h.shape[1] > 4 else 0
             df_h[h_name_idx] = df_h[h_name_idx].astype(str).str.strip()
@@ -137,11 +135,11 @@ if shutsuba_file is not None:
                     df.at[idx, "Hanro_Pattern"] = hanro_dict[hn]["Pattern"]
                     df.at[idx, "Is_Hanro_Acc"] = hanro_dict[hn]["Is_Acc"]
         except Exception as e:
-            st.warning(f"坂路調教CSV解析警告: {e}")
+            st.sidebar.warning(f"坂路データ解析通知: {e}")
 
-    # ③ ウッド調教CSVマージ
-    if wood_file is not None:
-        df_w = load_csv_safely(wood_file)
+    # ③ ウッド調教CSV自動マージ
+    df_w = load_csv_from_path(WOOD_PATH)
+    if df_w is not None:
         try:
             w_name_idx = 4 if df_w.shape[1] > 4 else 0
             df_w[w_name_idx] = df_w[w_name_idx].astype(str).str.strip()
@@ -164,11 +162,11 @@ if shutsuba_file is not None:
                     df.at[idx, "Wood_6F"] = wood_dict[hn]["Total"]
                     df.at[idx, "Wood_1F"] = wood_dict[hn]["1F"]
         except Exception as e:
-            st.warning(f"ウッド調教CSV解析警告: {e}")
+            st.sidebar.warning(f"ウッドデータ解析通知: {e}")
 
-    # ④ GTV/オッズCSVマージ
-    if gtv_file is not None:
-        df_g = load_csv_safely(gtv_file)
+    # ④ GTV/オッズCSV自動マージ
+    df_g = load_csv_from_path(GTV_PATH)
+    if df_g is not None:
         try:
             g_name_idx = 4 if df_g.shape[1] > 4 else 0
             df_g[g_name_idx] = df_g[g_name_idx].astype(str).str.strip()
@@ -182,7 +180,7 @@ if shutsuba_file is not None:
                 if hn in gtv_dict:
                     df.at[idx, "GTV"] = gtv_dict[hn]
         except Exception as e:
-            st.warning(f"GTV CSV解析警告: {e}")
+            st.sidebar.warning(f"GTVデータ解析通知: {e}")
 
     # ================= 判定ロジック =================
     df["Is_SSS"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 120.0) & (df["TUAIndex"] >= 200.0)
@@ -190,22 +188,19 @@ if shutsuba_file is not None:
     df["Is_F1_Lap124"] = (df["FRank"] == 1) & (df["Hanro_1F"] > 0) & (df["Hanro_1F"] <= 12.4)
     df["Is_Haran_Trigger"] = (df["PopRank"] >= 10) & (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
-    # クッション値×種牡馬バイアス判定（PDF完全準拠）
+    # クッション値×種牡馬バイアス判定（PDF完全同期）
     def check_sire_bias(row):
         sire = row["Sire"]
         c_cat = cushion_cat
-        # 超高帯判定
         if "≥10.5" in c_cat:
             if sire in ["サートゥルナーリア", "ゴールドシップ", "キングカメハメハ", "ハービンジャー", "ビッグアーサー"]:
                 return "⚠️超高帯危険血統(消し)"
             if sire in ["エピファネイア", "キタサンブラック", "イスラボニータ", "ロードカナロア"]:
                 return "🔥超高帯特注血統"
-        # 各コース特注
         if "9.5-9.9" in c_cat and venue == "阪神" and sire == "キズナ": return "🔥超買い(阪神芝1800外)"
         if "9.5-9.9" in c_cat and venue == "東京" and sire in ["エピファネイア", "モーリス", "ディープインパクト"]: return "🔥超買い(東京芝)"
         if "8.6-9.4" in c_cat and venue == "東京" and sire in ["キズナ", "ロードカナロア", "イスラボニータ"]: return "🔥超買い(東京芝)"
         if "8.6-9.4" in c_cat and venue == "中京" and sire == "ディープインパクト": return "🔥超買い(中京芝2000)"
-        # 危険
         if "9.5-9.9" in c_cat and venue == "中山" and sire == "ダノンバラード": return "⚠️危険(中山芝2000)"
         if "8.6-9.4" in c_cat and venue == "東京" and sire in ["シルバーステート", "ゴールドシップ", "エイシンフラッシュ"]: return "⚠️危険(東京芝)"
         if "8.6-9.4" in c_cat and venue == "小倉" and sire in ["ジャスタウェイ", "ヴィクトワールピサ"]: return "⚠️危険(小倉芝1200)"
@@ -284,7 +279,7 @@ if shutsuba_file is not None:
             if h["Is_F1_Lap124"]: tags.append("<span class='badge-combo'>🔥F1×究極ラップ(12.4s)</span>")
             if h["Is_Hanro_Acc"]: tags.append(f"<span class='badge-hanro'>🔥坂路:{h['Hanro_Pattern']}</span>")
             if h["Is_Wood"]: tags.append(f"<span class='badge-wood'>ウッド:{h['Wood_Track']}</span>")
-            if h["GTV"] and h["GTV"] != "nan": tags.append(f"<span class='badge-gtv'>印:{h['GTV']}</span>")
+            if h["GTV"] and h["GTV"] != "nan" and h["GTV"] != "": tags.append(f"<span class='badge-gtv'>印:{h['GTV']}</span>")
             if "🔥" in h["SireBias"]: tags.append(f"<span class='badge-bias'>{h['SireBias']}</span>")
             if "⚠️" in h["SireBias"]: tags.append(f"<span class='badge-risk'>{h['SireBias']}</span>")
             if h["Fup2Tag"]: tags.append(f"<span class='badge-bias'>{h['Fup2Tag']}</span>")
@@ -300,5 +295,5 @@ if shutsuba_file is not None:
             """)
             st.write("---")
 else:
-    st.info("👆 ①出走表CSV、②坂路調教CSV、③ウッド調教CSV、④GTV/オッズCSV をアップロードしてください。")
-   
+    st.warning("⚠️ GitHubの `data/shutsuba.csv` が見つかりません。リポジトリに `data/` フォルダを作成し、CSVを配置してください。")
+Windows側での開催日運用手順（これだけでiPhoneに自動反映）
