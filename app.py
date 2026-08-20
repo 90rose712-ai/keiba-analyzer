@@ -45,29 +45,28 @@ def get_cushion_category(v_name, c_val):
 cushion_cat = get_cushion_category(venue, cushion_val)
 st.sidebar.info(f"📍 判定帯: **{cushion_cat}**")
 
-# CSV安全読み込み関数（空ファイル対策）
-def load_csv_safely(file_path):
-    if not os.path.exists(file_path):
-        return None
-    if os.path.getsize(file_path) == 0:
-        return None
-    try:
-        df_read = pd.read_csv(file_path, encoding="cp932", header=None)
-        return df_read if not df_read.empty else None
-    except Exception:
-        try:
-            df_read = pd.read_csv(file_path, encoding="utf-8", header=None)
-            return df_read if not df_read.empty else None
-        except Exception:
-            return None
+# CSV安全読み込み関数（複数ファイル名候補・空ファイル・文字コード自動対応）
+def load_csv_candidates(candidates):
+    for path in candidates:
+        if os.path.exists(path) and os.path.getsize(path) > 0:
+            try:
+                df_read = pd.read_csv(path, encoding="cp932", header=None)
+                if not df_read.empty: return df_read
+            except Exception:
+                try:
+                    df_read = pd.read_csv(path, encoding="utf-8", header=None)
+                    if not df_read.empty: return df_read
+                except Exception:
+                    continue
+    return None
 
-# パス設定
-SHUTSUBA_PATH = "data/shutsuba.csv"
-HANRO_PATH = "data/hanro.csv"
-WOOD_PATH = "data/wood.csv"
-GTV_PATH = "data/gtv.csv"
+# 日本語名・英字名の両方を自動検知
+SHUTSUBA_CANDIDATES = ["data/出馬表_指数.csv", "data/shutsuba.csv", "data/出馬表.csv"]
+HANRO_CANDIDATES = ["data/出馬表_坂路.csv", "data/hanro.csv", "data/坂路.csv"]
+WOOD_CANDIDATES = ["data/出馬表_ウッド.csv", "data/wood.csv", "data/ウッド.csv"]
+GTV_CANDIDATES = ["data/GTV馬.csv", "data/gtv.csv", "data/GTV.csv"]
 
-df_raw = load_csv_safely(SHUTSUBA_PATH)
+df_raw = load_csv_candidates(SHUTSUBA_CANDIDATES)
 
 if df_raw is not None:
     # 出走表列マッピング
@@ -105,7 +104,7 @@ if df_raw is not None:
     df["Is_Wood"] = False
 
     # ② 坂路調教CSV自動マージ
-    df_h = load_csv_safely(HANRO_PATH)
+    df_h = load_csv_candidates(HANRO_CANDIDATES)
     if df_h is not None:
         try:
             h_name_idx = 4 if df_h.shape[1] > 4 else 0
@@ -145,7 +144,7 @@ if df_raw is not None:
             pass
 
     # ③ ウッド調教CSV自動マージ
-    df_w = load_csv_safely(WOOD_PATH)
+    df_w = load_csv_candidates(WOOD_CANDIDATES)
     if df_w is not None:
         try:
             w_name_idx = 4 if df_w.shape[1] > 4 else 0
@@ -172,7 +171,7 @@ if df_raw is not None:
             pass
 
     # ④ GTV/オッズCSV自動マージ
-    df_g = load_csv_safely(GTV_PATH)
+    df_g = load_csv_candidates(GTV_CANDIDATES)
     if df_g is not None:
         try:
             g_name_idx = 4 if df_g.shape[1] > 4 else 0
@@ -195,7 +194,7 @@ if df_raw is not None:
     df["Is_F1_Lap124"] = (df["FRank"] == 1) & (df["Hanro_1F"] > 0) & (df["Hanro_1F"] <= 12.4)
     df["Is_Haran_Trigger"] = (df["PopRank"] >= 10) & (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
-    # クッション値×種牡馬バイアス判定（データブック完全同期）
+    # クッション値×種牡馬バイアス判定（PDF完全同期）
     def check_sire_bias(row):
         sire = row["Sire"]
         c_cat = cushion_cat
@@ -302,4 +301,4 @@ if df_raw is not None:
             """)
             st.write("---")
 else:
-    st.info("💡 GitHubの `data/shutsuba.csv` に有効なデータが配置されるのを待機しています。CSVデータをアップロードしてください。")
+    st.info("💡 GitHubの `data/` フォルダに有効なデータが配置されるのを待機しています。")
