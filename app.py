@@ -45,14 +45,21 @@ def get_cushion_category(v_name, c_val):
 cushion_cat = get_cushion_category(venue, cushion_val)
 st.sidebar.info(f"📍 判定帯: **{cushion_cat}**")
 
-# CSV自動読み込み共通関数
-def load_csv_from_path(file_path):
+# CSV安全読み込み関数（空ファイル対策）
+def load_csv_safely(file_path):
     if not os.path.exists(file_path):
         return None
+    if os.path.getsize(file_path) == 0:
+        return None
     try:
-        return pd.read_csv(file_path, encoding="cp932", header=None)
-    except:
-        return pd.read_csv(file_path, encoding="utf-8", header=None)
+        df_read = pd.read_csv(file_path, encoding="cp932", header=None)
+        return df_read if not df_read.empty else None
+    except Exception:
+        try:
+            df_read = pd.read_csv(file_path, encoding="utf-8", header=None)
+            return df_read if not df_read.empty else None
+        except Exception:
+            return None
 
 # パス設定
 SHUTSUBA_PATH = "data/shutsuba.csv"
@@ -60,10 +67,10 @@ HANRO_PATH = "data/hanro.csv"
 WOOD_PATH = "data/wood.csv"
 GTV_PATH = "data/gtv.csv"
 
-df_raw = load_csv_from_path(SHUTSUBA_PATH)
+df_raw = load_csv_safely(SHUTSUBA_PATH)
 
 if df_raw is not None:
-    # 出走表列マッピング（全24項目完全同期）
+    # 出走表列マッピング
     col_names = [
         "RaceID", "TrackType", "Distance", "HorseNum", "HorseName", "Affiliation", 
         "Trainer", "Jockey", "PopRank", "GTV", "Fup2Val", "Fup2Rank", 
@@ -98,7 +105,7 @@ if df_raw is not None:
     df["Is_Wood"] = False
 
     # ② 坂路調教CSV自動マージ
-    df_h = load_csv_from_path(HANRO_PATH)
+    df_h = load_csv_safely(HANRO_PATH)
     if df_h is not None:
         try:
             h_name_idx = 4 if df_h.shape[1] > 4 else 0
@@ -134,11 +141,11 @@ if df_raw is not None:
                     df.at[idx, "Hanro_3F"] = hanro_dict[hn]["3F"]
                     df.at[idx, "Hanro_Pattern"] = hanro_dict[hn]["Pattern"]
                     df.at[idx, "Is_Hanro_Acc"] = hanro_dict[hn]["Is_Acc"]
-        except Exception as e:
-            st.sidebar.warning(f"坂路データ解析通知: {e}")
+        except Exception:
+            pass
 
     # ③ ウッド調教CSV自動マージ
-    df_w = load_csv_from_path(WOOD_PATH)
+    df_w = load_csv_safely(WOOD_PATH)
     if df_w is not None:
         try:
             w_name_idx = 4 if df_w.shape[1] > 4 else 0
@@ -161,11 +168,11 @@ if df_raw is not None:
                     df.at[idx, "Wood_Track"] = wood_dict[hn]["Track"]
                     df.at[idx, "Wood_6F"] = wood_dict[hn]["Total"]
                     df.at[idx, "Wood_1F"] = wood_dict[hn]["1F"]
-        except Exception as e:
-            st.sidebar.warning(f"ウッドデータ解析通知: {e}")
+        except Exception:
+            pass
 
     # ④ GTV/オッズCSV自動マージ
-    df_g = load_csv_from_path(GTV_PATH)
+    df_g = load_csv_safely(GTV_PATH)
     if df_g is not None:
         try:
             g_name_idx = 4 if df_g.shape[1] > 4 else 0
@@ -179,8 +186,8 @@ if df_raw is not None:
                 hn = r["HorseName"]
                 if hn in gtv_dict:
                     df.at[idx, "GTV"] = gtv_dict[hn]
-        except Exception as e:
-            st.sidebar.warning(f"GTVデータ解析通知: {e}")
+        except Exception:
+            pass
 
     # ================= 判定ロジック =================
     df["Is_SSS"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 120.0) & (df["TUAIndex"] >= 200.0)
@@ -188,7 +195,7 @@ if df_raw is not None:
     df["Is_F1_Lap124"] = (df["FRank"] == 1) & (df["Hanro_1F"] > 0) & (df["Hanro_1F"] <= 12.4)
     df["Is_Haran_Trigger"] = (df["PopRank"] >= 10) & (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
-    # クッション値×種牡馬バイアス判定（PDF完全同期）
+    # クッション値×種牡馬バイアス判定（データブック完全同期）
     def check_sire_bias(row):
         sire = row["Sire"]
         c_cat = cushion_cat
@@ -295,4 +302,4 @@ if df_raw is not None:
             """)
             st.write("---")
 else:
-    st.warning("⚠️ GitHubの `data/shutsuba.csv` が見つかりません。リポジトリに `data/` フォルダを作成し、CSVを配置してください。")
+    st.info("💡 GitHubの `data/shutsuba.csv` に有効なデータが配置されるのを待機しています。CSVデータをアップロードしてください。")
