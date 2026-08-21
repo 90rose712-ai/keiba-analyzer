@@ -492,3 +492,4 @@ if df_raw is not None:
     </div>
     """, unsafe_allow_html=True)
 else:
+    st.info("💡 GitHubの `data/` フォルダに有効なデータが配置されるのを待機しています。")
