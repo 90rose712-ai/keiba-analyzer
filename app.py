@@ -106,7 +106,7 @@ if df_raw is not None:
     df["Wood_Track"] = "なし"
     df["Is_Wood"] = False
 
-    # ② 坂路調教マージ（複数調教がある場合は「4F最速タイム」を抽出）
+    # ② 坂路調教マージ（複数本ある場合は最速4F時計を抽出）
     df_h = load_csv_candidates(HANRO_CANDIDATES)
     if df_h is not None:
         try:
@@ -115,7 +115,6 @@ if df_raw is not None:
             for ci in range(8, min(df_h.shape[1], 17)):
                 df_h[ci] = pd.to_numeric(df_h[ci], errors="coerce").fillna(0)
 
-            # 馬ごとに最速タイム（4F時計 > 0 の最小値）を優先抽出
             hanro_dict = {}
             for _, r in df_h.iterrows():
                 hn = r[h_name_idx]
@@ -151,7 +150,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ③ ウッド調教マージ（複数調教がある場合は「全体最速タイム」を抽出）
+    # ③ ウッド調教マージ（複数本ある場合は最速全体時計を抽出）
     df_w = load_csv_candidates(WOOD_CANDIDATES)
     if df_w is not None:
         try:
@@ -200,18 +199,12 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ================= 各レースごとの調教最速タイム順位付け =================
-    def calc_training_ranks(group):
-        # 坂路順位（タイムが0より大きい馬を昇順順位化）
-        h_times = group["Hanro_4F"].replace(0, np.nan)
-        group["Hanro_Rank"] = h_times.rank(method="min", ascending=True).fillna(0).astype(int)
-        
-        # ウッド順位（タイムが0より大きい馬を昇順順位化）
-        w_times = group["Wood_6F"].replace(0, np.nan)
-        group["Wood_Rank"] = w_times.rank(method="min", ascending=True).fillna(0).astype(int)
-        return group
+    # ================= 各レースごとの調教最速順位付け（KeyError安全対策） =================
+    h_series = df["Hanro_4F"].replace(0, np.nan)
+    df["Hanro_Rank"] = df.groupby("RaceID")[h_series.name].transform(lambda x: x.rank(method="min", ascending=True)).fillna(0).astype(int)
 
-    df = df.groupby("RaceID", group_keys=False).apply(calc_training_ranks)
+    w_series = df["Wood_6F"].replace(0, np.nan)
+    df["Wood_Rank"] = df.groupby("RaceID")[w_series.name].transform(lambda x: x.rank(method="min", ascending=True)).fillna(0).astype(int)
 
     # ================= 判定ロジック =================
     df["Is_SSS"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 120.0) & (df["TUAIndex"] >= 200.0)
@@ -335,7 +328,7 @@ if df_raw is not None:
 
     df["Is_Filter_Match"] = df.apply(check_match, axis=1) if active_filters else True
 
-    # レース自然順ソート
+    # レース自然順ソート（開催場×1R〜12R昇順）
     def parse_race_sort_key(race_id_str):
         venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
         v_rank = 99
