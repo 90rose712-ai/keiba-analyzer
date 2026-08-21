@@ -13,8 +13,8 @@ st.markdown("""
     .stMetric { background-color: #1E222D; padding: 10px; border-radius: 8px; }
     .badge-sss { background-color: #D90429; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-four { background-color: #B5179E; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .badge-bias { background-color: #2B9348; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .badge-risk { background-color: #555555; color: #FFAAAA; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .badge-bias { background-color: #2B9348; color: white; padding: 2px 6px; border-radius: 4px; }
+    .badge-risk { background-color: #555555; color: #FFAAAA; padding: 2px 6px; border-radius: 4px; }
     .badge-hanro { background-color: #FF8500; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-wood { background-color: #3A86FF; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-combo { background-color: #7209B7; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
@@ -55,7 +55,13 @@ def get_cushion_category(v_name, c_val):
 cushion_cat = get_cushion_category(venue, cushion_val)
 st.sidebar.info(f"📍 判定帯: **{cushion_cat}**")
 
-# CSV安全読み込み関数
+# 強制リロードボタン
+if st.sidebar.button("🔄 最新データへ強制再読み込み"):
+    st.cache_data.clear()
+    st.rerun()
+
+# CSV安全読み込み関数（キャッシュ制御対応）
+@st.cache_data(ttl=60)
 def load_csv_candidates(candidates):
     for path in candidates:
         if os.path.exists(path) and os.path.getsize(path) > 0:
@@ -109,7 +115,7 @@ if df_raw is not None:
     df["Wood_Track"] = ""
     df["Is_Wood"] = False
 
-    # ② 坂路調教マージ（複数本ある場合は最速4F時計を抽出）
+    # ② 坂路調教マージ（最速時計抽出）
     df_h = load_csv_candidates(HANRO_CANDIDATES)
     if df_h is not None:
         try:
@@ -154,7 +160,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ③ ウッド調教マージ（複数本ある場合は最速全体時計を抽出）
+    # ③ ウッド調教マージ（最速時計抽出）
     df_w = load_csv_candidates(WOOD_CANDIDATES)
     if df_w is not None:
         try:
@@ -203,7 +209,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # 各レースごとの調教最速順位付け（調教なし馬は除外）
+    # 各レースごとの調教最速順位付け（調教なし除外）
     h_series = df["Hanro_4F"].replace(0, np.nan)
     df["Hanro_Rank"] = df.groupby("RaceID")[h_series.name].transform(lambda x: x.rank(method="min", ascending=True)).fillna(0).astype(int)
 
@@ -458,7 +464,6 @@ if df_raw is not None:
     # ================= プロの推奨買い目生成（新フォーメーション） =================
     st.subheader(f"🎯 {selected_race} プロの推奨買い目＆フォーメーション")
     
-    # 候補馬抽出
     honmei_row = race_df[race_df["FRank"] == 1]
     honmei_name = f"{int(honmei_row['HorseNum'].values[0])}番 {honmei_row['HorseName'].values[0]}" if not honmei_row.empty else "該当なし"
     
