@@ -6,7 +6,7 @@ import re
 
 st.set_page_config(page_title="競馬予想10 クッション値Vr", page_icon="🏇", layout="wide")
 
-# カスタムCSS（スマホ最適化・カラーバッジ完備）
+# カスタムCSS（スマホ最適化・順位カラーバッジ完備）
 st.markdown("""
 <style>
     .reportview-container .main .block-container { max-width: 100%; padding: 1rem; }
@@ -20,7 +20,7 @@ st.markdown("""
     .badge-combo { background-color: #7209B7; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-gtv { background-color: #FFB703; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     
-    /* 指数順位カラーバッジ */
+    /* 順位カラーバッジ */
     .rank-1 { background-color: #FFD700; color: #000000; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-2 { background-color: #0077B6; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-3 { background-color: #2B9348; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
@@ -36,6 +36,7 @@ venue = st.sidebar.selectbox("開催場所", ["東京", "中山", "京都", "阪
 track_condition = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重", "不良"])
 cushion_val = st.sidebar.number_input("芝クッション値", min_value=5.0, max_value=13.0, value=9.5, step=0.1)
 
+# クッション帯判定ロジック（場内相対基準対応）
 def get_cushion_category(v_name, c_val):
     if v_name == "札幌":
         return "札幌場内低 (≤7.3)" if c_val <= 7.3 else ("札幌場内高 (≥7.7)" if c_val >= 7.7 else "札幌場内中")
@@ -92,6 +93,7 @@ if df_raw is not None:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
+    # 調教初期値
     df["Hanro_4F"] = 0.0
     df["Hanro_1F"] = 0.0
     df["Hanro_2F"] = 0.0
@@ -104,7 +106,7 @@ if df_raw is not None:
     df["Wood_Track"] = "なし"
     df["Is_Wood"] = False
 
-    # ② 坂路調教マージ
+    # ② 坂路調教マージ（複数調教がある場合は「4F最速タイム」を抽出）
     df_h = load_csv_candidates(HANRO_CANDIDATES)
     if df_h is not None:
         try:
@@ -113,12 +115,15 @@ if df_raw is not None:
             for ci in range(8, min(df_h.shape[1], 17)):
                 df_h[ci] = pd.to_numeric(df_h[ci], errors="coerce").fillna(0)
 
+            # 馬ごとに最速タイム（4F時計 > 0 の最小値）を優先抽出
             hanro_dict = {}
             for _, r in df_h.iterrows():
                 hn = r[h_name_idx]
                 if df_h.shape[1] >= 16:
                     t4 = r[11]
                     l4, l3, l2, l1 = r[12], r[13], r[14], r[15]
+                    if t4 <= 0: continue
+                    
                     is_acc = False
                     p_tag = "通常"
                     if t4 <= 56.0 and l1 <= 13.0 and (l4 > l3 > l2 > l1 > 0):
@@ -127,10 +132,13 @@ if df_raw is not None:
                         elif l1 <= 12.4: p_tag = "A2(完全加速)"
                         else: p_tag = "A1(完全加速)"
                     
-                    hanro_dict[hn] = {
+                    data_item = {
                         "4F": t4, "1F": l1, "2F": l2, "3F": l3,
                         "Pattern": p_tag, "Is_Acc": is_acc
                     }
+                    if hn not in hanro_dict or t4 < hanro_dict[hn]["4F"]:
+                        hanro_dict[hn] = data_item
+            
             for idx, r in df.iterrows():
                 hn = r["HorseName"]
                 if hn in hanro_dict:
@@ -143,7 +151,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ③ ウッド調教マージ
+    # ③ ウッド調教マージ（複数調教がある場合は「全体最速タイム」を抽出）
     df_w = load_csv_candidates(WOOD_CANDIDATES)
     if df_w is not None:
         try:
@@ -158,7 +166,11 @@ if df_raw is not None:
                 w_track = str(r[0]) if df_w.shape[1] > 0 else "CW/南W"
                 t_total = r[11] if df_w.shape[1] >= 12 else 0.0
                 l1 = r[15] if df_w.shape[1] >= 16 else 0.0
-                wood_dict[hn] = {"Track": w_track, "Total": t_total, "1F": l1}
+                if t_total <= 0: continue
+                
+                data_item = {"Track": w_track, "Total": t_total, "1F": l1}
+                if hn not in wood_dict or t_total < wood_dict[hn]["Total"]:
+                    wood_dict[hn] = data_item
                 
             for idx, r in df.iterrows():
                 hn = r["HorseName"]
@@ -188,12 +200,25 @@ if df_raw is not None:
         except Exception:
             pass
 
+    # ================= 各レースごとの調教最速タイム順位付け =================
+    def calc_training_ranks(group):
+        # 坂路順位（タイムが0より大きい馬を昇順順位化）
+        h_times = group["Hanro_4F"].replace(0, np.nan)
+        group["Hanro_Rank"] = h_times.rank(method="min", ascending=True).fillna(0).astype(int)
+        
+        # ウッド順位（タイムが0より大きい馬を昇順順位化）
+        w_times = group["Wood_6F"].replace(0, np.nan)
+        group["Wood_Rank"] = w_times.rank(method="min", ascending=True).fillna(0).astype(int)
+        return group
+
+    df = df.groupby("RaceID", group_keys=False).apply(calc_training_ranks)
+
     # ================= 判定ロジック =================
     df["Is_SSS"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 120.0) & (df["TUAIndex"] >= 200.0)
     df["Is_FourCrown"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 115.0) & (df["TUAIndex"] >= 190.0) & (df["SIndex"] >= 70.0)
     df["Is_Haran_Trigger"] = (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
-    # クッション値×種牡馬バイアス判定（PDF完全準拠）
+    # クッション値×種牡馬バイアス判定（PDF完全同期）
     def check_sire_bias(row):
         sire = row["Sire"]
         c_cat = cushion_cat
@@ -242,24 +267,7 @@ if df_raw is not None:
         elif r > 0: return f"<span class='rank-other'>{r}位</span>"
         return "<span class='rank-other'>-</span>"
 
-    # レース自然順ソート
-    def parse_race_sort_key(race_id_str):
-        venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
-        v_rank = 99
-        for i, v in enumerate(venue_order):
-            if race_id_str.startswith(v):
-                v_rank = i // 2
-                break
-        r_nums = re.findall(r'\d+', race_id_str)
-        r_num = int(r_nums[-1]) if r_nums else 0
-        return (v_rank, r_num, race_id_str)
-
-    unique_races = list(df["RaceID"].unique())
-    sorted_races = sorted(unique_races, key=parse_race_sort_key)
-
-    # ================= サイドバー: 分解型・検索フィルターUI =================
-    selected_race = st.sidebar.selectbox("🏁 レースを選択 (開催順・1R〜12R昇順)", sorted_races)
-
+    # ================= サイドバー: 分解型フィルター =================
     st.sidebar.markdown("---")
     st.sidebar.subheader("📊 能力指数フィルター")
     f_rank1 = st.sidebar.checkbox("F指数 1位")
@@ -276,12 +284,14 @@ if df_raw is not None:
     hanro_11s = st.sidebar.checkbox("坂路 終い11秒台 (A3🔥)")
     hanro_124 = st.sidebar.checkbox("坂路 終い12.4秒以下")
     hanro_54s = st.sidebar.checkbox("坂路 4F 54.0秒以下 (好時計)")
+    hanro_rank1 = st.sidebar.checkbox("坂路 4Fタイム レース1位")
     hanro_haran = st.sidebar.checkbox("坂路 ラスト連続加速 (波乱トリガー)")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🌲 ウッド調教フィルター")
     wood_any = st.sidebar.checkbox("ウッド調教該当馬 (南W / CW)")
     wood_11s = st.sidebar.checkbox("ウッド 終い11秒台")
+    wood_rank1 = st.sidebar.checkbox("ウッド 全体タイム レース1位")
 
     st.sidebar.markdown("---")
     st.sidebar.subheader("🎯 Fup2・血統・特注フィルター")
@@ -291,42 +301,88 @@ if df_raw is not None:
     sire_bias_hit = st.sidebar.checkbox("クッション値 特注血統 (🔥)")
     sire_special = st.sidebar.checkbox("ナダル / スクリーンヒーロー産駒")
 
+    # ================= 該当レース判定＆マーク付与 =================
+    active_filters = any([
+        f_rank1, f_top3, f_over70, arms_top3, tua_top3, is_sss, is_four,
+        hanro_acc, hanro_11s, hanro_124, hanro_54s, hanro_rank1, hanro_haran,
+        wood_any, wood_11s, wood_rank1,
+        fup_5plus, fup_7, gtv_any, sire_bias_hit, sire_special
+    ])
+
+    def check_match(r_row):
+        if f_rank1 and r_row["FRank"] != 1: return False
+        if f_top3 and r_row["FRank"] not in [1, 2, 3]: return False
+        if f_over70 and r_row["FIndex"] < 70.0: return False
+        if arms_top3 and r_row["ARMS2Rank"] not in [1, 2, 3]: return False
+        if tua_top3 and r_row["TUARank"] not in [1, 2, 3]: return False
+        if is_sss and not r_row["Is_SSS"]: return False
+        if is_four and not r_row["Is_FourCrown"]: return False
+        if hanro_acc and not r_row["Is_Hanro_Acc"]: return False
+        if hanro_11s and not (r_row["Hanro_1F"] > 0 and r_row["Hanro_1F"] <= 11.9): return False
+        if hanro_124 and not (r_row["Hanro_1F"] > 0 and r_row["Hanro_1F"] <= 12.4): return False
+        if hanro_54s and not (r_row["Hanro_4F"] > 0 and r_row["Hanro_4F"] <= 54.0): return False
+        if hanro_rank1 and r_row["Hanro_Rank"] != 1: return False
+        if hanro_haran and not r_row["Is_Haran_Trigger"]: return False
+        if wood_any and not r_row["Is_Wood"]: return False
+        if wood_11s and not (r_row["Is_Wood"] and r_row["Wood_1F"] > 0 and r_row["Wood_1F"] <= 11.9): return False
+        if wood_rank1 and r_row["Wood_Rank"] != 1: return False
+        if fup_5plus and r_row["Fup2Val"] < 5: return False
+        if fup_7 and r_row["Fup2Val"] != 7: return False
+        if gtv_any and (r_row["GTV"] == "" or r_row["GTV"] == "nan"): return False
+        if sire_bias_hit and "🔥" not in r_row["SireBias"]: return False
+        if sire_special and r_row["Sire"] not in ["ナダル", "スクリーンヒーロー"]: return False
+        return True
+
+    df["Is_Filter_Match"] = df.apply(check_match, axis=1) if active_filters else True
+
+    # レース自然順ソート
+    def parse_race_sort_key(race_id_str):
+        venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
+        v_rank = 99
+        for i, v in enumerate(venue_order):
+            if race_id_str.startswith(v):
+                v_rank = i // 2
+                break
+        r_nums = re.findall(r'\d+', race_id_str)
+        r_num = int(r_nums[-1]) if r_nums else 0
+        return (v_rank, r_num, race_id_str)
+
+    unique_races = sorted(list(df["RaceID"].unique()), key=parse_race_sort_key)
+
+    # 各レースの該当頭数集計と表示用ラベル作成
+    race_options = []
+    race_map = {}
+    for r_id in unique_races:
+        match_count = len(df[(df["RaceID"] == r_id) & df["Is_Filter_Match"]])
+        if active_filters and match_count > 0:
+            label = f"{r_id} 🔥({match_count}頭)"
+        elif active_filters:
+            label = f"{r_id} (0頭)"
+        else:
+            label = r_id
+        race_options.append(label)
+        race_map[label] = r_id
+
+    # サイドバー レース選択UI
+    st.sidebar.markdown("---")
+    selected_label = st.sidebar.selectbox("🏁 レースを選択 (該当レースに🔥表示)", race_options)
+    selected_race = race_map[selected_label]
+
     # ================= UI 描画 =================
     race_df = df[df["RaceID"] == selected_race].sort_values("HorseNum").copy()
-
-    # 個別フィルターの適用（チェックした条件をすべて満たす馬に絞り込み）
-    if f_rank1: race_df = race_df[race_df["FRank"] == 1]
-    if f_top3: race_df = race_df[race_df["FRank"].isin([1, 2, 3])]
-    if f_over70: race_df = race_df[race_df["FIndex"] >= 70.0]
-    if arms_top3: race_df = race_df[race_df["ARMS2Rank"].isin([1, 2, 3])]
-    if tua_top3: race_df = race_df[race_df["TUARank"].isin([1, 2, 3])]
-    if is_sss: race_df = race_df[race_df["Is_SSS"]]
-    if is_four: race_df = race_df[race_df["Is_FourCrown"]]
-
-    if hanro_acc: race_df = race_df[race_df["Is_Hanro_Acc"]]
-    if hanro_11s: race_df = race_df[(race_df["Hanro_1F"] > 0) & (race_df["Hanro_1F"] <= 11.9)]
-    if hanro_124: race_df = race_df[(race_df["Hanro_1F"] > 0) & (race_df["Hanro_1F"] <= 12.4)]
-    if hanro_54s: race_df = race_df[(race_df["Hanro_4F"] > 0) & (race_df["Hanro_4F"] <= 54.0)]
-    if hanro_haran: race_df = race_df[race_df["Is_Haran_Trigger"]]
-
-    if wood_any: race_df = race_df[race_df["Is_Wood"]]
-    if wood_11s: race_df = race_df[race_df["Is_Wood"] & (race_df["Wood_1F"] > 0) & (race_df["Wood_1F"] <= 11.9)]
-
-    if fup_5plus: race_df = race_df[race_df["Fup2Val"] >= 5]
-    if fup_7: race_df = race_df[race_df["Fup2Val"] == 7]
-    if gtv_any: race_df = race_df[(race_df["GTV"] != "") & (race_df["GTV"] != "nan")]
-    if sire_bias_hit: race_df = race_df[race_df["SireBias"].str.contains("🔥")]
-    if sire_special: race_df = race_df[race_df["Sire"].isin(["ナダル", "スクリーンヒーロー"])]
+    
+    if active_filters:
+        race_df = race_df[race_df["Is_Filter_Match"]]
 
     st.subheader(f"📊 {selected_race} 解析サマリー")
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("表示頭数", f"{len(race_df)}頭")
     c2.metric("F1位該当", f"{len(race_df[race_df['FRank']==1])}頭")
-    c3.metric("坂路完全加速", f"{len(race_df[race_df['Is_Hanro_Acc']])}頭")
+    c3.metric("坂路1位/加速", f"{len(race_df[race_df['Hanro_Rank']==1])}頭")
     c4.metric("Fup2(5点以上)", f"{len(race_df[race_df['Fup2Val']>=5])}頭")
 
     st.write("---")
-    st.subheader("📋 出走馬カード（スマホ最適化・単独＆複合フィルター対応）")
+    st.subheader("📋 出走馬カード（調教最速順位・カラー表示完備）")
 
     search_query = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", "")
     if search_query:
@@ -357,10 +413,13 @@ if df_raw is not None:
                 tua_badge = get_rank_badge_html(h['TUARank'])
                 s_badge = get_rank_badge_html(h['SRank'])
 
+                h_rank_badge = get_rank_badge_html(h['Hanro_Rank']) if h['Hanro_Rank'] > 0 else "-"
+                w_rank_badge = get_rank_badge_html(h['Wood_Rank']) if h['Wood_Rank'] > 0 else "-"
+
                 st.markdown(f"""
                 - **陣営/血統**: **{h['Trainer']}** 厩舎 / **{h['Jockey']}** 騎手 / 父: **{h['Sire']}**
-                - **坂路調教**: 4F **{h['Hanro_4F']:.1f}s** - 3F {h['Hanro_3F']:.1f}s - 2F {h['Hanro_2F']:.1f}s - 終い **{h['Hanro_1F']:.1f}s**（{h['Hanro_Pattern']}）
-                - **ウッド調教**: {h['Wood_Track']} 6F **{h['Wood_6F']:.1f}s** - 終い **{h['Wood_1F']:.1f}s**
+                - **坂路調教 (最速)**: 4F **{h['Hanro_4F']:.1f}s** ({h_rank_badge}) - 3F {h['Hanro_3F']:.1f}s - 2F {h['Hanro_2F']:.1f}s - 終い **{h['Hanro_1F']:.1f}s**（{h['Hanro_Pattern']}）
+                - **ウッド調教 (最速)**: {h['Wood_Track']} 6F **{h['Wood_6F']:.1f}s** ({w_rank_badge}) - 終い **{h['Wood_1F']:.1f}s**
                 - **能力指数**: F: **{h['FIndex']:.1f}** ({f_badge}) | ARMS2: **{h['ARMS2Index']:.1f}** ({arms_badge}) | TUA: **{h['TUAIndex']:.1f}** ({tua_badge}) | S: **{h['SIndex']:.1f}** ({s_badge})
                 - **Fup2数値**: **{int(h['Fup2Val'])}点** | 人気: {int(h['PopRank'])}番人気
                 """, unsafe_allow_html=True)
