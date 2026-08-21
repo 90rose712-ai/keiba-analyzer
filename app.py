@@ -6,26 +6,28 @@ import re
 
 st.set_page_config(page_title="競馬予想10 クッション値Vr", page_icon="🏇", layout="wide")
 
-# カスタムCSS（スマホ最適化・順位カラーバッジ完備）
+# カスタムCSS（スマホ最適化・カラーバッジ・買い目ボックス完備）
 st.markdown("""
 <style>
     .reportview-container .main .block-container { max-width: 100%; padding: 1rem; }
     .stMetric { background-color: #1E222D; padding: 10px; border-radius: 8px; }
     .badge-sss { background-color: #D90429; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-four { background-color: #B5179E; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
-    .badge-bias { background-color: #2B9348; color: white; padding: 2px 6px; border-radius: 4px; }
-    .badge-risk { background-color: #555555; color: #FFAAAA; padding: 2px 6px; border-radius: 4px; }
+    .badge-bias { background-color: #2B9348; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+    .badge-risk { background-color: #555555; color: #FFAAAA; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-hanro { background-color: #FF8500; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-wood { background-color: #3A86FF; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-combo { background-color: #7209B7; color: white; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .badge-gtv { background-color: #FFB703; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     
-    /* 順位カラーバッジ */
     .rank-1 { background-color: #FFD700; color: #000000; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-2 { background-color: #0077B6; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-3 { background-color: #2B9348; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-other { color: #CCCCCC; }
-    .no-train { color: #888888; font-weight: normal; }
+    .no-train { color: #888888; }
+    
+    .card-box { background-color: #161B22; padding: 15px; border-radius: 8px; margin-bottom: 12px; border-left: 4px solid #30363D; }
+    .bet-box { background-color: #1C2333; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #38444D; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -94,6 +96,7 @@ if df_raw is not None:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
+    # 調教初期化
     df["Hanro_4F"] = 0.0
     df["Hanro_1F"] = 0.0
     df["Hanro_2F"] = 0.0
@@ -125,7 +128,7 @@ if df_raw is not None:
                     
                     is_acc = False
                     p_tag = "通常"
-                    # 厳格負荷判定: 4F <= 56.0s & 1F <= 13.0s & 完全加速
+                    # 負荷基準の厳格化: 4F <= 56.0s & 1F <= 13.0s & 完全加速
                     if t4 <= 56.0 and l1 <= 13.0 and (l4 > l3 > l2 > l1 > 0):
                         is_acc = True
                         if l1 <= 11.9: p_tag = "A3(終い11秒台🔥)"
@@ -200,7 +203,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ================= 各レースごとの調教最速順位付け（調教なし馬は除外） =================
+    # 各レースごとの調教最速順位付け（調教なし馬は除外）
     h_series = df["Hanro_4F"].replace(0, np.nan)
     df["Hanro_Rank"] = df.groupby("RaceID")[h_series.name].transform(lambda x: x.rank(method="min", ascending=True)).fillna(0).astype(int)
 
@@ -210,7 +213,8 @@ if df_raw is not None:
     # ================= 判定ロジック =================
     df["Is_SSS"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 120.0) & (df["TUAIndex"] >= 200.0)
     df["Is_FourCrown"] = (df["FIndex"] >= 70.0) & (df["ARMS2Index"] >= 115.0) & (df["TUAIndex"] >= 190.0) & (df["SIndex"] >= 70.0)
-    df["Is_Haran_Trigger"] = (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
+    df["Is_F1_Lap124"] = (df["FRank"] == 1) & (df["Hanro_1F"] > 0) & (df["Hanro_1F"] <= 12.4)
+    df["Is_Haran_Trigger"] = (df["PopRank"] >= 10) & (df["Hanro_3F"] <= 14.0) & (df["Hanro_3F"] > df["Hanro_2F"]) & (df["Hanro_2F"] > df["Hanro_1F"]) & (df["Hanro_1F"] > 0)
 
     # クッション値×種牡馬バイアス判定（PDF完全同期）
     def check_sire_bias(row):
@@ -225,6 +229,8 @@ if df_raw is not None:
         if "9.5-9.9" in c_cat and venue == "東京" and sire in ["エピファネイア", "モーリス", "ディープインパクト"]: return "🔥超買い(東京芝)"
         if "8.6-9.4" in c_cat and venue == "東京" and sire in ["キズナ", "ロードカナロア", "イスラボニータ"]: return "🔥超買い(東京芝)"
         if "8.6-9.4" in c_cat and venue == "中京" and sire == "ディープインパクト": return "🔥超買い(中京芝2000)"
+        if "≤8.5" in c_cat and venue == "札幌" and sire == "オルフェーヴル": return "🔥超買い(札幌芝2000)"
+        if "≤8.5" in c_cat and venue == "函館" and sire == "キズナ": return "🔥超買い(函館芝1800)"
         if "9.5-9.9" in c_cat and venue == "中山" and sire == "ダノンバラード": return "⚠️危険(中山芝2000)"
         if "8.6-9.4" in c_cat and venue == "東京" and sire in ["シルバーステート", "ゴールドシップ", "エイシンフラッシュ"]: return "⚠️危険(東京芝)"
         if "8.6-9.4" in c_cat and venue == "小倉" and sire in ["ジャスタウェイ", "ヴィクトワールピサ"]: return "⚠️危険(小倉芝1200)"
@@ -252,7 +258,6 @@ if df_raw is not None:
 
     df["Fup2Tag"] = df.apply(check_fup2, axis=1)
 
-    # 順位カラーHTMLヘルパー
     def get_rank_badge_html(rank_val):
         r = int(rank_val)
         if r == 1: return f"<span class='rank-1'>1位</span>"
@@ -260,6 +265,20 @@ if df_raw is not None:
         elif r == 3: return f"<span class='rank-3'>3位</span>"
         elif r > 0: return f"<span class='rank-other'>{r}位</span>"
         return "<span class='rank-other'>-</span>"
+
+    # レース自然順ソート（開催場×1R〜12R昇順）
+    def parse_race_sort_key(race_id_str):
+        venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
+        v_rank = 99
+        for i, v in enumerate(venue_order):
+            if race_id_str.startswith(v):
+                v_rank = i // 2
+                break
+        r_nums = re.findall(r'\d+', race_id_str)
+        r_num = int(r_nums[-1]) if r_nums else 0
+        return (v_rank, r_num, race_id_str)
+
+    unique_races = sorted(list(df["RaceID"].unique()), key=parse_race_sort_key)
 
     # ================= サイドバー: 分解型フィルター =================
     st.sidebar.markdown("---")
@@ -295,7 +314,6 @@ if df_raw is not None:
     sire_bias_hit = st.sidebar.checkbox("クッション値 特注血統 (🔥)")
     sire_special = st.sidebar.checkbox("ナダル / スクリーンヒーロー産駒")
 
-    # ================= 該当レース判定＆マーク付与 =================
     active_filters = any([
         f_rank1, f_top3, f_over70, arms_top3, tua_top3, is_sss, is_four,
         hanro_acc, hanro_11s, hanro_124, hanro_54s, hanro_rank1, hanro_haran,
@@ -329,21 +347,7 @@ if df_raw is not None:
 
     df["Is_Filter_Match"] = df.apply(check_match, axis=1) if active_filters else True
 
-    # レース自然順ソート（開催場×1R〜12R昇順）
-    def parse_race_sort_key(race_id_str):
-        venue_order = ["札幌", "札", "函館", "函", "福島", "福", "新潟", "新", "東京", "東", "中山", "山", "中京", "名", "京都", "京", "阪神", "阪", "小倉", "小"]
-        v_rank = 99
-        for i, v in enumerate(venue_order):
-            if race_id_str.startswith(v):
-                v_rank = i // 2
-                break
-        r_nums = re.findall(r'\d+', race_id_str)
-        r_num = int(r_nums[-1]) if r_nums else 0
-        return (v_rank, r_num, race_id_str)
-
-    unique_races = sorted(list(df["RaceID"].unique()), key=parse_race_sort_key)
-
-    # 各レースの該当頭数集計と表示用ラベル作成
+    # レース選択ラベル生成
     race_options = []
     race_map = {}
     for r_id in unique_races:
@@ -357,35 +361,58 @@ if df_raw is not None:
         race_options.append(label)
         race_map[label] = r_id
 
-    # サイドバー レース選択UI
     st.sidebar.markdown("---")
     selected_label = st.sidebar.selectbox("🏁 レースを選択 (該当レースに🔥表示)", race_options)
     selected_race = race_map[selected_label]
 
-    # ================= UI 描画 =================
-    race_df = df[df["RaceID"] == selected_race].sort_values("HorseNum").copy()
-    
-    if active_filters:
-        race_df = race_df[race_df["Is_Filter_Match"]]
+    # ================= 全場 厳選勝負レースサマリー表 =================
+    st.subheader("📋 全場 厳選勝負レースサマリー表")
+    summary_data = []
+    for r_id in unique_races:
+        rdf = df[df["RaceID"] == r_id]
+        sss_m = rdf[rdf["Is_SSS"]]["HorseName"].tolist()
+        f1_m = rdf[rdf["FRank"] == 1]["HorseName"].tolist()
+        gtv_m = rdf[(rdf["GTV"] != "") & (rdf["GTV"] != "nan")]["HorseName"].tolist()
+        dummy_m = rdf[rdf["Fup2Tag"].str.contains("消し")]["HorseName"].tolist()
+        
+        honmei = sss_m[0] if sss_m else (f1_m[0] if f1_m else "-")
+        tokuda = gtv_m[0] if gtv_m else "-"
+        keshi = dummy_m[0] if dummy_m else "-"
+        grade = "★★★ (勝負)" if len(sss_m) > 0 or len(rdf[rdf["Is_FourCrown"]]) > 0 else "★★☆"
+        
+        summary_data.append({
+            "場・R": r_id,
+            "本命馬 (◎)": honmei,
+            "特大推奨 (🔥)": tokuda,
+            "ダミー消し (⚠️)": keshi,
+            "勝負度": grade
+        })
+    st.dataframe(pd.DataFrame(summary_data), use_container_width=True)
 
-    st.subheader(f"📊 {selected_race} 解析サマリー")
+    st.write("---")
+
+    # ================= 選択レース詳細描画 =================
+    race_df = df[df["RaceID"] == selected_race].sort_values("HorseNum").copy()
+    display_df = race_df[race_df["Is_Filter_Match"]] if active_filters else race_df
+
+    st.subheader(f"🏁 {selected_race} 解析サマリー")
     c1, c2, c3, c4 = st.columns(4)
-    c1.metric("表示頭数", f"{len(race_df)}頭")
-    c2.metric("F1位該当", f"{len(race_df[race_df['FRank']==1])}頭")
-    c3.metric("坂路1位/加速", f"{len(race_df[race_df['Hanro_Rank']==1])}頭")
-    c4.metric("Fup2(5点以上)", f"{len(race_df[race_df['Fup2Val']>=5])}頭")
+    c1.metric("出走頭数", f"{len(race_df)}頭")
+    c2.metric("SSS級神域", f"{len(race_df[race_df['Is_SSS']])}頭")
+    c3.metric("坂路完全加速", f"{len(race_df[race_df['Is_Hanro_Acc']])}頭")
+    c4.metric("ダミー消し馬", f"{len(race_df[race_df['Fup2Tag'].str.contains('消し')])}頭")
 
     st.write("---")
     st.subheader("📋 出走馬カード（調教最速順位・カラー表示完備）")
 
     search_query = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", "")
     if search_query:
-        race_df = race_df[race_df.apply(lambda r: search_query in str(r.values), axis=1)]
+        display_df = display_df[display_df.apply(lambda r: search_query in str(r.values), axis=1)]
 
-    if race_df.empty:
+    if display_df.empty:
         st.warning("⚠️ 選択した条件に一致する馬がいません。サイドバーのチェックを外して条件を緩めてください。")
     else:
-        for _, h in race_df.iterrows():
+        for _, h in display_df.iterrows():
             with st.container():
                 c_head, c_tags = st.columns([2, 3])
                 c_head.markdown(f"### **{int(h['HorseNum'])}番 {h['HorseName']}**")
@@ -407,14 +434,12 @@ if df_raw is not None:
                 tua_badge = get_rank_badge_html(h['TUARank'])
                 s_badge = get_rank_badge_html(h['SRank'])
 
-                # 坂路調教の表示文字列構築（データ非保持時は順位なし＆調教×）
                 if h["Hanro_4F"] > 0:
                     h_rank_badge = get_rank_badge_html(h['Hanro_Rank'])
                     hanro_text = f"4F **{h['Hanro_4F']:.1f}s** ({h_rank_badge}) - 3F {h['Hanro_3F']:.1f}s - 2F {h['Hanro_2F']:.1f}s - 終い **{h['Hanro_1F']:.1f}s**（{h['Hanro_Pattern']}）"
                 else:
                     hanro_text = "<span class='no-train'>調教×</span>"
 
-                # ウッド調教の表示文字列構築（データ非保持時は順位なし＆調教×）
                 if h["Is_Wood"] and h["Wood_6F"] > 0:
                     w_rank_badge = get_rank_badge_html(h['Wood_Rank'])
                     wood_text = f"{h['Wood_Track']} 6F **{h['Wood_6F']:.1f}s** ({w_rank_badge}) - 終い **{h['Wood_1F']:.1f}s**"
@@ -429,5 +454,41 @@ if df_raw is not None:
                 - **Fup2数値**: **{int(h['Fup2Val'])}点** | 人気: {int(h['PopRank'])}番人気
                 """, unsafe_allow_html=True)
                 st.write("---")
+
+    # ================= プロの推奨買い目生成（新フォーメーション） =================
+    st.subheader(f"🎯 {selected_race} プロの推奨買い目＆フォーメーション")
+    
+    # 候補馬抽出
+    honmei_row = race_df[race_df["FRank"] == 1]
+    honmei_name = f"{int(honmei_row['HorseNum'].values[0])}番 {honmei_row['HorseName'].values[0]}" if not honmei_row.empty else "該当なし"
+    
+    tokuda_rows = race_df[(race_df["GTV"] != "") & (race_df["GTV"] != "nan")]
+    tokuda_names = [f"{int(r['HorseNum'])}番 {r['HorseName']}" for _, r in tokuda_rows.iterrows()]
+    tokuda_str = ", ".join(tokuda_names) if tokuda_names else "なし"
+    
+    matrix_top = race_df[race_df["FRank"].isin([1, 2, 3]) | race_df["ARMS2Rank"].isin([1, 2]) | race_df["TUARank"].isin([1, 2])]
+    box_horses = [f"{int(r['HorseNum'])}番" for _, r in matrix_top.iterrows()][:4]
+    box_str = ", ".join(box_horses)
+
+    st.markdown(f"""
+    <div class='bet-box'>
+        <h4>【1】勝負レース本命馬（連軸筆頭）</h4>
+        <p>◎ <b>本命馬</b>: {honmei_name}</p>
+        <h4>【2】特注ヒモ穴・危険な人気馬</h4>
+        <p>🔥 <b>特大推奨馬</b>: {tokuda_str}</p>
+        <h4>【3】プロの推奨買い目（回収率・的中両立）</h4>
+        <ul>
+            <li><b>単勝・複勝</b>: {honmei_name} / {tokuda_str}</li>
+            <li><b>馬連・ワイドBOX (精鋭3〜4頭)</b>: {box_str}</li>
+            <li><b>3連複BOX / フォーメーション</b>: {box_str}</li>
+            <li><b>3連単フォーメーション（裏表マルチ対応）</b>:
+                <br>1着: {honmei_name}, {tokuda_str}
+                <br>2着: {box_str}
+                <br>3着: {box_str}（※ヒモ穴1着・本命2/3着マルチ完備）
+            </li>
+        </ul>
+        <h4>【4】⚠️ 本命馬が負けるパターンと保険シナリオ</h4>
+        <p>・本命馬が先行争いやクッション値の死角により2・3着に取りこぼした場合に備え、特大推奨馬頭固定の3連単裏目マルチを保険として配分。</p>
+    </div>
+    """, unsafe_allow_html=True)
 else:
-    st.info("💡 GitHubの `data/` フォルダに有効なデータが配置されるのを待機しています。")
