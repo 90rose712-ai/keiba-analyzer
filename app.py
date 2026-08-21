@@ -25,6 +25,7 @@ st.markdown("""
     .rank-2 { background-color: #0077B6; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-3 { background-color: #2B9348; color: #FFFFFF; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
     .rank-other { color: #CCCCCC; }
+    .no-train { color: #888888; font-weight: normal; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -93,17 +94,16 @@ if df_raw is not None:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce").fillna(0)
 
-    # 調教初期値
     df["Hanro_4F"] = 0.0
     df["Hanro_1F"] = 0.0
     df["Hanro_2F"] = 0.0
     df["Hanro_3F"] = 0.0
-    df["Hanro_Pattern"] = "通常"
+    df["Hanro_Pattern"] = "調教×"
     df["Is_Hanro_Acc"] = False
     
     df["Wood_6F"] = 0.0
     df["Wood_1F"] = 0.0
-    df["Wood_Track"] = "なし"
+    df["Wood_Track"] = ""
     df["Is_Wood"] = False
 
     # ② 坂路調教マージ（複数本ある場合は最速4F時計を抽出）
@@ -125,6 +125,7 @@ if df_raw is not None:
                     
                     is_acc = False
                     p_tag = "通常"
+                    # 厳格負荷判定: 4F <= 56.0s & 1F <= 13.0s & 完全加速
                     if t4 <= 56.0 and l1 <= 13.0 and (l4 > l3 > l2 > l1 > 0):
                         is_acc = True
                         if l1 <= 11.9: p_tag = "A3(終い11秒台🔥)"
@@ -199,7 +200,7 @@ if df_raw is not None:
         except Exception:
             pass
 
-    # ================= 各レースごとの調教最速順位付け（KeyError安全対策） =================
+    # ================= 各レースごとの調教最速順位付け（調教なし馬は除外） =================
     h_series = df["Hanro_4F"].replace(0, np.nan)
     df["Hanro_Rank"] = df.groupby("RaceID")[h_series.name].transform(lambda x: x.rank(method="min", ascending=True)).fillna(0).astype(int)
 
@@ -406,13 +407,24 @@ if df_raw is not None:
                 tua_badge = get_rank_badge_html(h['TUARank'])
                 s_badge = get_rank_badge_html(h['SRank'])
 
-                h_rank_badge = get_rank_badge_html(h['Hanro_Rank']) if h['Hanro_Rank'] > 0 else "-"
-                w_rank_badge = get_rank_badge_html(h['Wood_Rank']) if h['Wood_Rank'] > 0 else "-"
+                # 坂路調教の表示文字列構築（データ非保持時は順位なし＆調教×）
+                if h["Hanro_4F"] > 0:
+                    h_rank_badge = get_rank_badge_html(h['Hanro_Rank'])
+                    hanro_text = f"4F **{h['Hanro_4F']:.1f}s** ({h_rank_badge}) - 3F {h['Hanro_3F']:.1f}s - 2F {h['Hanro_2F']:.1f}s - 終い **{h['Hanro_1F']:.1f}s**（{h['Hanro_Pattern']}）"
+                else:
+                    hanro_text = "<span class='no-train'>調教×</span>"
+
+                # ウッド調教の表示文字列構築（データ非保持時は順位なし＆調教×）
+                if h["Is_Wood"] and h["Wood_6F"] > 0:
+                    w_rank_badge = get_rank_badge_html(h['Wood_Rank'])
+                    wood_text = f"{h['Wood_Track']} 6F **{h['Wood_6F']:.1f}s** ({w_rank_badge}) - 終い **{h['Wood_1F']:.1f}s**"
+                else:
+                    wood_text = "<span class='no-train'>調教×</span>"
 
                 st.markdown(f"""
                 - **陣営/血統**: **{h['Trainer']}** 厩舎 / **{h['Jockey']}** 騎手 / 父: **{h['Sire']}**
-                - **坂路調教 (最速)**: 4F **{h['Hanro_4F']:.1f}s** ({h_rank_badge}) - 3F {h['Hanro_3F']:.1f}s - 2F {h['Hanro_2F']:.1f}s - 終い **{h['Hanro_1F']:.1f}s**（{h['Hanro_Pattern']}）
-                - **ウッド調教 (最速)**: {h['Wood_Track']} 6F **{h['Wood_6F']:.1f}s** ({w_rank_badge}) - 終い **{h['Wood_1F']:.1f}s**
+                - **坂路調教 (最速)**: {hanro_text}
+                - **ウッド調教 (最速)**: {wood_text}
                 - **能力指数**: F: **{h['FIndex']:.1f}** ({f_badge}) | ARMS2: **{h['ARMS2Index']:.1f}** ({arms_badge}) | TUA: **{h['TUAIndex']:.1f}** ({tua_badge}) | S: **{h['SIndex']:.1f}** ({s_badge})
                 - **Fup2数値**: **{int(h['Fup2Val'])}点** | 人気: {int(h['PopRank'])}番人気
                 """, unsafe_allow_html=True)
