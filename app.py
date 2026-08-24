@@ -13,15 +13,33 @@ st.set_page_config(
 )
 
 # -------------------------------------------------------------
+# 安全な文字列・数値変換ヘルパー関数
+# -------------------------------------------------------------
+def safe_int_str(val, default="-"):
+    if pd.isna(val) or val == "" or str(val).strip().lower() == "nan":
+        return default
+    try:
+        return str(int(float(val)))
+    except Exception:
+        return default
+
+def safe_float_str(val, default="-"):
+    if pd.isna(val) or val == "" or str(val).strip().lower() == "nan":
+        return default
+    try:
+        return f"{float(val):.1f}"
+    except Exception:
+        return default
+
+# -------------------------------------------------------------
 # 1. データ読み込み関数（キャッシュ対応・空白ストリップ完備）
 # -------------------------------------------------------------
 @st.cache_data
 def load_and_preprocess_data():
-    # ファイル探索
     shisu_files = glob.glob("*指数*.csv") + glob.glob("指数、検証用.csv")
     sakuro_files = glob.glob("*坂路*.csv") + glob.glob("坂路、検証用.csv")
     
-    if not shisu_files or not sakuro_files:
+    if not shisu_files:
         return None, None
 
     # 指数CSV読み込み
@@ -67,14 +85,15 @@ def load_and_preprocess_data():
     df_shisu['track'] = df_shisu['place_code'].map(place_map).fillna(df_shisu['場所レース番号'])
 
     # 坂路CSV読み込み
-    sakuro_path = sakuro_files[0]
     df_sakuro = None
-    for enc in ['cp932', 'shift_jis', 'utf-8', 'utf-8-sig']:
-        try:
-            df_sakuro = pd.read_csv(sakuro_path, encoding=enc)
-            break
-        except Exception:
-            continue
+    if sakuro_files:
+        sakuro_path = sakuro_files[0]
+        for enc in ['cp932', 'shift_jis', 'utf-8', 'utf-8-sig']:
+            try:
+                df_sakuro = pd.read_csv(sakuro_path, encoding=enc)
+                break
+            except Exception:
+                continue
             
     if df_sakuro is not None:
         df_sakuro.columns = [c.strip() for c in df_sakuro.columns]
@@ -117,78 +136,84 @@ def load_and_preprocess_data():
         df_merged['min_time1'] = np.nan
         df_merged['min_lap1'] = np.nan
 
+    # 欠損値補正
+    df_merged['has_perfect_accel'] = df_merged['has_perfect_accel'].fillna(False).astype(bool)
+    df_merged['has_ultimate_lap'] = df_merged['has_ultimate_lap'].fillna(False).astype(bool)
+    df_merged['has_fast_t1'] = df_merged['has_fast_t1'].fillna(False).astype(bool)
+    df_merged['has_friday_accel'] = df_merged['has_friday_accel'].fillna(False).astype(bool)
+    df_merged['training_count'] = df_merged['training_count'].fillna(0).astype(int)
+
     return df_merged, df_sakuro
 
 # -------------------------------------------------------------
 # 2. クッション値×種牡馬バイアス判定ロジック
 # -------------------------------------------------------------
 def eval_sire_cushion_bias(track, dist, sire, cv_band, cv_val):
-    bias_type = "標準"
-    bias_desc = ""
-
+    sire_str = str(sire).strip()
+    
     # 京都
     if track == "京都":
         if "≥10.5" in cv_band or cv_val >= 10.5:
-            if sire in ["キタサンブラック", "エピファネイア", "イスラボニータ", "ロードカナロア", "ファインニードル"]:
+            if sire_str in ["キタサンブラック", "エピファネイア", "イスラボニータ", "ロードカナロア", "ファインニードル"]:
                 return "超買い", "京都×超高帯(≥10.5) 特注種牡馬[cite: 1]"
-            if sire in ["キングカメハメハ", "ゴールドシップ", "サートゥルナーリア", "ビッグアーサー", "ハービンジャー"]:
+            if sire_str in ["キングカメハメハ", "ゴールドシップ", "サートゥルナーリア", "ビッグアーサー", "ハービンジャー"]:
                 return "危険消し", "京都×超高帯(≥10.5) 危険種牡馬（大幅割引）[cite: 1]"
     
     # 札幌・函館（場内相対）
     elif track in ["札幌", "函館"]:
-        if sire in ["キズナ", "オルフェーヴル", "ウインブライト", "ファインニードル", "ジョーカプチーノ", "ドゥラメンテ"]:
+        if sire_str in ["キズナ", "オルフェーヴル", "ウインブライト", "ファインニードル", "ジョーカプチーノ", "ドゥラメンテ"]:
             return "超買い", f"{track}×低クッション特化種牡馬[cite: 1]"
-        if sire in ["ディープインパクト", "エピファネイア", "ルーラーシップ", "ゴールドシップ"]:
+        if sire_str in ["ディープインパクト", "エピファネイア", "ルーラーシップ", "ゴールドシップ"]:
             return "危険消し", f"{track}×低クッション危険種牡馬[cite: 1]"
 
     # 中山
     elif track == "中山":
         if "9.5-9.9" in cv_band:
-            if sire in ["シルバーステート", "ディープインパクト", "ハービンジャー"]:
+            if sire_str in ["シルバーステート", "ディープインパクト", "ハービンジャー"]:
                 return "超買い", "中山芝×9.5-9.9 標準高 特注種牡馬[cite: 1]"
-            if sire in ["ダノンバラード"]:
+            if sire_str in ["ダノンバラード"]:
                 return "危険消し", "中山芝2000×9.5-9.9 勝率0% 危険種牡馬[cite: 1]"
-        if ("≥10.5" in cv_band or cv_val >= 10.5) and sire in ["ゴールドシップ"]:
+        if ("≥10.5" in cv_band or cv_val >= 10.5) and sire_str in ["ゴールドシップ"]:
             return "危険消し", "中山芝×超高帯(≥10.5) 危険種牡馬[cite: 1]"
 
     # 阪神
     elif track == "阪神":
-        if "9.5-9.9" in cv_band and sire in ["キズナ", "ディープインパクト", "ドゥラメンテ"]:
+        if "9.5-9.9" in cv_band and sire_str in ["キズナ", "ディープインパクト", "ドゥラメンテ"]:
             return "超買い", "阪神外回り×9.5-9.9 標準高 特注種牡馬[cite: 1]"
-        if "9.5-9.9" in cv_band and sire in ["ハービンジャー", "ルーラーシップ", "ロードカナロア"]:
+        if "9.5-9.9" in cv_band and sire_str in ["ハービンジャー", "ルーラーシップ", "ロードカナロア"]:
             return "危険消し", "阪神芝1800外×9.5-9.9 危険種牡馬[cite: 1]"
-        if "8.6-9.4" in cv_band and sire in ["ルーラーシップ", "キズナ"]:
+        if "8.6-9.4" in cv_band and sire_str in ["ルーラーシップ", "キズナ"]:
             return "超買い", "阪神芝×8.6-9.4 やや低 特注種牡馬[cite: 1]"
 
     # 東京
     elif track == "東京":
         if "9.5-9.9" in cv_band:
-            if sire in ["エピファネイア", "モーリス", "ディープインパクト"]:
+            if sire_str in ["エピファネイア", "モーリス", "ディープインパクト"]:
                 return "超買い", "東京芝×9.5-9.9 標準高 瞬発力特注種牡馬[cite: 1]"
-            if sire in ["ルーラーシップ", "ゴールドシップ", "シルバーステート"]:
+            if sire_str in ["ルーラーシップ", "ゴールドシップ", "シルバーステート"]:
                 return "危険消し", "東京芝×9.5-9.9 危険種牡馬[cite: 1]"
         if "8.6-9.4" in cv_band:
-            if sire in ["キズナ", "エピファネイア", "ロードカナロア", "イスラボニータ"]:
+            if sire_str in ["キズナ", "エピファネイア", "ロードカナロア", "イスラボニータ"]:
                 return "超買い", "東京芝×8.6-9.4 やや低 特注種牡馬[cite: 1]"
-            if sire in ["シルバーステート", "ゴールドシップ", "エイシンフラッシュ", "サトノクラウン", "オルフェーヴル"]:
+            if sire_str in ["シルバーステート", "ゴールドシップ", "エイシンフラッシュ", "サトノクラウン", "オルフェーヴル"]:
                 return "危険消し", "東京芝×8.6-9.4 危険種牡馬[cite: 1]"
 
     # 福島・小倉・新潟
     elif track in ["福島", "小倉", "新潟"]:
-        if sire in ["ビッグアーサー", "ダノンバラード", "ダイワメジャー", "ロードカナロア"]:
+        if sire_str in ["ビッグアーサー", "ダノンバラード", "ダイワメジャー", "ロードカナロア"]:
             return "超買い", f"{track}×ローカル適性種牡馬[cite: 1]"
-        if sire in ["ジャスタウェイ", "ヴィクトワールピサ", "マツリダゴッホ", "カレンブラックヒル", "リオンディーズ"]:
+        if sire_str in ["ジャスタウェイ", "ヴィクトワールピサ", "マツリダゴッホ", "カレンブラックヒル", "リオンディーズ"]:
             return "危険消し", f"{track}×危険種牡馬[cite: 1]"
 
-    return bias_type, bias_desc
+    return "標準", ""
 
 # -------------------------------------------------------------
-# 3. アプリケーション描画メイン
+# 3. アプリケーションメイン
 # -------------------------------------------------------------
 df_all, df_sakuro = load_and_preprocess_data()
 
 if df_all is None:
-    st.error("⚠️ CSVファイル（`指数、検証用.csv` および `坂路、検証用.csv`）が見つかりません。ディレクトリを確認してください。")
+    st.error("⚠️ CSVファイル（`指数、検証用.csv`）が見つかりません。")
     st.stop()
 
 # --- サイドバー描画 ---
@@ -290,8 +315,12 @@ sire_bias_opt = st.sidebar.radio(
 # -------------------------------------------------------------
 df_view = df_all[df_all['track'] == place].copy()
 
-# レース選択プルダウン
-race_list = sorted(df_view['場所レース番号'].unique())
+if df_view.empty:
+    st.warning(f"現在選択された場所（{place}）のデータが存在しません。")
+    st.stop()
+
+# レース選択
+race_list = sorted(df_view['場所レース番号'].dropna().unique())
 selected_race = st.selectbox("🎯 対象レースを選択してください", race_list)
 
 df_race = df_view[df_view['場所レース番号'] == selected_race].copy()
@@ -351,7 +380,7 @@ elif sire_bias_opt == "危険消し馬のみ表示":
     df_race = df_race[df_race['sire_bias'] == "危険消し"]
 
 # -------------------------------------------------------------
-# 5. メイン画面描画（上部サマリーカウンター＆出走馬カード）
+# 5. メイン画面描画
 # -------------------------------------------------------------
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("表示頭数", f"{len(df_race)}頭")
@@ -365,15 +394,18 @@ st.markdown("### 📋 出走馬カード（調教最速・指数・血統バイ�
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", "")
 if search_kw:
     df_race = df_race[
-        df_race['馬名'].str.contains(search_kw, na=False) |
-        df_race['調教師'].str.contains(search_kw, na=False) |
-        df_race['騎手'].str.contains(search_kw, na=False) |
-        df_race['種牡馬'].str.contains(search_kw, na=False)
+        df_race['馬名'].astype(str).str.contains(search_kw, na=False) |
+        df_race['調教師'].astype(str).str.contains(search_kw, na=False) |
+        df_race['騎手'].astype(str).str.contains(search_kw, na=False) |
+        df_race['種牡馬'].astype(str).str.contains(search_kw, na=False)
     ]
 
 # 出走馬カード出力
-for _, horse in df_race.sort_values(by='馬番').iterrows():
-    # GTV印・バッジ
+for _, horse in df_race.sort_values(by='馬番', na_position='last').iterrows():
+    h_num = safe_int_str(horse['馬番'], default="")
+    h_name = str(horse['馬名']).strip()
+    
+    # GTV印
     gtv_badge = f"<span style='background-color: #f59e0b; color: black; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>印:{horse['印_GTV']}</span>" if pd.notna(horse['印_GTV']) and str(horse['印_GTV']).strip() != '' else ""
     
     # 血統バイアルバッジ
@@ -392,25 +424,41 @@ for _, horse in df_race.sort_values(by='馬番').iterrows():
 
     # Fup2カラー判定
     fup2_val = horse['Fup2数値']
-    if fup2_val >= 5:
-        fup2_color = "#ef4444" # 赤（確変）
-    elif fup2_val == 4:
-        fup2_color = "#f59e0b" # 橙（好走・爆弾）
+    if pd.notna(fup2_val) and float(fup2_val) >= 5:
+        fup2_color = "#ef4444"
+    elif pd.notna(fup2_val) and float(fup2_val) == 4:
+        fup2_color = "#f59e0b"
     else:
-        fup2_color = "#9ca3af" # 灰
+        fup2_color = "#9ca3af"
+
+    t_cnt = safe_int_str(horse['training_count'], default="0")
+    t1_val = safe_float_str(horse['min_time1'])
+    lap1_val = safe_float_str(horse['min_lap1'])
+    
+    f_val = safe_float_str(horse['F指数'])
+    f_rk = safe_int_str(horse['F指数順位'])
+    arms_val = safe_float_str(horse['ARMS2指数'])
+    arms_rk = safe_int_str(horse['ARMS2順位'])
+    tua_val = safe_float_str(horse['TUA指数'])
+    tua_rk = safe_int_str(horse['TUA順位'])
+    s_val = safe_float_str(horse['S指数'])
+    pop_rk = safe_int_str(horse['人気順位'])
+    fup2_str = safe_int_str(horse['Fup2数値'])
+
+    sire_desc_str = str(horse['sire_desc']) if horse['sire_desc'] else "基準内"
 
     st.markdown(
         f"""
         <div style="background-color: #1e293b; padding: 16px; border-radius: 8px; margin-bottom: 12px; border-left: 5px solid {badge_bg};">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-                <span style="font-size: 1.2rem; font-weight: bold; color: white;">{int(horse['馬番']) if pd.notna(horse['馬番']) else ''}番 {horse['馬名']}</span>
+                <span style="font-size: 1.2rem; font-weight: bold; color: white;">{h_num}番 {h_name}</span>
                 <div>{gtv_badge} {sire_badge}</div>
             </div>
             <ul style="color: #cbd5e1; font-size: 0.95rem; margin-bottom: 0px; padding-left: 20px;">
-                <li><b>陣営/血統:</b> {horse['調教師']} / {horse['騎手']} / <b>父: {horse['種牡馬']}</b> ({horse['sire_desc'] if horse['sire_desc'] else '基準内'})</li>
-                <li><b>坂路調教:</b> {accel_badge} (最速4F: {horse['min_time1'] if pd.notna(horse['min_time1']) else '-'}s | 最速1F: {horse['min_lap1'] if pd.notna(horse['min_lap1']) else '-'}s | 登坂数: {int(horse['training_count'])}回)</li>
-                <li><b>能力指数:</b> F: <b>{horse['F指数']}</b> ({int(horse['F指数順位']) if pd.notna(horse['F指数順位']) else '-'}位) | ARMS2: <b>{horse['ARMS2指数']}</b> ({int(horse['ARMS2順位']) if pd.notna(horse['ARMS2順位']) else '-'}位) | TUA: <b>{horse['TUA指数']}</b> ({int(horse['TUA順位']) if pd.notna(horse['TUA順位']) else '-'}位) | S: {horse['S指数']}</li>
-                <li><b>Fup2数値:</b> <span style="color: {fup2_color}; font-weight: bold;">{fup2_val}点</span> | <b>人気:</b> {int(horse['人気順位']) if pd.notna(horse['人気順位']) else '-'} 番人気</li>
+                <li><b>陣営/血統:</b> {horse['調教師']} / {horse['騎手']} / <b>父: {horse['種牡馬']}</b> ({sire_desc_str})</li>
+                <li><b>坂路調教:</b> {accel_badge} (最速4F: {t1_val}s | 最速1F: {lap1_val}s | 登坂数: {t_cnt}回)</li>
+                <li><b>能力指数:</b> F: <b>{f_val}</b> ({f_rk}位) | ARMS2: <b>{arms_val}</b> ({arms_rk}位) | TUA: <b>{tua_val}</b> ({tua_rk}位) | S: {s_val}</li>
+                <li><b>Fup2数値:</b> <span style="color: {fup2_color}; font-weight: bold;">{fup2_str}点</span> | <b>人気:</b> {pop_rk} 番人気</li>
             </ul>
         </div>
         """,
