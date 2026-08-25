@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSSスタイル（ダークテーマUI & 豪華バッジ） ---
+# --- CSSスタイル（ダークテーマUI & 順位カラー） ---
 st.markdown("""
 <style>
     .metric-container {
@@ -142,7 +142,7 @@ st.markdown("""
         color: #FFD700;
         font-weight: bold;
         background-color: rgba(255, 215, 0, 0.18);
-        padding: 1px 6px;
+        padding: 1px 5px;
         border-radius: 4px;
         border: 1px solid rgba(255, 215, 0, 0.5);
     }
@@ -150,7 +150,7 @@ st.markdown("""
         color: #E0E0E0;
         font-weight: bold;
         background-color: rgba(224, 224, 224, 0.18);
-        padding: 1px 6px;
+        padding: 1px 5px;
         border-radius: 4px;
         border: 1px solid rgba(224, 224, 224, 0.5);
     }
@@ -158,12 +158,13 @@ st.markdown("""
         color: #CD7F32;
         font-weight: bold;
         background-color: rgba(205, 127, 50, 0.18);
-        padding: 1px 6px;
+        padding: 1px 5px;
         border-radius: 4px;
         border: 1px solid rgba(205, 127, 50, 0.5);
     }
     .rank-normal {
         color: #8b949e;
+        font-size: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -213,11 +214,11 @@ def format_rank_badge(rank_val):
         return "<span class='rank-normal'>-位</span>"
     r = int(rank_val)
     if r == 1:
-        return f"<span class='rank-1st'>🥇 1位</span>"
+        return f"<span class='rank-1st'>🥇1位</span>"
     elif r == 2:
-        return f"<span class='rank-2nd'>🥈 2位</span>"
+        return f"<span class='rank-2nd'>🥈2位</span>"
     elif r == 3:
-        return f"<span class='rank-3rd'>🥉 3位</span>"
+        return f"<span class='rank-3rd'>🥉3位</span>"
     else:
         return f"<span class='rank-normal'>{r}位</span>"
 
@@ -332,7 +333,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     if df_main.empty:
         return pd.DataFrame()
 
-    # レース区分ID付与
     resets = [0]
     for i in range(1, len(df_main)):
         h_curr = df_main.loc[i, '馬名']
@@ -346,7 +346,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['batch_id'] = batch_ids
     df_main['race_uid'] = df_main['batch_id'].astype(str) + "_" + df_main['race_id']
 
-    # 競馬場名・レース番号の正規化
     venue_dict = {'東': '東京', '中': '中山', '京': '京都', '阪': '阪神', '名': '中京', '小': '小倉', '新': '新潟', '福': '福島', '函': '函館', '札': '札幌'}
     def parse_race(rid):
         match = re.match(r'([^\d]+)(\d+)', str(rid))
@@ -367,7 +366,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 坂路調教結合
+    # 3. 坂路調教 CSV (除外なし・全ラップ取り込み)
     df_sakaro = read_csv_flexible(f_sakaro, ['出馬表_坂路.csv', '坂路調教.csv', '坂路.csv'])
     if not df_sakaro.empty:
         s_name = find_col(df_sakaro, ['馬名', '馬 名', '競走馬名'])
@@ -382,24 +381,18 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
             df_sakaro['坂路_4F'] = pd.to_numeric(df_sakaro[c_4f], errors='coerce') if c_4f else np.nan
             df_sakaro['坂路_1F'] = pd.to_numeric(df_sakaro[c_1f], errors='coerce') if c_1f else np.nan
+            df_sakaro['坂路_Lap4'] = pd.to_numeric(df_sakaro[c_lap4], errors='coerce') if c_lap4 else np.nan
+            df_sakaro['坂路_Lap3'] = pd.to_numeric(df_sakaro[c_lap3], errors='coerce') if c_lap3 else np.nan
+            df_sakaro['坂路_Lap2'] = pd.to_numeric(df_sakaro[c_lap2], errors='coerce') if c_lap2 else np.nan
+            df_sakaro['坂路_Lap1'] = pd.to_numeric(df_sakaro[c_lap1], errors='coerce') if c_lap1 else np.nan
 
-            if c_lap4 and c_lap3 and c_lap2 and c_lap1:
-                l4 = pd.to_numeric(df_sakaro[c_lap4], errors='coerce')
-                l3 = pd.to_numeric(df_sakaro[c_lap3], errors='coerce')
-                l2 = pd.to_numeric(df_sakaro[c_lap2], errors='coerce')
-                l1 = pd.to_numeric(df_sakaro[c_lap1], errors='coerce')
-                df_sakaro['坂路_完全加速'] = (l4 > l3) & (l3 > l2) & (l2 > l1)
-            else:
-                df_sakaro['坂路_完全加速'] = False
+            l4, l3, l2, l1 = df_sakaro['坂路_Lap4'], df_sakaro['坂路_Lap3'], df_sakaro['坂路_Lap2'], df_sakaro['坂路_Lap1']
+            df_sakaro['坂路_完全加速'] = (l4 > l3) & (l3 > l2) & (l2 > l1)
 
-            df_main = pd.merge(df_main, df_sakaro[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']].drop_duplicates('馬名'), on='馬名', how='left')
+            sakaro_cols = ['馬名', '坂路_4F', '坂路_1F', '坂路_Lap4', '坂路_Lap3', '坂路_Lap2', '坂路_Lap1', '坂路_完全加速']
+            df_main = pd.merge(df_main, df_sakaro[sakaro_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    if '坂路_4F' not in df_main.columns:
-        df_main['坂路_4F'] = np.nan
-        df_main['坂路_1F'] = np.nan
-        df_main['坂路_完全加速'] = False
-
-    # ウッド調教結合
+    # 4. ウッド調教 CSV (除外なし・全ラップ取り込み)
     df_wood_raw = read_csv_flexible(f_wood, ['ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
@@ -408,6 +401,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             w_df['馬名'] = w_df[c_w_name].astype(str).str.strip()
             c_w_5f = find_col(w_df, ['5F', '５Ｆ', '５F', '5f'])
             c_w_1f = find_col(w_df, ['1F', '１Ｆ', '１F', '1f'])
+            c_w_l4 = find_col(w_df, ['Lap4', 'lap4', 'LAP4', 'L4'])
+            c_w_l3 = find_col(w_df, ['Lap3', 'lap3', 'LAP3', 'L3'])
             c_w_l2 = find_col(w_df, ['Lap2', 'lap2', 'LAP2', 'L2'])
             c_w_l1 = find_col(w_df, ['Lap1', 'lap1', 'LAP1', 'L1'])
             c_w_plc = find_col(w_df, ['場所', '調教場', '場'])
@@ -415,6 +410,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
             w_df['wood_5F'] = pd.to_numeric(w_df[c_w_5f], errors='coerce') if c_w_5f else np.nan
             w_df['wood_1F'] = pd.to_numeric(w_df[c_w_1f], errors='coerce') if c_w_1f else np.nan
+            w_df['wood_Lap4'] = pd.to_numeric(w_df[c_w_l4], errors='coerce') if c_w_l4 else np.nan
+            w_df['wood_Lap3'] = pd.to_numeric(w_df[c_w_l3], errors='coerce') if c_w_l3 else np.nan
             w_df['wood_Lap2'] = pd.to_numeric(w_df[c_w_l2], errors='coerce') if c_w_l2 else np.nan
             w_df['wood_Lap1'] = pd.to_numeric(w_df[c_w_l1], errors='coerce') if c_w_l1 else np.nan
             w_df['wood_place'] = w_df[c_w_plc].astype(str) if c_w_plc else ""
@@ -425,20 +422,27 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             else:
                 w_latest = w_df.groupby('馬名').last().reset_index()
 
-            w_latest = w_latest[(w_latest['wood_5F'] > 50) & (w_latest['wood_5F'] < 90) & (w_latest['wood_1F'] < 30)]
-            wood_sub = w_latest[['馬名', 'wood_place', 'wood_5F', 'wood_1F', 'wood_Lap2', 'wood_Lap1']].drop_duplicates('馬名')
-            df_main = pd.merge(df_main, wood_sub, on='馬名', how='left')
+            wood_cols = ['馬名', 'wood_place', 'wood_5F', 'wood_1F', 'wood_Lap4', 'wood_Lap3', 'wood_Lap2', 'wood_Lap1']
+            df_main = pd.merge(df_main, w_latest[wood_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
+    # レース内順位の算出（坂路 & ウッド）
+    # 坂路順位
+    if '坂路_4F' in df_main.columns:
+        df_main['坂路_4F_rank'] = df_main.groupby('race_uid')['坂路_4F'].rank(method='min', ascending=True)
+        df_main['坂路_Lap4_rank'] = df_main.groupby('race_uid')['坂路_Lap4'].rank(method='min', ascending=True)
+        df_main['坂路_Lap3_rank'] = df_main.groupby('race_uid')['坂路_Lap3'].rank(method='min', ascending=True)
+        df_main['坂路_Lap2_rank'] = df_main.groupby('race_uid')['坂路_Lap2'].rank(method='min', ascending=True)
+        df_main['坂路_Lap1_rank'] = df_main.groupby('race_uid')['坂路_Lap1'].rank(method='min', ascending=True)
+    
+    # ウッド順位
     if 'wood_5F' in df_main.columns:
         df_main['wood_accel'] = df_main['wood_Lap2'] - df_main['wood_Lap1']
         df_main['is_wood_accel'] = df_main['wood_accel'] > 0
         df_main['wood_5F_rank'] = df_main.groupby('race_uid')['wood_5F'].rank(method='min', ascending=True)
-    else:
-        df_main['wood_5F'] = np.nan
-        df_main['wood_1F'] = np.nan
-        df_main['wood_accel'] = np.nan
-        df_main['is_wood_accel'] = False
-        df_main['wood_5F_rank'] = np.nan
+        df_main['wood_Lap4_rank'] = df_main.groupby('race_uid')['wood_Lap4'].rank(method='min', ascending=True)
+        df_main['wood_Lap3_rank'] = df_main.groupby('race_uid')['wood_Lap3'].rank(method='min', ascending=True)
+        df_main['wood_Lap2_rank'] = df_main.groupby('race_uid')['wood_Lap2'].rank(method='min', ascending=True)
+        df_main['wood_Lap1_rank'] = df_main.groupby('race_uid')['wood_Lap1'].rank(method='min', ascending=True)
 
     return df_main
 
@@ -535,20 +539,20 @@ race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
 filtered_df = race_df.copy()
 
 
-# --- フィルタリング処理（チェックボックス選択時のみ絞り込み） ---
+# --- フィルタリング処理 ---
 if syn_iron:
     filtered_df = filtered_df[
         (filtered_df['F_rank'] == 1) &
         (filtered_df['arms_rank'] <= 3) &
-        (filtered_df['wood_1F'] <= 11.5) &
-        (filtered_df['is_wood_accel'] == True)
+        (filtered_df.get('wood_1F', 99) <= 11.5) &
+        (filtered_df.get('is_wood_accel', False) == True)
     ]
 
 if syn_high:
     filtered_df = filtered_df[
         ((filtered_df['F_rank'] == 1) | (filtered_df['F指数'] >= 66)) &
-        (filtered_df['wood_1F'] <= 11.5) &
-        (filtered_df['is_wood_accel'] == True)
+        (filtered_df.get('wood_1F', 99) <= 11.5) &
+        (filtered_df.get('is_wood_accel', False) == True)
     ]
 
 if syn_fup_sakaro:
@@ -561,7 +565,7 @@ if syn_bomb:
     filtered_df = filtered_df[
         (filtered_df['人気'] >= 6) &
         (filtered_df['Fup'] >= 4) &
-        ((filtered_df['is_wood_accel'] == True) | (filtered_df.get('坂路_完全加速', False) == True))
+        ((filtered_df.get('is_wood_accel', False) == True) | (filtered_df.get('坂路_完全加速', False) == True))
     ]
 
 if pat_f1:
@@ -580,13 +584,13 @@ if pat_tua1:
     filtered_df = filtered_df[filtered_df['tua_rank'] == 1]
 
 if pat_wood_top3:
-    filtered_df = filtered_df[filtered_df['wood_5F_rank'] <= 3]
+    filtered_df = filtered_df[filtered_df.get('wood_5F_rank', 99) <= 3]
 
 
 st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;'>", unsafe_allow_html=True)
 
 
-# --- 検索バー（自由検索） ---
+# --- 検索バー ---
 st.markdown("### 📋 出走馬カード（調教最速・指数・血統バイアス完備）")
 
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
@@ -616,7 +620,7 @@ with c4:
 st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
 
 
-# --- 出走馬カード一覧の描画（純粋HTMLで生成して完全レンダリング） ---
+# --- 出走馬カード一覧の描画 ---
 if filtered_df.empty:
     st.info("条件に一致する馬が見つかりませんでした。")
 else:
@@ -632,7 +636,7 @@ else:
         w_1f = row.get('wood_1F', 99.0)
         is_s_accel = row.get('坂路_完全加速', False)
         
-        # --- 豪華特注バッジ群の常時自動判定 ---
+        # 特注バッジ
         badges = []
         if f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel:
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
@@ -658,29 +662,37 @@ else:
 
         badges_html = " ".join(badges)
 
-        # ウッド調教テキスト整形
+        # ウッド調教テキスト（全Lap順位表記）
         if pd.notnull(row.get('wood_5F')):
             place = str(row.get('wood_place', ''))
             f5 = f"{row['wood_5F']:.1f}"
-            f1 = f"{row['wood_1F']:.1f}"
             accel = row.get('wood_accel', 0)
+            accel_badge = f"<span class='badge-accel'>加速 +{accel:.1f}s</span>" if accel > 0 else f"<span class='badge-decel'>減速 {accel:.1f}s</span>"
             
-            if accel > 0:
-                accel_badge = f"<span class='badge-accel'>加速 +{accel:.1f}s</span>"
-            else:
-                accel_badge = f"<span class='badge-decel'>減速 {accel:.1f}s</span>"
-                
-            w_rank_badge = format_rank_badge(row.get('wood_5F_rank'))
-            wood_info = f"{place} (5F: <strong>{f5}s</strong> | 1F: <strong>{f1}s</strong> | {accel_badge} | レース内5F: {w_rank_badge})"
+            w_5f_rk = format_rank_badge(row.get('wood_5F_rank'))
+            w_l4_rk = format_rank_badge(row.get('wood_Lap4_rank'))
+            w_l3_rk = format_rank_badge(row.get('wood_Lap3_rank'))
+            w_l2_rk = format_rank_badge(row.get('wood_Lap2_rank'))
+            w_l1_rk = format_rank_badge(row.get('wood_Lap1_rank'))
+
+            wood_info = f"{place} 5F: <strong>{f5}s</strong> ({w_5f_rk}) | {accel_badge} [ L4: {w_l4_rk} | L3: {w_l3_rk} | L2: {w_l2_rk} | L1: {w_l1_rk} ]"
         else:
             wood_info = "ウッド計測なし"
 
-        # 坂路調教テキスト整形
+        # 坂路調教テキスト（全Lap順位表記）
         if pd.notnull(row.get('坂路_4F')):
-            s_accel_str = "完全加速" if row.get('坂路_完全加速', False) else "非加速"
-            sakaro_info = f"4F: <strong>{row['坂路_4F']:.1f}s</strong> | 1F: <strong>{row.get('坂路_1F', 0.0):.1f}s</strong> ({s_accel_str})"
+            s_accel_str = "<span class='badge-accel'>完全加速</span>" if row.get('坂路_完全加速', False) else "<span class='badge-decel'>非加速</span>"
+            s_4f = f"{row['坂路_4F']:.1f}"
+            
+            s_4f_rk = format_rank_badge(row.get('坂路_4F_rank'))
+            s_l4_rk = format_rank_badge(row.get('坂路_Lap4_rank'))
+            s_l3_rk = format_rank_badge(row.get('坂路_Lap3_rank'))
+            s_l2_rk = format_rank_badge(row.get('坂路_Lap2_rank'))
+            s_l1_rk = format_rank_badge(row.get('坂路_Lap1_rank'))
+
+            sakaro_info = f"4F: <strong>{s_4f}s</strong> ({s_4f_rk}) | {s_accel_str} [ L4: {s_l4_rk} | L3: {s_l3_rk} | L2: {s_l2_rk} | L1: {s_l1_rk} ]"
         else:
-            sakaro_info = "調教×（非加速/負荷なし）"
+            sakaro_info = "坂路計測なし"
 
         u_no = row['馬番']
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
@@ -691,7 +703,7 @@ else:
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
-        # 純粋HTMLで完全構築（Markdownパーサーの誤認識・エスケープを100%防止）
-        card_html = f"""<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</li></ul></div>"""
+        # 純粋HTMLタグのみで安全出力
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
