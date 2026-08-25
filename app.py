@@ -3,7 +3,6 @@ import pandas as pd
 import numpy as np
 import os
 import re
-import textwrap
 
 # --- ページ基本設定 ---
 st.set_page_config(
@@ -40,9 +39,9 @@ st.markdown("""
     .horse-card {
         background-color: #161e2e;
         border-left: 5px solid #238636;
-        padding: 14px 18px;
+        padding: 16px 20px;
         border-radius: 8px;
-        margin-bottom: 14px;
+        margin-bottom: 16px;
         border-top: 1px solid #30363d;
         border-right: 1px solid #30363d;
         border-bottom: 1px solid #30363d;
@@ -51,19 +50,29 @@ st.markdown("""
         display: flex;
         align-items: center;
         flex-wrap: wrap;
-        gap: 6px;
-        margin-bottom: 8px;
+        gap: 8px;
+        margin-bottom: 10px;
     }
     .horse-card-title {
-        font-size: 18px;
+        font-size: 19px;
         font-weight: bold;
         color: #ffffff;
     }
-    .horse-detail-item {
+    .horse-card-list {
+        list-style-type: none;
+        padding-left: 0;
+        margin: 0;
+    }
+    .horse-card-list li {
         font-size: 13.5px;
         color: #c9d1d9;
-        margin-bottom: 4px;
+        margin-bottom: 5px;
         line-height: 1.6;
+    }
+    .horse-card-list li::before {
+        content: "• ";
+        color: #58a6ff;
+        font-weight: bold;
     }
 
     /* 豪華特注バッジ */
@@ -607,7 +616,7 @@ with c4:
 st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
 
 
-# --- 出走馬カード一覧の描画 ---
+# --- 出走馬カード一覧の描画（純粋HTMLで生成して完全レンダリング） ---
 if filtered_df.empty:
     st.info("条件に一致する馬が見つかりませんでした。")
 else:
@@ -682,19 +691,7 @@ else:
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
-        # textwrap.dedent でインデント誤認識による表示崩れを完全防止
-        card_html = textwrap.dedent(f"""
-        <div class='horse-card'>
-            <div class='horse-card-header'>
-                <span class='horse-card-title'>{umaban_str} {row['馬名']}</span>
-                {badges_html}
-            </div>
-            <div class='horse-detail-item'>• <strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></div>
-            <div class='horse-detail-item'>• <strong>坂路調教</strong>: {sakaro_info}</div>
-            <div class='horse-detail-item'>• <strong>ウッド調教</strong>: {wood_info}</div>
-            <div class='horse-detail-item'>• <strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</div>
-            <div class='horse-detail-item'>• <strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</div>
-        </div>
-        """).strip()
+        # 純粋HTMLで完全構築（Markdownパーサーの誤認識・エスケープを100%防止）
+        card_html = f"""<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</li></ul></div>"""
 
         st.markdown(card_html, unsafe_allow_html=True)
