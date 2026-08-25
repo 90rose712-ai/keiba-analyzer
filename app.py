@@ -289,6 +289,7 @@ def format_fup_rank_badge(rank_val):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
+    # 1. 出馬表・指数 CSV の読み込み
     index_src = f_index
     if index_src is None:
         for name in ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv']:
@@ -434,31 +435,90 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 3. 坂路調教 CSV
-    df_sakaro = read_csv_flexible(f_sakaro, ['出馬表_坂路.csv', '坂路調教.csv', '坂路.csv'])
-    if not df_sakaro.empty:
-        s_name = find_col(df_sakaro, ['馬名', '馬 名', '競走馬名'])
-        if s_name:
-            df_sakaro['馬名'] = df_sakaro[s_name].apply(clean_horse_name)
-            c_4f = find_col(df_sakaro, ['4F', '４Ｆ', '４F', '4f'])
-            c_1f = find_col(df_sakaro, ['1F', '１Ｆ', '１F', '1f'])
-            c_lap4 = find_col(df_sakaro, ['Lap4', 'lap4', 'LAP4', 'L4'])
-            c_lap3 = find_col(df_sakaro, ['Lap3', 'lap3', 'LAP3', 'L3'])
-            c_lap2 = find_col(df_sakaro, ['Lap2', 'lap2', 'LAP2', 'L2'])
-            c_lap1 = find_col(df_sakaro, ['Lap1', 'lap1', 'LAP1', 'L1'])
+    # 3. 坂路調教 CSV の超柔軟パース＆結合
+    sakaro_src = f_sakaro
+    if sakaro_src is None:
+        for name in ['出馬表_坂路.csv', '坂路、検証用.csv', '坂路調教.csv', '坂路.csv']:
+            if os.path.exists(name):
+                sakaro_src = name
+                break
 
-            df_sakaro['坂路_4F'] = pd.to_numeric(df_sakaro[c_4f], errors='coerce') if c_4f else np.nan
-            df_sakaro['坂路_1F'] = pd.to_numeric(df_sakaro[c_1f], errors='coerce') if c_1f else np.nan
-            df_sakaro['坂路_Lap4'] = pd.to_numeric(df_sakaro[c_lap4], errors='coerce') if c_lap4 else np.nan
-            df_sakaro['坂路_Lap3'] = pd.to_numeric(df_sakaro[c_lap3], errors='coerce') if c_lap3 else np.nan
-            df_sakaro['坂路_Lap2'] = pd.to_numeric(df_sakaro[c_lap2], errors='coerce') if c_lap2 else np.nan
-            df_sakaro['坂路_Lap1'] = pd.to_numeric(df_sakaro[c_lap1], errors='coerce') if c_lap1 else np.nan
+    df_sakaro_clean = pd.DataFrame()
+    if sakaro_src is not None:
+        if isinstance(sakaro_src, str):
+            with open(sakaro_src, 'r', encoding='shift-jis', errors='ignore') as f:
+                s_lines = f.readlines()
+        else:
+            try:
+                sakaro_src.seek(0)
+            except Exception:
+                pass
+            content = sakaro_src.read()
+            try:
+                s_lines = content.decode('shift-jis').splitlines()
+            except Exception:
+                s_lines = content.decode('utf-8', errors='ignore').splitlines()
 
-            l4, l3, l2, l1 = df_sakaro['坂路_Lap4'], df_sakaro['坂路_Lap3'], df_sakaro['坂路_Lap2'], df_sakaro['坂路_Lap1']
-            df_sakaro['坂路_完全加速'] = (l4 > l3) & (l3 > l2) & (l2 > l1)
+        s_records = []
+        for line in s_lines:
+            parts = [p.strip() for p in line.strip().split(',')]
+            n = len(parts)
+            if n < 4:
+                continue
+            
+            # ヘッダー行判定
+            if '馬名' in parts or '4F' in parts:
+                continue
 
-            sakaro_cols = ['馬名', '坂路_4F', '坂路_1F', '坂路_Lap4', '坂路_Lap3', '坂路_Lap2', '坂路_Lap1', '坂路_完全加速']
-            df_main = pd.merge(df_main, df_sakaro[sakaro_cols].drop_duplicates('馬名'), on='馬名', how='left')
+            # 形式1: TARGET出馬表形式 (race_id, track, dist, umaban, horse, ..., 4F, 3F, 2F, 1F, Lap4, Lap3, Lap2, Lap1)
+            h_name, s_4f, s_1f, s_l4, s_l3, s_l2, s_l1 = None, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
+            
+            # 各列から馬名候補とタイム候補を走査
+            for idx, p in enumerate(parts):
+                if re.match(r'^[\u30A0-\u30FF\* \$]{2,}$', p) and h_name is None:
+                    h_name = clean_horse_name(p)
+            
+            # タイム列の抽出（通常右側に並ぶ）
+            numeric_parts = []
+            for p in parts:
+                val = pd.to_numeric(p, errors='coerce')
+                if pd.notnull(val) and 10.0 <= val <= 120.0:
+                    numeric_parts.append(val)
+            
+            # 坂路時計（4F, 3F, 2F, 1F, Lap4, Lap3, Lap2, Lap1）のパターンマッチ
+            if len(numeric_parts) >= 8:
+                s_4f = numeric_parts[0]
+                s_1f = numeric_parts[3]
+                s_l4 = numeric_parts[4]
+                s_l3 = numeric_parts[5]
+                s_l2 = numeric_parts[6]
+                s_l1 = numeric_parts[7]
+            elif len(numeric_parts) >= 4:
+                s_4f = numeric_parts[0]
+                s_1f = numeric_parts[-1]
+                if len(numeric_parts) >= 5:
+                    s_l1 = numeric_parts[-1]
+                    s_l2 = numeric_parts[-2]
+
+            if h_name:
+                s_records.append({
+                    '馬名': h_name,
+                    '坂路_4F': s_4f,
+                    '坂路_1F': s_1f,
+                    '坂路_Lap4': s_l4,
+                    '坂路_Lap3': s_l3,
+                    '坂路_Lap2': s_l2,
+                    '坂路_Lap1': s_l1
+                })
+
+        if s_records:
+            df_sakaro_clean = pd.DataFrame(s_records)
+            df_sakaro_clean['坂路_完全加速'] = (
+                (df_sakaro_clean['坂路_Lap4'] > df_sakaro_clean['坂路_Lap3']) &
+                (df_sakaro_clean['坂路_Lap3'] > df_sakaro_clean['坂路_Lap2']) &
+                (df_sakaro_clean['坂路_Lap2'] > df_sakaro_clean['坂路_Lap1'])
+            )
+            df_main = pd.merge(df_main, df_sakaro_clean.drop_duplicates('馬名'), on='馬名', how='left')
 
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan
@@ -469,7 +529,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV
+    # 4. ウッド調教 CSV の読み込み
     df_wood_raw = read_csv_flexible(f_wood, ['出馬表_ウッド.csv', 'ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
