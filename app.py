@@ -186,6 +186,23 @@ st.markdown("""
         border-radius: 4px;
         border: 1px solid rgba(255, 165, 0, 0.5);
     }
+
+    /* サイドバー専用シナジーリストカード */
+    .sidebar-synergy-item {
+        background-color: #0d1117;
+        border: 1px solid #30363d;
+        border-left: 3px solid #f78166;
+        padding: 8px 10px;
+        border-radius: 6px;
+        margin-bottom: 6px;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .sidebar-synergy-header {
+        font-weight: bold;
+        color: #ffffff;
+        margin-bottom: 2px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -524,6 +541,37 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 df = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
 
 
+# --- 黄金シナジー該当フラグを全データに付与 ---
+if not df.empty:
+    df['is_syn_iron'] = (
+        (df['F_rank'] == 1) &
+        (df['arms_rank'] <= 3) &
+        (df['wood_1F'] <= 11.5) &
+        (df['is_wood_accel'] == True)
+    )
+    df['is_syn_high'] = (
+        ((df['F_rank'] == 1) | (df['F指数'] >= 66)) &
+        (df['wood_1F'] <= 11.5) &
+        (df['is_wood_accel'] == True)
+    )
+    df['is_syn_fup_sakaro'] = (
+        (df['Fup'] >= 5) &
+        (df['坂路_完全加速'] == True)
+    )
+    df['is_syn_bomb'] = (
+        (df['人気'] >= 6) &
+        (df['Fup'] >= 4) &
+        ((df['is_wood_accel'] == True) | (df['坂路_完全加速'] == True))
+    )
+    df['is_syn_f1_rap'] = (
+        (df['F_rank'] == 1) &
+        (
+            ((df['wood_1F'] <= 12.4) & (df['is_wood_accel'] == True)) |
+            ((df['坂路_1F'] <= 12.4) & (df['坂路_完全加速'] == True))
+        )
+    )
+
+
 # --- サイドバー: 条件・操作エリア ---
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 芝馬場状態")
@@ -548,13 +596,62 @@ if st.sidebar.button("🔄 最新データへ強制再読み込み", use_contain
 st.sidebar.markdown("---")
 
 
-# --- サイドバー: 👑 黄金シナジー抽出 ---
+# ==============================================================================
+# ★ 左側サイドバー: 全レース横断 黄金シナジー該当馬一覧 & 抽出チェックボックス
+# ==============================================================================
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
-syn_iron = st.sidebar.checkbox("💎 鉄板軸馬 (F1位 × arms3位内 × ウッド加速11.5s以下)", help="複勝率 61.9% / 連対率 46.3%")
-syn_high = st.sidebar.checkbox("🔥 高確率軸馬 (F1位/66以上 × ウッド加速11.5s以下)", help="複勝率 54.8〜59.0%")
-syn_fup_sakaro = st.sidebar.checkbox("✨ Fup2(5〜7点) × 坂路完全加速", help="坂路完全加速かつFup高評価")
-syn_f1_rap = st.sidebar.checkbox("🔥 SSS級・F1位 × 究極ラップ (1F≤12.4s)")
-syn_bomb = st.sidebar.checkbox("💣 爆弾穴馬 (6人気以下 × Fup2≥4 × 加速)")
+
+if not df.empty:
+    iron_cnt = int(df['is_syn_iron'].sum())
+    high_cnt = int(df['is_syn_high'].sum())
+    fup_sakaro_cnt = int(df['is_syn_fup_sakaro'].sum())
+    f1_rap_cnt = int(df['is_syn_f1_rap'].sum())
+    bomb_cnt = int(df['is_syn_bomb'].sum())
+else:
+    iron_cnt, high_cnt, fup_sakaro_cnt, f1_rap_cnt, bomb_cnt = 0, 0, 0, 0, 0
+
+# チェックボックス（フィルター用）
+syn_iron = st.sidebar.checkbox(f"💎 鉄板軸馬 (該当: {iron_cnt}頭)", help="複勝率 61.9% / 連対率 46.3%")
+syn_high = st.sidebar.checkbox(f"🔥 高確率軸馬 (該当: {high_cnt}頭)", help="複勝率 54.8〜59.0%")
+syn_fup_sakaro = st.sidebar.checkbox(f"✨ Fup2(5〜7点) × 坂路完全 (該当: {fup_sakaro_cnt}頭)", help="坂路完全加速かつFup高評価")
+syn_f1_rap = st.sidebar.checkbox(f"🔥 SSS級・F1位 × 究極ラップ (該当: {f1_rap_cnt}頭)")
+syn_bomb = st.sidebar.checkbox(f"💣 爆弾穴馬 (該当: {bomb_cnt}頭)")
+
+# --- 全レース横断: 該当馬の即時一覧表示（アコーディオン） ---
+with st.sidebar.expander("📋 【全レース】黄金シナジー該当馬一覧", expanded=True):
+    if not df.empty:
+        any_synergy_df = df[
+            (df['is_syn_iron'] == True) |
+            (df['is_syn_high'] == True) |
+            (df['is_syn_fup_sakaro'] == True) |
+            (df['is_syn_bomb'] == True)
+        ].copy()
+
+        if any_synergy_df.empty:
+            st.caption("現在該当する馬はいません。")
+        else:
+            for _, s_row in any_synergy_df.iterrows():
+                # シナジー種別タグ
+                s_tags = []
+                if s_row['is_syn_iron']:
+                    s_tags.append("💎鉄板軸")
+                elif s_row['is_syn_high']:
+                    s_tags.append("🔥高確率軸")
+                if s_row['is_syn_fup_sakaro']:
+                    s_tags.append("✨Fup坂路")
+                if s_row['is_syn_bomb']:
+                    s_tags.append("💣爆弾")
+                
+                tag_str = " ".join(s_tags)
+                u_str = f"{int(s_row['馬番'])}番" if pd.notnull(s_row['馬番']) and s_row['馬番'] != 99 else ""
+                
+                st.markdown(f"""
+                <div class='sidebar-synergy-item'>
+                    <div class='sidebar-synergy-header'>[{s_row['race_id']}] {u_str} {s_row['馬名']}</div>
+                    <div style='color:#58a6ff;font-weight:bold;margin-top:2px;'>{tag_str}</div>
+                    <div style='color:#8b949e;font-size:11px;'>F:{s_row['F指数']}({s_row['F_rank']}位) | Fup:{int(s_row['Fup'])}点</div>
+                </div>
+                """, unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
 
@@ -616,32 +713,19 @@ filtered_df = race_df.copy()
 
 # --- フィルタリング処理 ---
 if syn_iron:
-    filtered_df = filtered_df[
-        (filtered_df['F_rank'] == 1) &
-        (filtered_df['arms_rank'] <= 3) &
-        (filtered_df['wood_1F'] <= 11.5) &
-        (filtered_df['is_wood_accel'] == True)
-    ]
+    filtered_df = filtered_df[filtered_df['is_syn_iron'] == True]
 
 if syn_high:
-    filtered_df = filtered_df[
-        ((filtered_df['F_rank'] == 1) | (filtered_df['F指数'] >= 66)) &
-        (filtered_df['wood_1F'] <= 11.5) &
-        (filtered_df['is_wood_accel'] == True)
-    ]
+    filtered_df = filtered_df[filtered_df['is_syn_high'] == True]
 
 if syn_fup_sakaro:
-    filtered_df = filtered_df[
-        (filtered_df['Fup'] >= 5) &
-        (filtered_df['坂路_完全加速'] == True)
-    ]
+    filtered_df = filtered_df[filtered_df['is_syn_fup_sakaro'] == True]
+
+if syn_f1_rap:
+    filtered_df = filtered_df[filtered_df['is_syn_f1_rap'] == True]
 
 if syn_bomb:
-    filtered_df = filtered_df[
-        (filtered_df['人気'] >= 6) &
-        (filtered_df['Fup'] >= 4) &
-        ((filtered_df['is_wood_accel'] == True) | (filtered_df['坂路_完全加速'] == True))
-    ]
+    filtered_df = filtered_df[filtered_df['is_syn_bomb'] == True]
 
 if pat_f1:
     filtered_df = filtered_df[filtered_df['F_rank'] == 1]
@@ -722,14 +806,14 @@ else:
         badges = []
         
         # 1. 鉄板軸馬
-        if f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel:
+        if row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
         # 2. 高確率軸
-        elif (f_rank == 1 or f_val >= 66) and w_1f <= 11.5 and is_w_accel:
+        elif row.get('is_syn_high', False):
             badges.append("<span class='badge-synergy badge-high'>🔥 高確率軸 (複勝率55%超)</span>")
             
         # 3. Fup2 坂路完全加速
-        if fup_val >= 5 and is_s_accel:
+        if row.get('is_syn_fup_sakaro', False):
             badges.append("<span class='badge-synergy badge-sakaro-fup'>✨ Fup坂路完全</span>")
             
         # 4. Fup 1位 & 5点以上バッジ
@@ -741,7 +825,7 @@ else:
             badges.append("<span class='badge-synergy badge-fup-high'>⚡ Fup 5点+</span>")
             
         # 5. F指数 1位
-        if f_rank == 1 and not (f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel):
+        if f_rank == 1 and not row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-f1'>👑 F1位</span>")
         elif f_val >= 66 and not (f_rank == 1 or (w_1f <= 11.5 and is_w_accel)):
             badges.append("<span class='badge-synergy badge-f1'>🔥 F66+</span>")
@@ -755,7 +839,7 @@ else:
             badges.append("<span class='badge-synergy badge-tua1'>🛡️ tua1位</span>")
 
         # 8. 爆弾穴馬
-        if pd.notnull(pop_val) and pop_val >= 6 and fup_val >= 4 and (is_w_accel or is_s_accel):
+        if row.get('is_syn_bomb', False):
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
         badges_html = " ".join(badges)
