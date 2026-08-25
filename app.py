@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import os
 import re
+import textwrap
 
 # --- ページ基本設定 ---
 st.set_page_config(
@@ -65,7 +66,7 @@ st.markdown("""
         line-height: 1.6;
     }
 
-    /* 豪華特注バッジ（グラデーション & 光沢エフェクト） */
+    /* 豪華特注バッジ */
     .badge-synergy {
         display: inline-flex;
         align-items: center;
@@ -611,7 +612,6 @@ if filtered_df.empty:
     st.info("条件に一致する馬が見つかりませんでした。")
 else:
     for _, row in filtered_df.iterrows():
-        # 各種フラグ・数値判定
         f_rank = row.get('F_rank', 99)
         f_val = row.get('F指数', 0.0)
         arms_rank = row.get('arms_rank', 99)
@@ -625,33 +625,25 @@ else:
         
         # --- 豪華特注バッジ群の常時自動判定 ---
         badges = []
-        
-        # 1. 鉄板軸馬 (最上位)
         if f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel:
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
-        # 2. 高確率軸
         elif (f_rank == 1 or f_val >= 66) and w_1f <= 11.5 and is_w_accel:
             badges.append("<span class='badge-synergy badge-high'>🔥 高確率軸 (複勝率55%超)</span>")
             
-        # 3. Fup2(5~7点) × 坂路完全加速
         if fup_val >= 5 and is_s_accel:
             badges.append("<span class='badge-synergy badge-sakaro-fup'>✨ Fup坂路完全</span>")
             
-        # 4. F指数 1位
         if f_rank == 1 and not (f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel):
             badges.append("<span class='badge-synergy badge-f1'>👑 F1位</span>")
         elif f_val >= 66 and not (f_rank == 1 or (w_1f <= 11.5 and is_w_accel)):
             badges.append("<span class='badge-synergy badge-f1'>🔥 F66+</span>")
             
-        # 5. arms指数 1位
         if arms_rank == 1:
             badges.append("<span class='badge-synergy badge-arms1'>🚀 arms1位</span>")
             
-        # 6. tua指数 1位
         if tua_rank == 1:
             badges.append("<span class='badge-synergy badge-tua1'>🛡️ tua1位</span>")
 
-        # 7. 爆弾穴馬
         if pd.notnull(pop_val) and pop_val >= 6 and fup_val >= 4 and (is_w_accel or is_s_accel):
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
@@ -686,12 +678,12 @@ else:
         pop_str = f"{int(row['人気'])} 番人気" if pd.notnull(row.get('人気')) else "- 番人気"
         fup_str = f"{int(row['Fup'])}点" if pd.notnull(row.get('Fup')) else "- 点"
         
-        # 指数順位のカラーバッジ生成
         f_badge = format_rank_badge(row.get('F_rank'))
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
-        st.markdown(f"""
+        # textwrap.dedent でインデント誤認識による表示崩れを完全防止
+        card_html = textwrap.dedent(f"""
         <div class='horse-card'>
             <div class='horse-card-header'>
                 <span class='horse-card-title'>{umaban_str} {row['馬名']}</span>
@@ -703,4 +695,6 @@ else:
             <div class='horse-detail-item'>• <strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</div>
             <div class='horse-detail-item'>• <strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</div>
         </div>
-        """, unsafe_allow_html=True)
+        """).strip()
+
+        st.markdown(card_html, unsafe_allow_html=True)
