@@ -135,56 +135,85 @@ def find_col(df, candidates):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
-    df_race_raw = read_csv_flexible(f_index, ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv'])
-    
+    # 1. 出馬表・指数 CSV の行単位高精度パース
+    index_src = f_index
+    if index_src is None:
+        for name in ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv']:
+            if os.path.exists(name):
+                index_src = name
+                break
+
     records = []
-    if not df_race_raw.empty:
+    if index_src is not None:
+        if isinstance(index_src, str):
+            with open(index_src, 'r', encoding='shift-jis', errors='ignore') as f:
+                lines = f.readlines()
+        else:
+            content = index_src.read()
+            try:
+                lines = content.decode('shift-jis').splitlines()
+            except Exception:
+                lines = content.decode('utf-8', errors='ignore').splitlines()
+
         fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
                   '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
-        
-        for line_idx, row in df_race_raw.iterrows():
-            vals = [str(x).strip() if pd.notnull(x) else "" for x in row.values]
-            n = len(vals)
-            race_id, track, dist, umaban, horse = vals[0], "", "", "", None
+
+        for line_idx, line in enumerate(lines):
+            parts = [p.strip() for p in line.strip().split(',')]
+            n = len(parts)
+            if n < 10:
+                continue
+
+            race_id, track, dist, umaban, horse = parts[0], "", "", "", None
             trainer, jockey, sire = "", "", ""
             pop, finish, fup, f_val, f_rank = None, None, 0, 0.0, 99
             arms_val, arms_rank, tua_val, tua_rank = 0.0, 99, 0.0, 99
 
-            if n >= 24:
-                track, dist, umaban = vals[1], vals[2], vals[3]
-                horse = vals[4].replace('*', '').replace('$', '').strip()
-                trainer, jockey = vals[6], vals[7]
-                pop = vals[8]
-                fup = pd.to_numeric(vals[10], errors='coerce')
-                f_val = pd.to_numeric(vals[13], errors='coerce')
-                f_rank = pd.to_numeric(vals[14], errors='coerce')
-                arms_val = pd.to_numeric(vals[16], errors='coerce')
-                arms_rank = pd.to_numeric(vals[17], errors='coerce')
-                tua_val = pd.to_numeric(vals[19], errors='coerce')
-                tua_rank = pd.to_numeric(vals[20], errors='coerce')
-                finish = vals[22]
-                sire = vals[23] if n > 23 else ""
+            if n == 24:
+                # 24列形式
+                track, dist, umaban = parts[1], parts[2], parts[3]
+                horse = parts[4].replace('*', '').replace('$', '').strip()
+                trainer, jockey = parts[6], parts[7]
+                pop = parts[8]
+                fup = pd.to_numeric(parts[10], errors='coerce')
+                f_val = pd.to_numeric(parts[13], errors='coerce')
+                f_rank = pd.to_numeric(parts[14], errors='coerce')
+                arms_val = pd.to_numeric(parts[16], errors='coerce')
+                arms_rank = pd.to_numeric(parts[17], errors='coerce')
+                tua_val = pd.to_numeric(parts[19], errors='coerce')
+                tua_rank = pd.to_numeric(parts[20], errors='coerce')
+                finish = parts[22]
+                sire = parts[23] if n > 23 else ""
             elif n == 23:
-                track, dist, umaban = vals[1], vals[2], vals[3]
-                horse = vals[4].replace('*', '').replace('$', '').strip()
-                trainer, jockey = vals[6], vals[7]
-                pop = vals[8]
-                fup = pd.to_numeric(vals[10], errors='coerce')
-                finish = vals[20]
-                sire = vals[21] if n > 21 else ""
+                # 23列形式 (ビバームス / ラインエレガント等)
+                track, dist, umaban = parts[1], parts[2], parts[3]
+                horse = parts[4].replace('*', '').replace('$', '').strip()
+                trainer, jockey = parts[6], parts[7]
+                pop = parts[8]
+                fup = pd.to_numeric(parts[10], errors='coerce')
+                f_val = pd.to_numeric(parts[12], errors='coerce')
+                f_rank = pd.to_numeric(parts[13], errors='coerce')
+                arms_val = pd.to_numeric(parts[16], errors='coerce')
+                arms_rank = pd.to_numeric(parts[17], errors='coerce')
+                tua_val = pd.to_numeric(parts[18], errors='coerce')
+                tua_rank = pd.to_numeric(parts[19], errors='coerce')
+                finish = parts[20]
+                sire = parts[21] if n > 21 else ""
             elif n >= 26:
-                track, dist, umaban = vals[1], vals[2], vals[3]
-                trainer, jockey = vals[5], vals[6]
-                horse = vals[7].replace('*', '').replace('$', '').strip()
-                pop = vals[8]
-                f_val = pd.to_numeric(vals[12], errors='coerce')
-                f_rank = pd.to_numeric(vals[13], errors='coerce')
-                arms_val = pd.to_numeric(vals[18], errors='coerce')
-                arms_rank = pd.to_numeric(vals[19], errors='coerce')
-                tua_val = pd.to_numeric(vals[21], errors='coerce')
-                tua_rank = pd.to_numeric(vals[22], errors='coerce')
-                finish = vals[24]
-                sire = vals[25] if n > 25 else ""
+                # 26列形式
+                track, dist, umaban = parts[1], parts[2], parts[3]
+                trainer, jockey = parts[5], parts[6]
+                horse = parts[7].replace('*', '').replace('$', '').strip()
+                pop = parts[8]
+                fup = pd.to_numeric(parts[10], errors='coerce')
+                f_val = pd.to_numeric(parts[12], errors='coerce')
+                f_rank = pd.to_numeric(parts[13], errors='coerce')
+                arms_val = pd.to_numeric(parts[18], errors='coerce')
+                arms_rank = pd.to_numeric(parts[19], errors='coerce')
+                tua_val = pd.to_numeric(parts[21], errors='coerce')
+                tua_rank = pd.to_numeric(parts[22], errors='coerce')
+                finish = parts[24]
+                sire = parts[25] if n > 25 else ""
             else:
                 continue
 
@@ -192,7 +221,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 fin_int = fw_map.get(finish, int(finish) if str(finish).isdigit() else np.nan)
                 pop_int = int(pop) if str(pop).isdigit() else np.nan
                 u_int = int(umaban) if str(umaban).isdigit() else 99
-                
+
                 records.append({
                     'race_id': race_id,
                     'track': track,
@@ -243,7 +272,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    # GTVオッズ結合
+    # 2. GTVオッズ CSV
     df_gtv = read_csv_flexible(f_gtv, ['GTV馬.csv', 'GTV.csv'])
     if not df_gtv.empty:
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
@@ -252,7 +281,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 坂路調教結合
+    # 3. 坂路調教 CSV
     df_sakaro = read_csv_flexible(f_sakaro, ['出馬表_坂路.csv', '坂路調教.csv', '坂路.csv'])
     if not df_sakaro.empty:
         s_name = find_col(df_sakaro, ['馬名', '馬 名', '競走馬名'])
@@ -284,7 +313,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_1F'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # ウッド調教結合
+    # 4. ウッド調教 CSV
     df_wood_raw = read_csv_flexible(f_wood, ['ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
@@ -370,25 +399,19 @@ if df.empty:
     st.stop()
 
 
-# --- レース選択UI（競馬場別タブ ＋ 整理されたレースセレクター） ---
+# --- レース選択UI ---
 st.markdown("### 🎯 レース選択")
-
-# 競馬場の一覧（標準的な順序で並べる）
 venue_sort_order = ['東京', '中山', '京都', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌', 'その他']
 existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()] + [v for v in df['競馬場名'].unique() if v not in venue_sort_order]
 
 venue_tabs = st.tabs([f"🏟️ {v}" for v in existing_venues])
-
 selected_race_uid = None
 
 for i, v_name in enumerate(existing_venues):
     with venue_tabs[i]:
         v_df = df[df['競馬場名'] == v_name]
-        
-        # 競馬場内の全レースを抽出（R番号昇順）
         races_in_v = v_df[['race_uid', 'race_id', 'R番号', 'track', 'dist']].drop_duplicates('race_uid').sort_values('R番号')
         
-        # 表示用ラベルの生成
         race_options = {}
         for _, r_row in races_in_v.iterrows():
             n_horses = len(df[df['race_uid'] == r_row['race_uid']])
@@ -403,21 +426,16 @@ for i, v_name in enumerate(existing_venues):
                 key=f"sel_race_{v_name}",
                 label_visibility="collapsed"
             )
-            # 現在アクティブなタブのレースを選択
             if selected_race_uid is None:
                 selected_race_uid = chosen_uid
 
-# レース確定（デフォルトは先頭）
 if not selected_race_uid:
     selected_race_uid = df['race_uid'].iloc[0]
 
-# 該当レースの出走馬データ（馬番昇順で整列）
 race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
-
-
-# --- フィルタリング処理 ---
 filtered_df = race_df.copy()
 
+# シナジー抽出フィルターの適用
 if syn_iron:
     filtered_df = filtered_df[
         (filtered_df['F_rank'] == 1) &
@@ -455,7 +473,7 @@ if search_kw:
     ]
 
 # 指数専用検索・フィルター欄
-with st.expander("📊 指数・調教の詳細検索欄（F指数・ARMS・TUA・Fup・ウッド・坂路）", expanded=False):
+with st.expander("📊 指数・調教の詳細検索欄（F指数・ARMS・TUA・Fup・ウッド・坂路）", expanded=True):
     f_col1, f_col2, f_col3, f_col4 = st.columns(4)
     with f_col1:
         f_rank_filter = st.selectbox("F指数順位", ["指定なし", "1位のみ", "3位以内", "5位以内"], index=0)
@@ -578,6 +596,10 @@ else:
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
         pop_str = f"{int(row['人気'])} 番人気" if pd.notnull(row.get('人気')) else "- 番人気"
         fup_str = f"{int(row['Fup'])}点" if pd.notnull(row.get('Fup')) else "- 点"
+        
+        f_rank_display = f"{int(row['F_rank'])}位" if row.get('F_rank', 99) != 99 else "-位"
+        arms_rank_display = f"{int(row['arms_rank'])}位" if row.get('arms_rank', 99) != 99 else "-位"
+        tua_rank_display = f"{int(row['tua_rank'])}位" if row.get('tua_rank', 99) != 99 else "-位"
 
         st.markdown(f"""
         <div class='horse-card'>
@@ -585,7 +607,7 @@ else:
             <div class='horse-detail-item'>• <strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></div>
             <div class='horse-detail-item'>• <strong>坂路調教</strong>: {sakaro_info}</div>
             <div class='horse-detail-item'>• <strong>ウッド調教</strong>: {wood_info}</div>
-            <div class='horse-detail-item'>• <strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({row.get('F_rank', '-')}位) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({row.get('arms_rank', '-')}位) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({row.get('tua_rank', '-')}位)</div>
+            <div class='horse-detail-item'>• <strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_rank_display}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_rank_display}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_rank_display})</div>
             <div class='horse-detail-item'>• <strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</div>
         </div>
         """, unsafe_allow_html=True)
