@@ -93,7 +93,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- サイドバー: 4つのCSVファイル読み込みUI ---
+# --- サイドバー: 4大CSVアップローダー ---
 st.sidebar.markdown("### 📁 4大CSVデータ読み込み")
 with st.sidebar.expander("CSVファイルの指定 / アップロード", expanded=False):
     up_index = st.file_uploader("1. 出馬表・指数 CSV", type=['csv'], key='up_index')
@@ -113,7 +113,6 @@ def read_csv_flexible(file_obj, default_names):
     if src is None:
         return pd.DataFrame()
     
-    # ファイルオブジェクトまたはパスから読み込み
     try:
         return pd.read_csv(src, encoding='shift-jis')
     except Exception:
@@ -125,6 +124,13 @@ def read_csv_flexible(file_obj, default_names):
             return pd.DataFrame()
 
 
+def find_col(df, candidates):
+    for c in candidates:
+        if c in df.columns:
+            return c
+    return None
+
+
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
@@ -133,7 +139,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     
     records = []
     if not df_race_raw.empty:
-        # ヘッダー有無/行ごとのパース判定
         fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
                   '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
         
@@ -167,6 +172,19 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 fup = pd.to_numeric(vals[10], errors='coerce')
                 finish = vals[20]
                 sire = vals[21] if n > 21 else ""
+            elif n >= 26:
+                track, dist, umaban = vals[1], vals[2], vals[3]
+                trainer, jockey = vals[5], vals[6]
+                horse = vals[7].replace('*', '').replace('$', '').strip()
+                pop = vals[8]
+                f_val = pd.to_numeric(vals[12], errors='coerce')
+                f_rank = pd.to_numeric(vals[13], errors='coerce')
+                arms_val = pd.to_numeric(vals[18], errors='coerce')
+                arms_rank = pd.to_numeric(vals[19], errors='coerce')
+                tua_val = pd.to_numeric(vals[21], errors='coerce')
+                tua_rank = pd.to_numeric(vals[22], errors='coerce')
+                finish = vals[24]
+                sire = vals[25] if n > 25 else ""
             else:
                 continue
 
@@ -214,65 +232,87 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     # 2. GTVオッズ CSV
     df_gtv = read_csv_flexible(f_gtv, ['GTV馬.csv', 'GTV.csv'])
     if not df_gtv.empty:
-        name_col = next((c for c in ['馬名', '馬 名'] if c in df_gtv.columns), None)
+        name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
         if name_col:
             df_gtv['馬名'] = df_gtv[name_col].astype(str).str.strip()
-            # GTV指数やオッズ関連列を特定して結合
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 3. 坂路調教 CSV
+    # 3. 坂路調教 CSV (安全結合)
     df_sakaro = read_csv_flexible(f_sakaro, ['出馬表_坂路.csv', '坂路調教.csv', '坂路.csv'])
     if not df_sakaro.empty:
-        s_name = next((c for c in ['馬名', '馬 名'] if c in df_sakaro.columns), None)
+        s_name = find_col(df_sakaro, ['馬名', '馬 名', '競走馬名'])
         if s_name:
             df_sakaro['馬名'] = df_sakaro[s_name].astype(str).str.strip()
-            # 坂路時計列の抽出
-            for col in ['4F', '3F', '2F', '1F', 'Lap4', 'Lap3', 'Lap2', 'Lap1']:
-                if col in df_sakaro.columns:
-                    df_sakaro[f'坂路_{col}'] = pd.to_numeric(df_sakaro[col], errors='coerce')
             
-            # 坂路完全加速判定（Lap4 > Lap3 > Lap2 > Lap1）
-            if '坂路_Lap4' in df_sakaro.columns and '坂路_Lap1' in df_sakaro.columns:
-                df_sakaro['坂路_完全加速'] = (df_sakaro['坂路_Lap4'] > df_sakaro['坂路_Lap3']) & \
-                                              (df_sakaro['坂路_Lap3'] > df_sakaro['坂路_Lap2']) & \
-                                              (df_sakaro['坂路_Lap2'] > df_sakaro['坂路_Lap1'])
+            c_4f = find_col(df_sakaro, ['4F', '４Ｆ', '４F', '4f'])
+            c_1f = find_col(df_sakaro, ['1F', '１Ｆ', '１F', '1f'])
+            c_lap4 = find_col(df_sakaro, ['Lap4', 'lap4', 'LAP4', 'L4'])
+            c_lap3 = find_col(df_sakaro, ['Lap3', 'lap3', 'LAP3', 'L3'])
+            c_lap2 = find_col(df_sakaro, ['Lap2', 'lap2', 'LAP2', 'L2'])
+            c_lap1 = find_col(df_sakaro, ['Lap1', 'lap1', 'LAP1', 'L1'])
+
+            df_sakaro['坂路_4F'] = pd.to_numeric(df_sakaro[c_4f], errors='coerce') if c_4f else np.nan
+            df_sakaro['坂路_1F'] = pd.to_numeric(df_sakaro[c_1f], errors='coerce') if c_1f else np.nan
+
+            if c_lap4 and c_lap3 and c_lap2 and c_lap1:
+                l4 = pd.to_numeric(df_sakaro[c_lap4], errors='coerce')
+                l3 = pd.to_numeric(df_sakaro[c_lap3], errors='coerce')
+                l2 = pd.to_numeric(df_sakaro[c_lap2], errors='coerce')
+                l1 = pd.to_numeric(df_sakaro[c_lap1], errors='coerce')
+                df_sakaro['坂路_完全加速'] = (l4 > l3) & (l3 > l2) & (l2 > l1)
             else:
                 df_sakaro['坂路_完全加速'] = False
-                
-            df_main = pd.merge(df_main, df_sakaro[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 4. ウッド調教 CSV
+            sakaro_sub = df_sakaro[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']].drop_duplicates('馬名')
+            df_main = pd.merge(df_main, sakaro_sub, on='馬名', how='left')
+
+    # 坂路列が存在しない場合の初期化
+    if '坂路_4F' not in df_main.columns:
+        df_main['坂路_4F'] = np.nan
+        df_main['坂路_1F'] = np.nan
+        df_main['坂路_完全加速'] = False
+
+    # 4. ウッド調教 CSV (安全結合)
     df_wood_raw = read_csv_flexible(f_wood, ['ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
-        for col in ['6F', '5F', '4F', '3F', '2F', '1F', 'Lap6', 'Lap5', 'Lap4', 'Lap3', 'Lap2', 'Lap1']:
-            if col in w_df.columns:
-                w_df[col] = pd.to_numeric(w_df[col], errors='coerce')
         
-        w_df['馬名'] = w_df['馬名'].astype(str).str.strip()
-        if '年月日' in w_df.columns:
-            w_df['調教日'] = pd.to_datetime(w_df['年月日'].astype(str), format='%Y%m%d', errors='coerce')
-            w_latest = w_df.sort_values('調教日').groupby('馬名').last().reset_index()
-        else:
-            w_latest = w_df.groupby('馬名').last().reset_index()
+        c_w_name = find_col(w_df, ['馬名', '馬 名', '競走馬名'])
+        if c_w_name:
+            w_df['馬名'] = w_df[c_w_name].astype(str).str.strip()
             
-        w_latest = w_latest[(w_latest['5F'] > 50) & (w_latest['5F'] < 90) & (w_latest['1F'] < 30)]
-        
-        # プレフィックス付与
-        w_latest = w_latest.rename(columns={
-            '場所': 'wood_place', '5F': 'wood_5F', '4F': 'wood_4F', '3F': 'wood_3F',
-            '2F': 'wood_2F', '1F': 'wood_1F', 'Lap2': 'wood_Lap2', 'Lap1': 'wood_Lap1'
-        })
-        
-        df_main = pd.merge(df_main, w_latest[['馬名', 'wood_place', 'wood_5F', 'wood_1F', 'wood_Lap2', 'wood_Lap1']], on='馬名', how='left')
+            c_w_5f = find_col(w_df, ['5F', '５Ｆ', '５F', '5f'])
+            c_w_1f = find_col(w_df, ['1F', '１Ｆ', '１F', '1f'])
+            c_w_l2 = find_col(w_df, ['Lap2', 'lap2', 'LAP2', 'L2'])
+            c_w_l1 = find_col(w_df, ['Lap1', 'lap1', 'LAP1', 'L1'])
+            c_w_plc = find_col(w_df, ['場所', '調教場', '場'])
+            c_w_date = find_col(w_df, ['年月日', '日付', '日付S'])
 
-    # ウッド追加指標の算出
+            w_df['wood_5F'] = pd.to_numeric(w_df[c_w_5f], errors='coerce') if c_w_5f else np.nan
+            w_df['wood_1F'] = pd.to_numeric(w_df[c_w_1f], errors='coerce') if c_w_1f else np.nan
+            w_df['wood_Lap2'] = pd.to_numeric(w_df[c_w_l2], errors='coerce') if c_w_l2 else np.nan
+            w_df['wood_Lap1'] = pd.to_numeric(w_df[c_w_l1], errors='coerce') if c_w_l1 else np.nan
+            w_df['wood_place'] = w_df[c_w_plc].astype(str) if c_w_plc else ""
+
+            if c_w_date:
+                w_df['調教日'] = pd.to_datetime(w_df[c_w_date].astype(str), format='%Y%m%d', errors='coerce')
+                w_latest = w_df.sort_values('調教日').groupby('馬名').last().reset_index()
+            else:
+                w_latest = w_df.groupby('馬名').last().reset_index()
+
+            w_latest = w_latest[(w_latest['wood_5F'] > 50) & (w_latest['wood_5F'] < 90) & (w_latest['wood_1F'] < 30)]
+            wood_sub = w_latest[['馬名', 'wood_place', 'wood_5F', 'wood_1F', 'wood_Lap2', 'wood_Lap1']].drop_duplicates('馬名')
+            df_main = pd.merge(df_main, wood_sub, on='馬名', how='left')
+
+    # ウッド指標の安全計算
     if 'wood_5F' in df_main.columns:
         df_main['wood_accel'] = df_main['wood_Lap2'] - df_main['wood_Lap1']
         df_main['is_wood_accel'] = df_main['wood_accel'] > 0
         df_main['wood_5F_rank'] = df_main.groupby('race_uid')['wood_5F'].rank(method='min', ascending=True)
     else:
+        df_main['wood_5F'] = np.nan
+        df_main['wood_1F'] = np.nan
         df_main['wood_accel'] = np.nan
         df_main['is_wood_accel'] = False
         df_main['wood_5F_rank'] = np.nan
@@ -354,7 +394,6 @@ if syn_fup_sakaro:
 # --- 検索・詳細フィルターバー（基本検索 ＋ 指数専用検索欄） ---
 st.markdown("### 📋 出走馬カード（調教最速・指数・血統バイアス完備）")
 
-# 1. テキスト自由検索
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
 if search_kw:
     filtered_df = filtered_df[
@@ -364,7 +403,7 @@ if search_kw:
         filtered_df['種牡馬'].str.contains(search_kw, na=False)
     ]
 
-# 2. 指数専用検索・フィルター欄
+# 指数専用検索・フィルター欄
 with st.expander("📊 指数・調教の詳細検索欄（F指数・ARMS・TUA・Fup・ウッド・坂路）", expanded=False):
     f_col1, f_col2, f_col3, f_col4 = st.columns(4)
     with f_col1:
@@ -380,7 +419,7 @@ with st.expander("📊 指数・調教の詳細検索欄（F指数・ARMS・TUA�
         wood_accel_only = st.checkbox("ウッド加速ラップのみ", value=False)
         sakaro_accel_only = st.checkbox("坂路完全加速のみ", value=False)
 
-    # 指数フィルター処理
+    # フィルター処理
     if f_rank_filter == "1位のみ":
         filtered_df = filtered_df[filtered_df['F_rank'] == 1]
     elif f_rank_filter == "3位以内":
@@ -437,7 +476,7 @@ with c3:
     fup_high_cnt = len(race_df[race_df['Fup'] >= 5])
     st.markdown(f"<div class='metric-box'><div class='metric-label'>Fup2(5点以上)</div><div class='metric-val'>{fup_high_cnt}頭</div></div>", unsafe_allow_html=True)
 with c4:
-    wood_accel_cnt = len(race_df[race_df['is_wood_accel'] == True])
+    wood_accel_cnt = len(race_df[race_df.get('is_wood_accel', False) == True])
     st.markdown(f"<div class='metric-box'><div class='metric-label'>ウッド加速該当</div><div class='metric-val'>{wood_accel_cnt}頭</div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
