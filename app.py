@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import re
 
 # --- ページ基本設定 ---
 st.set_page_config(
@@ -134,7 +135,6 @@ def find_col(df, candidates):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
-    # 1. 出馬表・指数 CSV
     df_race_raw = read_csv_flexible(f_index, ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv'])
     
     records = []
@@ -142,10 +142,10 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
                   '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
         
-        for idx, row in df_race_raw.iterrows():
+        for line_idx, row in df_race_raw.iterrows():
             vals = [str(x).strip() if pd.notnull(x) else "" for x in row.values]
             n = len(vals)
-            race_id, track, dist, umaban, horse = vals[0], None, None, None, None
+            race_id, track, dist, umaban, horse = vals[0], "", "", "", None
             trainer, jockey, sire = "", "", ""
             pop, finish, fup, f_val, f_rank = None, None, 0, 0.0, 99
             arms_val, arms_rank, tua_val, tua_rank = 0.0, 99, 0.0, 99
@@ -191,11 +191,13 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             if horse:
                 fin_int = fw_map.get(finish, int(finish) if str(finish).isdigit() else np.nan)
                 pop_int = int(pop) if str(pop).isdigit() else np.nan
+                u_int = int(umaban) if str(umaban).isdigit() else 99
+                
                 records.append({
                     'race_id': race_id,
                     'track': track,
                     'dist': dist,
-                    '馬番': umaban,
+                    '馬番': u_int,
                     '馬名': horse,
                     '調教師': trainer,
                     '騎手': jockey,
@@ -229,7 +231,19 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['batch_id'] = batch_ids
     df_main['race_uid'] = df_main['batch_id'].astype(str) + "_" + df_main['race_id']
 
-    # 2. GTVオッズ CSV
+    # 競馬場名・レース番号の正規化
+    venue_dict = {'東': '東京', '中': '中山', '京': '京都', '阪': '阪神', '名': '中京', '小': '小倉', '新': '新潟', '福': '福島', '函': '函館', '札': '札幌'}
+    def parse_race(rid):
+        match = re.match(r'([^\d]+)(\d+)', str(rid))
+        if match:
+            v_code, r_no = match.group(1), int(match.group(2))
+            v_name = venue_dict.get(v_code, v_code)
+            return v_name, r_no
+        return "その他", 99
+
+    df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
+
+    # GTVオッズ結合
     df_gtv = read_csv_flexible(f_gtv, ['GTV馬.csv', 'GTV.csv'])
     if not df_gtv.empty:
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
@@ -238,13 +252,12 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 3. 坂路調教 CSV (安全結合)
+    # 坂路調教結合
     df_sakaro = read_csv_flexible(f_sakaro, ['出馬表_坂路.csv', '坂路調教.csv', '坂路.csv'])
     if not df_sakaro.empty:
         s_name = find_col(df_sakaro, ['馬名', '馬 名', '競走馬名'])
         if s_name:
             df_sakaro['馬名'] = df_sakaro[s_name].astype(str).str.strip()
-            
             c_4f = find_col(df_sakaro, ['4F', '４Ｆ', '４F', '4f'])
             c_1f = find_col(df_sakaro, ['1F', '１Ｆ', '１F', '1f'])
             c_lap4 = find_col(df_sakaro, ['Lap4', 'lap4', 'LAP4', 'L4'])
@@ -264,24 +277,20 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             else:
                 df_sakaro['坂路_完全加速'] = False
 
-            sakaro_sub = df_sakaro[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']].drop_duplicates('馬名')
-            df_main = pd.merge(df_main, sakaro_sub, on='馬名', how='left')
+            df_main = pd.merge(df_main, df_sakaro[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 坂路列が存在しない場合の初期化
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan
         df_main['坂路_1F'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV (安全結合)
+    # ウッド調教結合
     df_wood_raw = read_csv_flexible(f_wood, ['ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
-        
         c_w_name = find_col(w_df, ['馬名', '馬 名', '競走馬名'])
         if c_w_name:
             w_df['馬名'] = w_df[c_w_name].astype(str).str.strip()
-            
             c_w_5f = find_col(w_df, ['5F', '５Ｆ', '５F', '5f'])
             c_w_1f = find_col(w_df, ['1F', '１Ｆ', '１F', '1f'])
             c_w_l2 = find_col(w_df, ['Lap2', 'lap2', 'LAP2', 'L2'])
@@ -305,7 +314,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             wood_sub = w_latest[['馬名', 'wood_place', 'wood_5F', 'wood_1F', 'wood_Lap2', 'wood_Lap1']].drop_duplicates('馬名')
             df_main = pd.merge(df_main, wood_sub, on='馬名', how='left')
 
-    # ウッド指標の安全計算
     if 'wood_5F' in df_main.columns:
         df_main['wood_accel'] = df_main['wood_Lap2'] - df_main['wood_Lap1']
         df_main['is_wood_accel'] = df_main['wood_accel'] > 0
@@ -361,15 +369,55 @@ if df.empty:
     st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 4大CSVデータ読み込み」からファイルを指定するか、同一フォルダにCSVを配置してください。")
     st.stop()
 
-# レース選択
-all_races = df['race_id'].unique().tolist()
-selected_race_id = st.selectbox("🎯 対象レースを選択してください", all_races, index=0)
-race_df = df[df['race_id'] == selected_race_id].copy()
 
-# フィルタリング初期化
+# --- レース選択UI（競馬場別タブ ＋ 整理されたレースセレクター） ---
+st.markdown("### 🎯 レース選択")
+
+# 競馬場の一覧（標準的な順序で並べる）
+venue_sort_order = ['東京', '中山', '京都', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌', 'その他']
+existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()] + [v for v in df['競馬場名'].unique() if v not in venue_sort_order]
+
+venue_tabs = st.tabs([f"🏟️ {v}" for v in existing_venues])
+
+selected_race_uid = None
+
+for i, v_name in enumerate(existing_venues):
+    with venue_tabs[i]:
+        v_df = df[df['競馬場名'] == v_name]
+        
+        # 競馬場内の全レースを抽出（R番号昇順）
+        races_in_v = v_df[['race_uid', 'race_id', 'R番号', 'track', 'dist']].drop_duplicates('race_uid').sort_values('R番号')
+        
+        # 表示用ラベルの生成
+        race_options = {}
+        for _, r_row in races_in_v.iterrows():
+            n_horses = len(df[df['race_uid'] == r_row['race_uid']])
+            lbl = f"{r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]"
+            race_options[r_row['race_uid']] = lbl
+
+        if race_options:
+            chosen_uid = st.selectbox(
+                f"{v_name}のレースを選択",
+                options=list(race_options.keys()),
+                format_func=lambda x: race_options[x],
+                key=f"sel_race_{v_name}",
+                label_visibility="collapsed"
+            )
+            # 現在アクティブなタブのレースを選択
+            if selected_race_uid is None:
+                selected_race_uid = chosen_uid
+
+# レース確定（デフォルトは先頭）
+if not selected_race_uid:
+    selected_race_uid = df['race_uid'].iloc[0]
+
+# 該当レースの出走馬データ（馬番昇順で整列）
+race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
+
+
+# --- フィルタリング処理 ---
 filtered_df = race_df.copy()
 
-# シナジー抽出フィルターの適用
 if syn_iron:
     filtered_df = filtered_df[
         (filtered_df['F_rank'] == 1) &
@@ -391,7 +439,10 @@ if syn_fup_sakaro:
         (filtered_df.get('坂路_完全加速', False) == True)
     ]
 
-# --- 検索・詳細フィルターバー（基本検索 ＋ 指数専用検索欄） ---
+st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;'>", unsafe_allow_html=True)
+
+
+# --- 検索・詳細フィルターバー ---
 st.markdown("### 📋 出走馬カード（調教最速・指数・血統バイアス完備）")
 
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
@@ -419,7 +470,6 @@ with st.expander("📊 指数・調教の詳細検索欄（F指数・ARMS・TUA�
         wood_accel_only = st.checkbox("ウッド加速ラップのみ", value=False)
         sakaro_accel_only = st.checkbox("坂路完全加速のみ", value=False)
 
-    # フィルター処理
     if f_rank_filter == "1位のみ":
         filtered_df = filtered_df[filtered_df['F_rank'] == 1]
     elif f_rank_filter == "3位以内":
@@ -524,7 +574,8 @@ else:
         elif (f_rank == 1 or f_val >= 66) and f1_val <= 11.5 and is_accel:
             badge_html = "<span class='badge-high'>🔥 高確率軸 (複勝率55%超)</span>"
 
-        umaban_str = f"{int(row['馬番'])}番" if pd.notnull(row.get('馬番')) and str(row['馬番']).isdigit() else "番"
+        u_no = row['馬番']
+        umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
         pop_str = f"{int(row['人気'])} 番人気" if pd.notnull(row.get('人気')) else "- 番人気"
         fup_str = f"{int(row['Fup'])}点" if pd.notnull(row.get('Fup')) else "- 点"
 
