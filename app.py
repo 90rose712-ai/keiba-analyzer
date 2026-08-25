@@ -662,23 +662,19 @@ pat_wood_top3 = st.sidebar.checkbox("⚡ ウッド5F 3位以内")
 
 # --- メイン画面 ---
 if df.empty:
-    st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 4大CSVデータ読み込み」からファイルを指定するか、同一フォルダにCSVを配置してください。)
+    st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 4大CSVデータ読み込み」からファイルを指定するか、同一フォルダにCSVを配置してください。")
     st.stop()
 
 
-# ==============================================================================
-# ★ レース選択UI（確実な双方向状態管理）
-# ==============================================================================
+# --- レース選択UI（確実な双方向状態管理） ---
 st.markdown("### 🎯 レース選択")
 
 venue_sort_order = ['東京', '中山', '京都', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌', 'その他']
 existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()] + [v for v in df['競馬場名'].unique() if v not in venue_sort_order]
 
-# セッション状態の初期化
 if 'active_venue' not in st.session_state or st.session_state['active_venue'] not in existing_venues:
     st.session_state['active_venue'] = existing_venues[0]
 
-# 競馬場選択ラジオボタン
 chosen_venue = st.radio(
     "開催場選択",
     options=existing_venues,
@@ -688,7 +684,6 @@ chosen_venue = st.radio(
 )
 st.session_state['active_venue'] = chosen_venue
 
-# 選択された競馬場内のレース一覧を抽出
 v_df = df[df['競馬場名'] == chosen_venue]
 races_in_v = v_df[['race_uid', 'race_id', 'R番号', 'track', 'dist']].drop_duplicates('race_uid').sort_values('R番号')
 
@@ -700,7 +695,6 @@ for _, r_row in races_in_v.iterrows():
 
 race_uid_list = list(race_options.keys())
 
-# 現在の競馬場での選択状態
 venue_race_key = f"sel_race_uid_{chosen_venue}"
 if venue_race_key not in st.session_state or st.session_state[venue_race_key] not in race_uid_list:
     st.session_state[venue_race_key] = race_uid_list[0]
@@ -714,7 +708,6 @@ selected_race_uid = st.selectbox(
     label_visibility="collapsed"
 )
 
-# 該当レースの出走馬データを馬番昇順で取得
 race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
 filtered_df = race_df.copy()
 
