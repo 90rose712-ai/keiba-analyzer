@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSSスタイル（ダークテーマUI & 順位カラー） ---
+# --- CSSスタイル（ダークテーマUI & 豪華バッジ） ---
 st.markdown("""
 <style>
     .metric-container {
@@ -101,6 +101,16 @@ st.markdown("""
         color: #ffffff;
         border: 1px solid #FFA07A;
     }
+    .badge-fup-top {
+        background: linear-gradient(135deg, #FF512F 0%, #DD2476 100%);
+        color: #ffffff;
+        border: 1px solid #FFA07A;
+    }
+    .badge-fup-high {
+        background: linear-gradient(135deg, #F09819 0%, #EDDE5D 100%);
+        color: #2b1d00;
+        border: 1px solid #FFE066;
+    }
     .badge-f1 {
         background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%);
         color: #2b1d00;
@@ -165,6 +175,16 @@ st.markdown("""
     .rank-normal {
         color: #8b949e;
         font-size: 12px;
+    }
+    
+    /* Fup数値ハイライト */
+    .fup-high-val {
+        color: #FFD700;
+        font-weight: bold;
+        background-color: rgba(255, 165, 0, 0.2);
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(255, 165, 0, 0.5);
     }
 </style>
 """, unsafe_allow_html=True)
@@ -236,6 +256,21 @@ def format_rank_badge(rank_val):
         return f"<span class='rank-normal'>{r}位</span>"
 
 
+# --- Fup順位専用整形ヘルパー（1位のみ色付け） ---
+def format_fup_rank_badge(rank_val):
+    if pd.isnull(rank_val) or rank_val == 99 or rank_val == 0:
+        return "<span class='rank-normal'>-位</span>"
+    try:
+        r = int(rank_val)
+    except Exception:
+        return "<span class='rank-normal'>-位</span>"
+        
+    if r == 1:
+        return f"<span class='rank-1st'>🥇 1位</span>"
+    else:
+        return f"<span class='rank-normal'>{r}位</span>"
+
+
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
@@ -270,7 +305,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
             race_id, track, dist, umaban, horse_raw = parts[0], "", "", "", None
             trainer, jockey, sire = "", "", ""
-            pop, finish, fup, f_val, f_rank = None, None, 0, 0.0, 99
+            pop, finish, fup, fup_rank, f_val, f_rank = None, None, 0, 99, 0.0, 99
             arms_val, arms_rank, tua_val, tua_rank = 0.0, 99, 0.0, 99
 
             if n == 24:
@@ -279,6 +314,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 trainer, jockey = parts[6], parts[7]
                 pop = parts[8]
                 fup = pd.to_numeric(parts[10], errors='coerce')
+                fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[13], errors='coerce')
                 f_rank = pd.to_numeric(parts[14], errors='coerce')
                 arms_val = pd.to_numeric(parts[16], errors='coerce')
@@ -293,6 +329,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 trainer, jockey = parts[6], parts[7]
                 pop = parts[8]
                 fup = pd.to_numeric(parts[10], errors='coerce')
+                fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
                 f_rank = pd.to_numeric(parts[13], errors='coerce')
                 arms_val = pd.to_numeric(parts[16], errors='coerce')
@@ -307,6 +344,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 horse_raw = parts[7]
                 pop = parts[8]
                 fup = pd.to_numeric(parts[10], errors='coerce')
+                fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
                 f_rank = pd.to_numeric(parts[13], errors='coerce')
                 arms_val = pd.to_numeric(parts[18], errors='coerce')
@@ -336,6 +374,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                     '人気': pop_int,
                     '着順': fin_int,
                     'Fup': fup if not np.isnan(fup) else 0,
+                    'Fup_rank': int(fup_rank) if not np.isnan(fup_rank) else 99,
                     'F指数': f_val if not np.isnan(f_val) else 0.0,
                     'F_rank': int(f_rank) if not np.isnan(f_rank) else 99,
                     'arms': arms_val if not np.isnan(arms_val) else 0.0,
@@ -416,7 +455,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV (直近の有効調教を優先抽出)
+    # 4. ウッド調教 CSV
     df_wood_raw = read_csv_flexible(f_wood, ['ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
@@ -446,7 +485,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 w_df['調教日'] = pd.to_datetime(w_df[c_w_date].astype(str), format='%Y%m%d', errors='coerce')
                 w_df = w_df.sort_values('調教日')
             
-            # 5Fまたは1Fが有効な直近レコードを最優先でマージ
             w_latest = w_df.groupby('馬名').last().reset_index()
 
             wood_cols = ['馬名', 'wood_place', 'wood_5F', 'wood_4F', 'wood_1F', 'wood_Lap4', 'wood_Lap3', 'wood_Lap2', 'wood_Lap1']
@@ -526,6 +564,8 @@ st.sidebar.markdown("### 📊 指数黄金パターン抽出")
 pat_f1 = st.sidebar.checkbox("🥇 F指数 1位 (勝率22.1% / 複勝率52.9%)")
 pat_f66 = st.sidebar.checkbox("🔥 F指数 66以上 (高信頼)")
 pat_f1_arms3 = st.sidebar.checkbox("🎯 F指数1位 ＋ arms3位以内")
+pat_fup_top = st.sidebar.checkbox("🌟 Fup 1位 (最上位評価・軸候補)")
+pat_fup5 = st.sidebar.checkbox("✨ Fup 5点以上 (高期待値)")
 pat_arms1 = st.sidebar.checkbox("🚀 arms指数 1位 (期待値ホース)")
 pat_tua1 = st.sidebar.checkbox("🛡️ tua指数 1位 (堅実軸)")
 pat_wood_top3 = st.sidebar.checkbox("⚡ ウッド5F 3位以内")
@@ -612,6 +652,12 @@ if pat_f66:
 if pat_f1_arms3:
     filtered_df = filtered_df[(filtered_df['F_rank'] == 1) & (filtered_df['arms_rank'] <= 3)]
 
+if pat_fup_top:
+    filtered_df = filtered_df[filtered_df['Fup_rank'] == 1]
+
+if pat_fup5:
+    filtered_df = filtered_df[filtered_df['Fup'] >= 5]
+
 if pat_arms1:
     filtered_df = filtered_df[filtered_df['arms_rank'] == 1]
 
@@ -665,39 +711,56 @@ else:
         arms_rank = row.get('arms_rank', 99)
         tua_rank = row.get('tua_rank', 99)
         fup_val = row.get('Fup', 0)
+        fup_rank = row.get('Fup_rank', 99)
         pop_val = row.get('人気', 99)
         
         is_w_accel = bool(row.get('is_wood_accel', False))
         w_1f = row.get('wood_1F', 99.0)
         is_s_accel = bool(row.get('坂路_完全加速', False))
         
-        # 特注バッジ判定
+        # --- 豪華特注バッジ判定 ---
         badges = []
+        
+        # 1. 鉄板軸馬
         if f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel:
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
+        # 2. 高確率軸
         elif (f_rank == 1 or f_val >= 66) and w_1f <= 11.5 and is_w_accel:
             badges.append("<span class='badge-synergy badge-high'>🔥 高確率軸 (複勝率55%超)</span>")
             
+        # 3. Fup2 坂路完全加速
         if fup_val >= 5 and is_s_accel:
             badges.append("<span class='badge-synergy badge-sakaro-fup'>✨ Fup坂路完全</span>")
             
+        # 4. Fup 1位 & 5点以上バッジ
+        if fup_rank == 1 and fup_val >= 5:
+            badges.append("<span class='badge-synergy badge-fup-top'>🌟 Fup 1位 (5点+)</span>")
+        elif fup_rank == 1:
+            badges.append("<span class='badge-synergy badge-fup-top'>👑 Fup 1位</span>")
+        elif fup_val >= 5:
+            badges.append("<span class='badge-synergy badge-fup-high'>⚡ Fup 5点+</span>")
+            
+        # 5. F指数 1位
         if f_rank == 1 and not (f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel):
             badges.append("<span class='badge-synergy badge-f1'>👑 F1位</span>")
         elif f_val >= 66 and not (f_rank == 1 or (w_1f <= 11.5 and is_w_accel)):
             badges.append("<span class='badge-synergy badge-f1'>🔥 F66+</span>")
             
+        # 6. arms指数 1位
         if arms_rank == 1:
             badges.append("<span class='badge-synergy badge-arms1'>🚀 arms1位</span>")
             
+        # 7. tua指数 1位
         if tua_rank == 1:
             badges.append("<span class='badge-synergy badge-tua1'>🛡️ tua1位</span>")
 
+        # 8. 爆弾穴馬
         if pd.notnull(pop_val) and pop_val >= 6 and fup_val >= 4 and (is_w_accel or is_s_accel):
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
         badges_html = " ".join(badges)
 
-        # ウッド調教テキスト（全Lap順位表記）
+        # ウッド調教テキスト
         has_wood = pd.notnull(row.get('wood_1F')) or pd.notnull(row.get('wood_5F')) or pd.notnull(row.get('wood_4F'))
         if has_wood:
             place = str(row.get('wood_place', ''))
@@ -719,7 +782,7 @@ else:
         else:
             wood_info = "ウッド計測なし"
 
-        # 坂路調教テキスト（全Lap順位表記）
+        # 坂路調教テキスト
         has_sakaro = pd.notnull(row.get('坂路_4F')) or pd.notnull(row.get('坂路_1F'))
         if has_sakaro:
             s_accel_str = "<span class='badge-accel'>完全加速</span>" if is_s_accel else "<span class='badge-decel'>非加速</span>"
@@ -738,12 +801,21 @@ else:
         u_no = row['馬番']
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
         pop_str = f"{int(row['人気'])} 番人気" if pd.notnull(row.get('人気')) else "- 番人気"
-        fup_str = f"{int(row['Fup'])}点" if pd.notnull(row.get('Fup')) else "- 点"
+        
+        # Fup数値 & 順位のカラーハイライト
+        if pd.notnull(fup_val) and fup_val >= 5:
+            fup_val_html = f"<span class='fup-high-val'>{int(fup_val)}点</span>"
+        elif pd.notnull(fup_val):
+            fup_val_html = f"<strong>{int(fup_val)}点</strong>"
+        else:
+            fup_val_html = "- 点"
+            
+        fup_rank_html = format_fup_rank_badge(fup_rank)
         
         f_badge = format_rank_badge(row.get('F_rank'))
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
-        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</li></ul></div>"
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
