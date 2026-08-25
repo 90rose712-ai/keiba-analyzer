@@ -11,7 +11,7 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# --- CSSスタイル（ダークテーマUI & 順位カラー） ---
+# --- CSSスタイル（ダークテーマUI & 豪華バッジ） ---
 st.markdown("""
 <style>
     .metric-container {
@@ -46,11 +46,17 @@ st.markdown("""
         border-right: 1px solid #30363d;
         border-bottom: 1px solid #30363d;
     }
+    .horse-card-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+    }
     .horse-card-title {
         font-size: 18px;
         font-weight: bold;
         color: #ffffff;
-        margin-bottom: 8px;
     }
     .horse-detail-item {
         font-size: 13.5px;
@@ -58,24 +64,54 @@ st.markdown("""
         margin-bottom: 4px;
         line-height: 1.6;
     }
-    .badge-iron {
-        background-color: #D4AF37;
-        color: #000000;
-        padding: 2px 7px;
-        border-radius: 4px;
+
+    /* 豪華特注バッジ（グラデーション & 光沢エフェクト） */
+    .badge-synergy {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 6px;
         font-weight: bold;
-        font-size: 11px;
-        margin-left: 6px;
+        font-size: 11.5px;
+        letter-spacing: 0.3px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .badge-iron {
+        background: linear-gradient(135deg, #FFE259 0%, #FFA751 100%);
+        color: #1a1000;
+        border: 1px solid #FFF275;
     }
     .badge-high {
-        background-color: #da3633;
+        background: linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%);
         color: #ffffff;
-        padding: 2px 7px;
-        border-radius: 4px;
-        font-weight: bold;
-        font-size: 11px;
-        margin-left: 6px;
+        border: 1px solid #FF8E72;
     }
+    .badge-sakaro-fup {
+        background: linear-gradient(135deg, #8A2387 0%, #E94057 50%, #F27121 100%);
+        color: #ffffff;
+        border: 1px solid #FFA07A;
+    }
+    .badge-f1 {
+        background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%);
+        color: #2b1d00;
+        border: 1px solid #FFE066;
+    }
+    .badge-arms1 {
+        background: linear-gradient(135deg, #00B4DB 0%, #0083B0 100%);
+        color: #ffffff;
+        border: 1px solid #56CCF2;
+    }
+    .badge-tua1 {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: #052010;
+        border: 1px solid #80FFB4;
+    }
+    .badge-bomb {
+        background: linear-gradient(135deg, #EB3349 0%, #F45C43 100%);
+        color: #ffffff;
+        border: 1px solid #FFA07A;
+    }
+
     .badge-accel {
         background-color: #238636;
         color: #ffffff;
@@ -90,30 +126,31 @@ st.markdown("""
         border-radius: 4px;
         font-size: 11px;
     }
-    /* 順位ハイライト用カラー */
+
+    /* 順位カラーハイライト */
     .rank-1st {
         color: #FFD700;
         font-weight: bold;
-        background-color: rgba(255, 215, 0, 0.15);
-        padding: 1px 5px;
+        background-color: rgba(255, 215, 0, 0.18);
+        padding: 1px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(255, 215, 0, 0.4);
+        border: 1px solid rgba(255, 215, 0, 0.5);
     }
     .rank-2nd {
         color: #E0E0E0;
         font-weight: bold;
-        background-color: rgba(224, 224, 224, 0.15);
-        padding: 1px 5px;
+        background-color: rgba(224, 224, 224, 0.18);
+        padding: 1px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(224, 224, 224, 0.4);
+        border: 1px solid rgba(224, 224, 224, 0.5);
     }
     .rank-3rd {
         color: #CD7F32;
         font-weight: bold;
-        background-color: rgba(205, 127, 50, 0.15);
-        padding: 1px 5px;
+        background-color: rgba(205, 127, 50, 0.18);
+        padding: 1px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(205, 127, 50, 0.4);
+        border: 1px solid rgba(205, 127, 50, 0.5);
     }
     .rank-normal {
         color: #8b949e;
@@ -424,7 +461,7 @@ if st.sidebar.button("🔄 最新データへ強制再読み込み", use_contain
 st.sidebar.markdown("---")
 
 
-# --- サイドバー: 黄金シナジー抽出 ---
+# --- サイドバー: 👑 黄金シナジー抽出 ---
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
 syn_iron = st.sidebar.checkbox("💎 鉄板軸馬 (F1位 × arms3位内 × ウッド加速11.5s以下)", help="複勝率 61.9% / 連対率 46.3%")
 syn_high = st.sidebar.checkbox("🔥 高確率軸馬 (F1位/66以上 × ウッド加速11.5s以下)", help="複勝率 54.8〜59.0%")
@@ -435,7 +472,7 @@ syn_bomb = st.sidebar.checkbox("💣 爆弾穴馬 (6人気以下 × Fup2≥4 × 
 st.sidebar.markdown("---")
 
 
-# --- サイドバー: 指数黄金パターン ---
+# --- サイドバー: 📊 指数黄金パターン抽出 ---
 st.sidebar.markdown("### 📊 指数黄金パターン抽出")
 pat_f1 = st.sidebar.checkbox("🥇 F指数 1位 (勝率22.1% / 複勝率52.9%)")
 pat_f66 = st.sidebar.checkbox("🔥 F指数 66以上 (高信頼)")
@@ -488,7 +525,7 @@ race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
 filtered_df = race_df.copy()
 
 
-# --- 黄金シナジー & 指数パターンのフィルタリング適用 ---
+# --- フィルタリング処理（チェックボックス選択時のみ絞り込み） ---
 if syn_iron:
     filtered_df = filtered_df[
         (filtered_df['F_rank'] == 1) &
@@ -508,6 +545,13 @@ if syn_fup_sakaro:
     filtered_df = filtered_df[
         (filtered_df['Fup'] >= 5) &
         (filtered_df.get('坂路_完全加速', False) == True)
+    ]
+
+if syn_bomb:
+    filtered_df = filtered_df[
+        (filtered_df['人気'] >= 6) &
+        (filtered_df['Fup'] >= 4) &
+        ((filtered_df['is_wood_accel'] == True) | (filtered_df.get('坂路_完全加速', False) == True))
     ]
 
 if pat_f1:
@@ -567,7 +611,53 @@ if filtered_df.empty:
     st.info("条件に一致する馬が見つかりませんでした。")
 else:
     for _, row in filtered_df.iterrows():
-        # ウッド調教テキスト & 順位カラー
+        # 各種フラグ・数値判定
+        f_rank = row.get('F_rank', 99)
+        f_val = row.get('F指数', 0.0)
+        arms_rank = row.get('arms_rank', 99)
+        tua_rank = row.get('tua_rank', 99)
+        fup_val = row.get('Fup', 0)
+        pop_val = row.get('人気', 99)
+        
+        is_w_accel = row.get('is_wood_accel', False)
+        w_1f = row.get('wood_1F', 99.0)
+        is_s_accel = row.get('坂路_完全加速', False)
+        
+        # --- 豪華特注バッジ群の常時自動判定 ---
+        badges = []
+        
+        # 1. 鉄板軸馬 (最上位)
+        if f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel:
+            badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
+        # 2. 高確率軸
+        elif (f_rank == 1 or f_val >= 66) and w_1f <= 11.5 and is_w_accel:
+            badges.append("<span class='badge-synergy badge-high'>🔥 高確率軸 (複勝率55%超)</span>")
+            
+        # 3. Fup2(5~7点) × 坂路完全加速
+        if fup_val >= 5 and is_s_accel:
+            badges.append("<span class='badge-synergy badge-sakaro-fup'>✨ Fup坂路完全</span>")
+            
+        # 4. F指数 1位
+        if f_rank == 1 and not (f_rank == 1 and arms_rank <= 3 and w_1f <= 11.5 and is_w_accel):
+            badges.append("<span class='badge-synergy badge-f1'>👑 F1位</span>")
+        elif f_val >= 66 and not (f_rank == 1 or (w_1f <= 11.5 and is_w_accel)):
+            badges.append("<span class='badge-synergy badge-f1'>🔥 F66+</span>")
+            
+        # 5. arms指数 1位
+        if arms_rank == 1:
+            badges.append("<span class='badge-synergy badge-arms1'>🚀 arms1位</span>")
+            
+        # 6. tua指数 1位
+        if tua_rank == 1:
+            badges.append("<span class='badge-synergy badge-tua1'>🛡️ tua1位</span>")
+
+        # 7. 爆弾穴馬
+        if pd.notnull(pop_val) and pop_val >= 6 and fup_val >= 4 and (is_w_accel or is_s_accel):
+            badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
+
+        badges_html = " ".join(badges)
+
+        # ウッド調教テキスト整形
         if pd.notnull(row.get('wood_5F')):
             place = str(row.get('wood_place', ''))
             f5 = f"{row['wood_5F']:.1f}"
@@ -584,25 +674,12 @@ else:
         else:
             wood_info = "ウッド計測なし"
 
-        # 坂路調教テキスト
+        # 坂路調教テキスト整形
         if pd.notnull(row.get('坂路_4F')):
             s_accel_str = "完全加速" if row.get('坂路_完全加速', False) else "非加速"
             sakaro_info = f"4F: <strong>{row['坂路_4F']:.1f}s</strong> | 1F: <strong>{row.get('坂路_1F', 0.0):.1f}s</strong> ({s_accel_str})"
         else:
             sakaro_info = "調教×（非加速/負荷なし）"
-
-        # 特注バッジ判定
-        badge_html = ""
-        is_accel = row.get('is_wood_accel', False)
-        f1_val = row.get('wood_1F', 99)
-        f_rank = row.get('F_rank', 99)
-        arms_rank = row.get('arms_rank', 99)
-        f_val = row.get('F指数', 0)
-
-        if f_rank == 1 and arms_rank <= 3 and f1_val <= 11.5 and is_accel:
-            badge_html = "<span class='badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>"
-        elif (f_rank == 1 or f_val >= 66) and f1_val <= 11.5 and is_accel:
-            badge_html = "<span class='badge-high'>🔥 高確率軸 (複勝率55%超)</span>"
 
         u_no = row['馬番']
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
@@ -616,7 +693,10 @@ else:
 
         st.markdown(f"""
         <div class='horse-card'>
-            <div class='horse-card-title'>{umaban_str} {row['馬名']} {badge_html}</div>
+            <div class='horse-card-header'>
+                <span class='horse-card-title'>{umaban_str} {row['馬名']}</span>
+                {badges_html}
+            </div>
             <div class='horse-detail-item'>• <strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></div>
             <div class='horse-detail-item'>• <strong>坂路調教</strong>: {sakaro_info}</div>
             <div class='horse-detail-item'>• <strong>ウッド調教</strong>: {wood_info}</div>
