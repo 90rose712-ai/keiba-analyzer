@@ -17,75 +17,75 @@ st.markdown("""
         display: flex;
         justify-content: space-around;
         background-color: #161b22;
-        padding: 18px;
+        padding: 16px;
         border-radius: 10px;
-        margin-bottom: 25px;
+        margin-bottom: 20px;
         border: 1px solid #30363d;
     }
     .metric-box {
         text-align: center;
     }
     .metric-label {
-        font-size: 14px;
+        font-size: 13px;
         color: #8b949e;
-        margin-bottom: 4px;
+        margin-bottom: 2px;
     }
     .metric-val {
-        font-size: 32px;
+        font-size: 28px;
         font-weight: bold;
         color: #f0f6fc;
     }
     .horse-card {
         background-color: #161e2e;
         border-left: 5px solid #238636;
-        padding: 16px 20px;
+        padding: 14px 18px;
         border-radius: 8px;
-        margin-bottom: 18px;
+        margin-bottom: 14px;
         border-top: 1px solid #30363d;
         border-right: 1px solid #30363d;
         border-bottom: 1px solid #30363d;
     }
     .horse-card-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: bold;
         color: #ffffff;
-        margin-bottom: 10px;
+        margin-bottom: 8px;
     }
     .horse-detail-item {
-        font-size: 14px;
+        font-size: 13.5px;
         color: #c9d1d9;
-        margin-bottom: 6px;
-        line-height: 1.6;
+        margin-bottom: 4px;
+        line-height: 1.5;
     }
     .badge-iron {
         background-color: #D4AF37;
         color: #000000;
-        padding: 3px 8px;
+        padding: 2px 7px;
         border-radius: 4px;
         font-weight: bold;
-        font-size: 12px;
-        margin-left: 8px;
+        font-size: 11px;
+        margin-left: 6px;
     }
     .badge-high {
         background-color: #da3633;
         color: #ffffff;
-        padding: 3px 8px;
+        padding: 2px 7px;
         border-radius: 4px;
         font-weight: bold;
-        font-size: 12px;
-        margin-left: 8px;
+        font-size: 11px;
+        margin-left: 6px;
     }
     .badge-accel {
         background-color: #238636;
         color: #ffffff;
-        padding: 2px 6px;
+        padding: 2px 5px;
         border-radius: 4px;
         font-size: 11px;
     }
     .badge-decel {
         background-color: #6e7681;
         color: #ffffff;
-        padding: 2px 6px;
+        padding: 2px 5px;
         border-radius: 4px;
         font-size: 11px;
     }
@@ -93,110 +93,87 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- サイドバー: CSVアップローダー ---
-st.sidebar.markdown("### 📁 CSVデータ読み込み")
-uploaded_wood = st.sidebar.file_uploader("ウッド調教CSV", type=['csv'])
-uploaded_index = st.sidebar.file_uploader("指数・レースCSV", type=['csv'])
+# --- サイドバー: 4つのCSVファイル読み込みUI ---
+st.sidebar.markdown("### 📁 4大CSVデータ読み込み")
+with st.sidebar.expander("CSVファイルの指定 / アップロード", expanded=False):
+    up_index = st.file_uploader("1. 出馬表・指数 CSV", type=['csv'], key='up_index')
+    up_gtv = st.file_uploader("2. GTVオッズ CSV", type=['csv'], key='up_gtv')
+    up_sakaro = st.file_uploader("3. 坂路調教 CSV", type=['csv'], key='up_sakaro')
+    up_wood = st.file_uploader("4. ウッド調教 CSV", type=['csv'], key='up_wood')
 
 
-# --- データロード＆前処理関数 ---
-@st.cache_data
-def load_and_process_data(wood_file_obj, index_file_obj):
-    # 1. ウッド調教データの読み込み
-    df_wood = pd.DataFrame()
-    wood_src = wood_file_obj if wood_file_obj is not None else ('ウッド、検証用.csv' if os.path.exists('ウッド、検証用.csv') else None)
+# --- CSV読み込み汎用ヘルパー ---
+def read_csv_flexible(file_obj, default_names):
+    src = file_obj
+    if src is None:
+        for name in default_names:
+            if os.path.exists(name):
+                src = name
+                break
+    if src is None:
+        return pd.DataFrame()
     
-    if wood_src is not None:
+    # ファイルオブジェクトまたはパスから読み込み
+    try:
+        return pd.read_csv(src, encoding='shift-jis')
+    except Exception:
         try:
-            df_w = pd.read_csv(wood_src, encoding='shift-jis')
+            if hasattr(src, 'seek'):
+                src.seek(0)
+            return pd.read_csv(src, encoding='utf-8', errors='ignore')
         except Exception:
-            try:
-                wood_src.seek(0)
-            except Exception:
-                pass
-            df_w = pd.read_csv(wood_src, encoding='utf-8', errors='ignore')
-        
-        df_w = df_w[df_w['場所'] != '場所'].copy()
-        for col in ['6F', '5F', '4F', '3F', '2F', '1F', 'Lap6', 'Lap5', 'Lap4', 'Lap3', 'Lap2', 'Lap1']:
-            if col in df_w.columns:
-                df_w[col] = pd.to_numeric(df_w[col], errors='coerce')
-        
-        df_w['馬名'] = df_w['馬名'].astype(str).str.strip()
-        df_w['調教日'] = pd.to_datetime(df_w['年月日'].astype(str), format='%Y%m%d', errors='coerce')
-        df_w = df_w[(df_w['5F'] > 50) & (df_w['5F'] < 90) & (df_w['1F'] < 30)]
-        df_wood = df_w.sort_values('調教日').groupby('馬名').last().reset_index()
+            return pd.DataFrame()
 
-    # 2. 指数・レースデータの読み込み
-    df_race = pd.DataFrame()
-    index_src = index_file_obj if index_file_obj is not None else ('指数、検証用.csv' if os.path.exists('指数、検証用.csv') else None)
+
+# --- データロード＆4CSV統合処理 ---
+@st.cache_data
+def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
+    # 1. 出馬表・指数 CSV
+    df_race_raw = read_csv_flexible(f_index, ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv'])
     
-    if index_src is not None:
-        if isinstance(index_src, str):
-            with open(index_src, 'r', encoding='shift-jis', errors='ignore') as f:
-                lines = f.readlines()
-        else:
-            content = index_src.read()
-            try:
-                lines = content.decode('shift-jis').splitlines()
-            except Exception:
-                lines = content.decode('utf-8', errors='ignore').splitlines()
-
+    records = []
+    if not df_race_raw.empty:
+        # ヘッダー有無/行ごとのパース判定
         fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
                   '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
-
-        records = []
-        for line_idx, line in enumerate(lines):
-            parts = [p.strip() for p in line.strip().split(',')]
-            n = len(parts)
-            if n < 10:
-                continue
-
-            race_id, track, dist, umaban, horse = parts[0], None, None, None, None
+        
+        for idx, row in df_race_raw.iterrows():
+            vals = [str(x).strip() if pd.notnull(x) else "" for x in row.values]
+            n = len(vals)
+            race_id, track, dist, umaban, horse = vals[0], None, None, None, None
             trainer, jockey, sire = "", "", ""
             pop, finish, fup, f_val, f_rank = None, None, 0, 0.0, 99
             arms_val, arms_rank, tua_val, tua_rank = 0.0, 99, 0.0, 99
 
-            if n == 24:
-                track, dist, umaban = parts[1], parts[2], parts[3]
-                horse = parts[4].replace('*', '').replace('$', '').strip()
-                trainer, jockey = parts[6], parts[7]
-                pop = parts[8]
-                fup = pd.to_numeric(parts[10], errors='coerce')
-                f_val = pd.to_numeric(parts[13], errors='coerce')
-                f_rank = pd.to_numeric(parts[14], errors='coerce')
-                arms_val = pd.to_numeric(parts[16], errors='coerce')
-                arms_rank = pd.to_numeric(parts[17], errors='coerce')
-                tua_val = pd.to_numeric(parts[19], errors='coerce')
-                tua_rank = pd.to_numeric(parts[20], errors='coerce')
-                finish = parts[22]
-                sire = parts[23] if len(parts) > 23 else ""
+            if n >= 24:
+                track, dist, umaban = vals[1], vals[2], vals[3]
+                horse = vals[4].replace('*', '').replace('$', '').strip()
+                trainer, jockey = vals[6], vals[7]
+                pop = vals[8]
+                fup = pd.to_numeric(vals[10], errors='coerce')
+                f_val = pd.to_numeric(vals[13], errors='coerce')
+                f_rank = pd.to_numeric(vals[14], errors='coerce')
+                arms_val = pd.to_numeric(vals[16], errors='coerce')
+                arms_rank = pd.to_numeric(vals[17], errors='coerce')
+                tua_val = pd.to_numeric(vals[19], errors='coerce')
+                tua_rank = pd.to_numeric(vals[20], errors='coerce')
+                finish = vals[22]
+                sire = vals[23] if n > 23 else ""
             elif n == 23:
-                track, dist, umaban = parts[1], parts[2], parts[3]
-                horse = parts[4].replace('*', '').replace('$', '').strip()
-                trainer, jockey = parts[6], parts[7]
-                pop = parts[8]
-                fup = pd.to_numeric(parts[10], errors='coerce')
-                finish = parts[20]
-                sire = parts[21] if len(parts) > 21 else ""
-            elif n == 26:
-                track, dist, umaban = parts[1], parts[2], parts[3]
-                trainer, jockey = parts[5], parts[6]
-                horse = parts[7].replace('*', '').replace('$', '').strip()
-                pop = parts[8]
-                f_val = pd.to_numeric(parts[12], errors='coerce')
-                f_rank = pd.to_numeric(parts[13], errors='coerce')
-                arms_val = pd.to_numeric(parts[18], errors='coerce')
-                arms_rank = pd.to_numeric(parts[19], errors='coerce')
-                tua_val = pd.to_numeric(parts[21], errors='coerce')
-                tua_rank = pd.to_numeric(parts[22], errors='coerce')
-                finish = parts[24]
-                sire = parts[25] if len(parts) > 25 else ""
+                track, dist, umaban = vals[1], vals[2], vals[3]
+                horse = vals[4].replace('*', '').replace('$', '').strip()
+                trainer, jockey = vals[6], vals[7]
+                pop = vals[8]
+                fup = pd.to_numeric(vals[10], errors='coerce')
+                finish = vals[20]
+                sire = vals[21] if n > 21 else ""
+            else:
+                continue
 
             if horse:
                 fin_int = fw_map.get(finish, int(finish) if str(finish).isdigit() else np.nan)
                 pop_int = int(pop) if str(pop).isdigit() else np.nan
                 records.append({
-                    'line_idx': line_idx,
                     'race_id': race_id,
                     'track': track,
                     'dist': dist,
@@ -216,49 +193,96 @@ def load_and_process_data(wood_file_obj, index_file_obj):
                     'tua_rank': int(tua_rank) if not np.isnan(tua_rank) else 99
                 })
 
-        df_race = pd.DataFrame(records)
+    df_main = pd.DataFrame(records)
+    if df_main.empty:
+        return pd.DataFrame()
 
-        # レース区分の識別（五十音順リセット判定）
-        if not df_race.empty:
-            resets = [0]
-            for i in range(1, len(df_race)):
-                h_curr = df_race.loc[i, '馬名']
-                h_prev = df_race.loc[i - 1, '馬名']
-                if h_curr < h_prev and (h_prev > 'マ' and h_curr < 'ウ'):
-                    resets.append(i)
-            resets.append(len(df_race))
+    # レース区分ID付与
+    resets = [0]
+    for i in range(1, len(df_main)):
+        h_curr = df_main.loc[i, '馬名']
+        h_prev = df_main.loc[i - 1, '馬名']
+        if h_curr < h_prev and (h_prev > 'マ' and h_curr < 'ウ'):
+            resets.append(i)
+    resets.append(len(df_main))
+    batch_ids = []
+    for i in range(len(resets) - 1):
+        batch_ids.extend([i] * (resets[i + 1] - resets[i]))
+    df_main['batch_id'] = batch_ids
+    df_main['race_uid'] = df_main['batch_id'].astype(str) + "_" + df_main['race_id']
 
-            batch_ids = []
-            for i in range(len(resets) - 1):
-                batch_ids.extend([i] * (resets[i + 1] - resets[i]))
-            df_race['batch_id'] = batch_ids
-            df_race['race_uid'] = df_race['batch_id'].astype(str) + "_" + df_race['race_id']
+    # 2. GTVオッズ CSV
+    df_gtv = read_csv_flexible(f_gtv, ['GTV馬.csv', 'GTV.csv'])
+    if not df_gtv.empty:
+        name_col = next((c for c in ['馬名', '馬 名'] if c in df_gtv.columns), None)
+        if name_col:
+            df_gtv['馬名'] = df_gtv[name_col].astype(str).str.strip()
+            # GTV指数やオッズ関連列を特定して結合
+            gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
+            df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 3. マージと調教順位・加速タイムの算出
-    if not df_race.empty and not df_wood.empty:
-        merged = pd.merge(df_race, df_wood, on='馬名', how='left')
-    else:
-        merged = df_race
-
-    # ウッド指標の計算
-    if not merged.empty:
-        if '5F' in merged.columns and '1F' in merged.columns:
-            merged['wood_accel'] = merged['Lap2'] - merged['Lap1']
-            merged['is_wood_accel'] = merged['wood_accel'] > 0
-            if 'race_uid' in merged.columns:
-                merged['wood_5F_rank'] = merged.groupby('race_uid')['5F'].rank(method='min', ascending=True)
+    # 3. 坂路調教 CSV
+    df_sakaro = read_csv_flexible(f_sakaro, ['出馬表_坂路.csv', '坂路調教.csv', '坂路.csv'])
+    if not df_sakaro.empty:
+        s_name = next((c for c in ['馬名', '馬 名'] if c in df_sakaro.columns), None)
+        if s_name:
+            df_sakaro['馬名'] = df_sakaro[s_name].astype(str).str.strip()
+            # 坂路時計列の抽出
+            for col in ['4F', '3F', '2F', '1F', 'Lap4', 'Lap3', 'Lap2', 'Lap1']:
+                if col in df_sakaro.columns:
+                    df_sakaro[f'坂路_{col}'] = pd.to_numeric(df_sakaro[col], errors='coerce')
+            
+            # 坂路完全加速判定（Lap4 > Lap3 > Lap2 > Lap1）
+            if '坂路_Lap4' in df_sakaro.columns and '坂路_Lap1' in df_sakaro.columns:
+                df_sakaro['坂路_完全加速'] = (df_sakaro['坂路_Lap4'] > df_sakaro['坂路_Lap3']) & \
+                                              (df_sakaro['坂路_Lap3'] > df_sakaro['坂路_Lap2']) & \
+                                              (df_sakaro['坂路_Lap2'] > df_sakaro['坂路_Lap1'])
             else:
-                merged['wood_5F_rank'] = np.nan
+                df_sakaro['坂路_完全加速'] = False
+                
+            df_main = pd.merge(df_main, df_sakaro[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']].drop_duplicates('馬名'), on='馬名', how='left')
+
+    # 4. ウッド調教 CSV
+    df_wood_raw = read_csv_flexible(f_wood, ['ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
+    if not df_wood_raw.empty:
+        w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
+        for col in ['6F', '5F', '4F', '3F', '2F', '1F', 'Lap6', 'Lap5', 'Lap4', 'Lap3', 'Lap2', 'Lap1']:
+            if col in w_df.columns:
+                w_df[col] = pd.to_numeric(w_df[col], errors='coerce')
+        
+        w_df['馬名'] = w_df['馬名'].astype(str).str.strip()
+        if '年月日' in w_df.columns:
+            w_df['調教日'] = pd.to_datetime(w_df['年月日'].astype(str), format='%Y%m%d', errors='coerce')
+            w_latest = w_df.sort_values('調教日').groupby('馬名').last().reset_index()
         else:
-            merged['wood_accel'] = np.nan
-            merged['is_wood_accel'] = False
-            merged['wood_5F_rank'] = np.nan
+            w_latest = w_df.groupby('馬名').last().reset_index()
+            
+        w_latest = w_latest[(w_latest['5F'] > 50) & (w_latest['5F'] < 90) & (w_latest['1F'] < 30)]
+        
+        # プレフィックス付与
+        w_latest = w_latest.rename(columns={
+            '場所': 'wood_place', '5F': 'wood_5F', '4F': 'wood_4F', '3F': 'wood_3F',
+            '2F': 'wood_2F', '1F': 'wood_1F', 'Lap2': 'wood_Lap2', 'Lap1': 'wood_Lap1'
+        })
+        
+        df_main = pd.merge(df_main, w_latest[['馬名', 'wood_place', 'wood_5F', 'wood_1F', 'wood_Lap2', 'wood_Lap1']], on='馬名', how='left')
 
-    return merged
+    # ウッド追加指標の算出
+    if 'wood_5F' in df_main.columns:
+        df_main['wood_accel'] = df_main['wood_Lap2'] - df_main['wood_Lap1']
+        df_main['is_wood_accel'] = df_main['wood_accel'] > 0
+        df_main['wood_5F_rank'] = df_main.groupby('race_uid')['wood_5F'].rank(method='min', ascending=True)
+    else:
+        df_main['wood_accel'] = np.nan
+        df_main['is_wood_accel'] = False
+        df_main['wood_5F_rank'] = np.nan
+
+    return df_main
 
 
-# データ読み込み実行
-df = load_and_process_data(uploaded_wood, uploaded_index)
+# 統合データ読み込み実行
+df = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
+
 
 # --- サイドバー: 条件・操作エリア ---
 st.sidebar.markdown("---")
@@ -285,69 +309,52 @@ st.sidebar.markdown("---")
 
 # --- 黄金シナジー抽出 ---
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
-
-syn_iron = st.sidebar.checkbox(
-    "💎 鉄板軸馬 (F1位 × arms3位内 × ウッド加速11.5s以下)",
-    help="実測検証値: 複勝率 61.9% / 連対率 46.3% / 勝率 25.2%"
-)
-syn_high = st.sidebar.checkbox(
-    "🔥 高確率軸馬 (F1位/66以上 × ウッド加速11.5s以下)",
-    help="実測検証値: 複勝率 54.8〜59.0% / 連対率 40.7〜44.3%"
-)
+syn_iron = st.sidebar.checkbox("💎 鉄板軸馬 (F1位 × arms3位内 × ウッド加速11.5s以下)", help="複勝率 61.9% / 連対率 46.3%")
+syn_high = st.sidebar.checkbox("🔥 高確率軸馬 (F1位/66以上 × ウッド加速11.5s以下)", help="複勝率 54.8〜59.0%")
 syn_fup_sakaro = st.sidebar.checkbox("✨ Fup2(5〜7点) × 坂路完全加速", help="坂路完全加速かつFup高評価")
 syn_f1_rap = st.sidebar.checkbox("🔥 SSS級・F1位 × 究極ラップ (1F≤12.4s)")
 syn_bomb = st.sidebar.checkbox("💣 爆弾穴馬 (6人気以下 × Fup2≥4 × 加速)")
 
-st.sidebar.markdown("---")
-
-# --- 能力指数フィルター ---
-st.sidebar.markdown("### 📊 能力指数フィルター")
-f_rank_1 = st.sidebar.checkbox("F指数 1位")
-f_rank_3 = st.sidebar.checkbox("F指数 3位以内")
-wood_top3 = st.sidebar.checkbox("ウッド5F 3位以内")
-
 
 # --- メイン画面 ---
 if df.empty:
-    st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 CSVデータ読み込み」から2つのファイルをアップロードするか、同じフォルダ内に配置してください。")
+    st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 4大CSVデータ読み込み」からファイルを指定するか、同一フォルダにCSVを配置してください。")
     st.stop()
 
-# レース選択プルダウン
+# レース選択
 all_races = df['race_id'].unique().tolist()
 selected_race_id = st.selectbox("🎯 対象レースを選択してください", all_races, index=0)
-
-# 該当レースのデータ抽出
 race_df = df[df['race_id'] == selected_race_id].copy()
 
-# フィルタリング適用
+# フィルタリング初期化
 filtered_df = race_df.copy()
 
+# シナジー抽出フィルターの適用
 if syn_iron:
     filtered_df = filtered_df[
         (filtered_df['F_rank'] == 1) &
         (filtered_df['arms_rank'] <= 3) &
-        (filtered_df['1F'] <= 11.5) &
+        (filtered_df['wood_1F'] <= 11.5) &
         (filtered_df['is_wood_accel'] == True)
     ]
 
 if syn_high:
     filtered_df = filtered_df[
         ((filtered_df['F_rank'] == 1) | (filtered_df['F指数'] >= 66)) &
-        (filtered_df['1F'] <= 11.5) &
+        (filtered_df['wood_1F'] <= 11.5) &
         (filtered_df['is_wood_accel'] == True)
     ]
 
-if f_rank_1:
-    filtered_df = filtered_df[filtered_df['F_rank'] == 1]
+if syn_fup_sakaro:
+    filtered_df = filtered_df[
+        (filtered_df['Fup'] >= 5) &
+        (filtered_df.get('坂路_完全加速', False) == True)
+    ]
 
-if f_rank_3:
-    filtered_df = filtered_df[filtered_df['F_rank'] <= 3]
+# --- 検索・詳細フィルターバー（基本検索 ＋ 指数専用検索欄） ---
+st.markdown("### 📋 出走馬カード（調教最速・指数・血統バイアス完備）")
 
-if wood_top3:
-    filtered_df = filtered_df[filtered_df['wood_5F_rank'] <= 3]
-
-# 検索バー
-st.markdown("### 📋 出走馬カード（調教最速・指数・ウッド検証完備）")
+# 1. テキスト自由検索
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
 if search_kw:
     filtered_df = filtered_df[
@@ -357,31 +364,95 @@ if search_kw:
         filtered_df['種牡馬'].str.contains(search_kw, na=False)
     ]
 
-# 上部サマリーカウンター
+# 2. 指数専用検索・フィルター欄
+with st.expander("📊 指数・調教の詳細検索欄（F指数・ARMS・TUA・Fup・ウッド・坂路）", expanded=False):
+    f_col1, f_col2, f_col3, f_col4 = st.columns(4)
+    with f_col1:
+        f_rank_filter = st.selectbox("F指数順位", ["指定なし", "1位のみ", "3位以内", "5位以内"], index=0)
+        f_min_val = st.number_input("F指数 最小値", min_value=0.0, max_value=100.0, value=0.0, step=5.0)
+    with f_col2:
+        arms_rank_filter = st.selectbox("ARMS順位", ["指定なし", "1位のみ", "3位以内", "5位以内"], index=0)
+        tua_rank_filter = st.selectbox("TUA順位", ["指定なし", "1位のみ", "3位以内", "5位以内"], index=0)
+    with f_col3:
+        fup_min_filter = st.selectbox("Fup最小点数", ["指定なし", "4点以上", "5点以上", "6点以上"], index=0)
+        wood_rank_filter = st.selectbox("ウッド5F順位", ["指定なし", "1位のみ", "3位以内", "5位以内"], index=0)
+    with f_col4:
+        wood_accel_only = st.checkbox("ウッド加速ラップのみ", value=False)
+        sakaro_accel_only = st.checkbox("坂路完全加速のみ", value=False)
+
+    # 指数フィルター処理
+    if f_rank_filter == "1位のみ":
+        filtered_df = filtered_df[filtered_df['F_rank'] == 1]
+    elif f_rank_filter == "3位以内":
+        filtered_df = filtered_df[filtered_df['F_rank'] <= 3]
+    elif f_rank_filter == "5位以内":
+        filtered_df = filtered_df[filtered_df['F_rank'] <= 5]
+
+    if f_min_val > 0.0:
+        filtered_df = filtered_df[filtered_df['F指数'] >= f_min_val]
+
+    if arms_rank_filter == "1位のみ":
+        filtered_df = filtered_df[filtered_df['arms_rank'] == 1]
+    elif arms_rank_filter == "3位以内":
+        filtered_df = filtered_df[filtered_df['arms_rank'] <= 3]
+    elif arms_rank_filter == "5位以内":
+        filtered_df = filtered_df[filtered_df['arms_rank'] <= 5]
+
+    if tua_rank_filter == "1位のみ":
+        filtered_df = filtered_df[filtered_df['tua_rank'] == 1]
+    elif tua_rank_filter == "3位以内":
+        filtered_df = filtered_df[filtered_df['tua_rank'] <= 3]
+    elif tua_rank_filter == "5位以内":
+        filtered_df = filtered_df[filtered_df['tua_rank'] <= 5]
+
+    if fup_min_filter == "4点以上":
+        filtered_df = filtered_df[filtered_df['Fup'] >= 4]
+    elif fup_min_filter == "5点以上":
+        filtered_df = filtered_df[filtered_df['Fup'] >= 5]
+    elif fup_min_filter == "6点以上":
+        filtered_df = filtered_df[filtered_df['Fup'] >= 6]
+
+    if wood_rank_filter == "1位のみ":
+        filtered_df = filtered_df[filtered_df['wood_5F_rank'] == 1]
+    elif wood_rank_filter == "3位以内":
+        filtered_df = filtered_df[filtered_df['wood_5F_rank'] <= 3]
+    elif wood_rank_filter == "5位以内":
+        filtered_df = filtered_df[filtered_df['wood_5F_rank'] <= 5]
+
+    if wood_accel_only:
+        filtered_df = filtered_df[filtered_df['is_wood_accel'] == True]
+
+    if sakaro_accel_only:
+        filtered_df = filtered_df[filtered_df.get('坂路_完全加速', False) == True]
+
+
+# --- 上部サマリーカウンター ---
 c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown(f"<div class='metric-box'><div class='metric-label'>表示頭数</div><div class='metric-val'>{len(filtered_df)}頭</div></div>", unsafe_allow_html=True)
 with c2:
-    wood_accel_count = len(race_df[race_df['is_wood_accel'] == True])
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>ウッド加速該当</div><div class='metric-val'>{wood_accel_count}頭</div></div>", unsafe_allow_html=True)
+    sakaro_accel_cnt = len(race_df[race_df.get('坂路_完全加速', False) == True])
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>坂路完全加速</div><div class='metric-val'>{sakaro_accel_cnt}頭</div></div>", unsafe_allow_html=True)
 with c3:
-    fup_high_count = len(race_df[race_df['Fup'] >= 4])
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>Fup(4点以上)</div><div class='metric-val'>{fup_high_count}頭</div></div>", unsafe_allow_html=True)
+    fup_high_cnt = len(race_df[race_df['Fup'] >= 5])
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>Fup2(5点以上)</div><div class='metric-val'>{fup_high_cnt}頭</div></div>", unsafe_allow_html=True)
 with c4:
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>クッション特注馬</div><div class='metric-val'>0頭</div></div>", unsafe_allow_html=True)
+    wood_accel_cnt = len(race_df[race_df['is_wood_accel'] == True])
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>ウッド加速該当</div><div class='metric-val'>{wood_accel_cnt}頭</div></div>", unsafe_allow_html=True)
 
-st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:25px;'>", unsafe_allow_html=True)
+st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
 
-# 出走馬カード一覧の描画
+
+# --- 出走馬カード一覧の描画 ---
 if filtered_df.empty:
     st.info("条件に一致する馬が見つかりませんでした。")
 else:
     for _, row in filtered_df.iterrows():
-        # ウッド調教テキスト整形
-        if pd.notnull(row.get('5F')):
-            place = str(row.get('場所', ''))
-            f5 = f"{row['5F']:.1f}"
-            f1 = f"{row['1F']:.1f}"
+        # ウッド調教テキスト
+        if pd.notnull(row.get('wood_5F')):
+            place = str(row.get('wood_place', ''))
+            f5 = f"{row['wood_5F']:.1f}"
+            f1 = f"{row['wood_1F']:.1f}"
             accel = row.get('wood_accel', 0)
             
             if accel > 0:
@@ -392,12 +463,19 @@ else:
             rank_str = f"{int(row['wood_5F_rank'])}位" if pd.notnull(row.get('wood_5F_rank')) else "-位"
             wood_info = f"{place} (5F: {f5}s | 1F: {f1}s | {accel_badge} | レース内5F: {rank_str})"
         else:
-            wood_info = "ウッド計測データなし"
+            wood_info = "ウッド計測なし"
+
+        # 坂路調教テキスト
+        if pd.notnull(row.get('坂路_4F')):
+            s_accel_str = "完全加速" if row.get('坂路_完全加速', False) else "非加速"
+            sakaro_info = f"4F: {row['坂路_4F']:.1f}s | 1F: {row.get('坂路_1F', 0.0):.1f}s ({s_accel_str})"
+        else:
+            sakaro_info = "調教×（非加速/負荷なし）"
 
         # 特注バッジ判定
         badge_html = ""
         is_accel = row.get('is_wood_accel', False)
-        f1_val = row.get('1F', 99)
+        f1_val = row.get('wood_1F', 99)
         f_rank = row.get('F_rank', 99)
         arms_rank = row.get('arms_rank', 99)
         f_val = row.get('F指数', 0)
@@ -415,6 +493,7 @@ else:
         <div class='horse-card'>
             <div class='horse-card-title'>{umaban_str} {row['馬名']} {badge_html}</div>
             <div class='horse-detail-item'>• <strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></div>
+            <div class='horse-detail-item'>• <strong>坂路調教</strong>: {sakaro_info}</div>
             <div class='horse-detail-item'>• <strong>ウッド調教</strong>: {wood_info}</div>
             <div class='horse-detail-item'>• <strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({row.get('F_rank', '-')}位) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({row.get('arms_rank', '-')}位) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({row.get('tua_rank', '-')}位)</div>
             <div class='horse-detail-item'>• <strong>Fup数値</strong>: {fup_str} | <strong>人気</strong>: {pop_str}</div>
