@@ -93,19 +93,28 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+# --- サイドバー: CSVアップローダー ---
+st.sidebar.markdown("### 📁 CSVデータ読み込み")
+uploaded_wood = st.sidebar.file_uploader("ウッド調教CSV", type=['csv'])
+uploaded_index = st.sidebar.file_uploader("指数・レースCSV", type=['csv'])
+
+
 # --- データロード＆前処理関数 ---
 @st.cache_data
-def load_and_process_data():
-    wood_file = 'ウッド、検証用.csv'
-    index_file = '指数、検証用.csv'
-
+def load_and_process_data(wood_file_obj, index_file_obj):
     # 1. ウッド調教データの読み込み
     df_wood = pd.DataFrame()
-    if os.path.exists(wood_file):
+    wood_src = wood_file_obj if wood_file_obj is not None else ('ウッド、検証用.csv' if os.path.exists('ウッド、検証用.csv') else None)
+    
+    if wood_src is not None:
         try:
-            df_w = pd.read_csv(wood_file, encoding='shift-jis')
+            df_w = pd.read_csv(wood_src, encoding='shift-jis')
         except Exception:
-            df_w = pd.read_csv(wood_file, encoding='utf-8', errors='ignore')
+            try:
+                wood_src.seek(0)
+            except Exception:
+                pass
+            df_w = pd.read_csv(wood_src, encoding='utf-8', errors='ignore')
         
         df_w = df_w[df_w['場所'] != '場所'].copy()
         for col in ['6F', '5F', '4F', '3F', '2F', '1F', 'Lap6', 'Lap5', 'Lap4', 'Lap3', 'Lap2', 'Lap1']:
@@ -114,19 +123,23 @@ def load_and_process_data():
         
         df_w['馬名'] = df_w['馬名'].astype(str).str.strip()
         df_w['調教日'] = pd.to_datetime(df_w['年月日'].astype(str), format='%Y%m%d', errors='coerce')
-        # 異常値除外
         df_w = df_w[(df_w['5F'] > 50) & (df_w['5F'] < 90) & (df_w['1F'] < 30)]
         df_wood = df_w.sort_values('調教日').groupby('馬名').last().reset_index()
 
     # 2. 指数・レースデータの読み込み
     df_race = pd.DataFrame()
-    if os.path.exists(index_file):
-        try:
-            with open(index_file, 'r', encoding='shift-jis', errors='ignore') as f:
+    index_src = index_file_obj if index_file_obj is not None else ('指数、検証用.csv' if os.path.exists('指数、検証用.csv') else None)
+    
+    if index_src is not None:
+        if isinstance(index_src, str):
+            with open(index_src, 'r', encoding='shift-jis', errors='ignore') as f:
                 lines = f.readlines()
-        except Exception:
-            with open(index_file, 'r', encoding='utf-8', errors='ignore') as f:
-                lines = f.readlines()
+        else:
+            content = index_src.read()
+            try:
+                lines = content.decode('shift-jis').splitlines()
+            except Exception:
+                lines = content.decode('utf-8', errors='ignore').splitlines()
 
         fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
                   '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
@@ -205,20 +218,21 @@ def load_and_process_data():
 
         df_race = pd.DataFrame(records)
 
-        # レース区分の識別（アルファベット順リセット単位）
-        resets = [0]
-        for i in range(1, len(df_race)):
-            h_curr = df_race.loc[i, '馬名']
-            h_prev = df_race.loc[i - 1, '馬名']
-            if h_curr < h_prev and (h_prev > 'マ' and h_curr < 'ウ'):
-                resets.append(i)
-        resets.append(len(df_race))
+        # レース区分の識別（五十音順リセット判定）
+        if not df_race.empty:
+            resets = [0]
+            for i in range(1, len(df_race)):
+                h_curr = df_race.loc[i, '馬名']
+                h_prev = df_race.loc[i - 1, '馬名']
+                if h_curr < h_prev and (h_prev > 'マ' and h_curr < 'ウ'):
+                    resets.append(i)
+            resets.append(len(df_race))
 
-        batch_ids = []
-        for i in range(len(resets) - 1):
-            batch_ids.extend([i] * (resets[i + 1] - resets[i]))
-        df_race['batch_id'] = batch_ids
-        df_race['race_uid'] = df_race['batch_id'].astype(str) + "_" + df_race['race_id']
+            batch_ids = []
+            for i in range(len(resets) - 1):
+                batch_ids.extend([i] * (resets[i + 1] - resets[i]))
+            df_race['batch_id'] = batch_ids
+            df_race['race_uid'] = df_race['batch_id'].astype(str) + "_" + df_race['race_id']
 
     # 3. マージと調教順位・加速タイムの算出
     if not df_race.empty and not df_wood.empty:
@@ -227,22 +241,27 @@ def load_and_process_data():
         merged = df_race
 
     # ウッド指標の計算
-    if '5F' in merged.columns and '1F' in merged.columns:
-        merged['wood_accel'] = merged['Lap2'] - merged['Lap1']
-        merged['is_wood_accel'] = merged['wood_accel'] > 0
-        merged['wood_5F_rank'] = merged.groupby('race_uid')['5F'].rank(method='min', ascending=True)
-    else:
-        merged['wood_accel'] = np.nan
-        merged['is_wood_accel'] = False
-        merged['wood_5F_rank'] = np.nan
+    if not merged.empty:
+        if '5F' in merged.columns and '1F' in merged.columns:
+            merged['wood_accel'] = merged['Lap2'] - merged['Lap1']
+            merged['is_wood_accel'] = merged['wood_accel'] > 0
+            if 'race_uid' in merged.columns:
+                merged['wood_5F_rank'] = merged.groupby('race_uid')['5F'].rank(method='min', ascending=True)
+            else:
+                merged['wood_5F_rank'] = np.nan
+        else:
+            merged['wood_accel'] = np.nan
+            merged['is_wood_accel'] = False
+            merged['wood_5F_rank'] = np.nan
 
     return merged
 
 
-# データ読み込み
-df = load_and_process_data()
+# データ読み込み実行
+df = load_and_process_data(uploaded_wood, uploaded_index)
 
-# --- サイドバー操作部 ---
+# --- サイドバー: 条件・操作エリア ---
+st.sidebar.markdown("---")
 st.sidebar.markdown("### 芝馬場状態")
 turf_condition = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重", "不良"], index=0, label_visibility="collapsed")
 
@@ -290,7 +309,7 @@ wood_top3 = st.sidebar.checkbox("ウッド5F 3位以内")
 
 # --- メイン画面 ---
 if df.empty:
-    st.error("検証用CSVファイルが見つかりません。『ウッド、検証用.csv』および『指数、検証用.csv』を同一ディレクトリに配置してください。")
+    st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 CSVデータ読み込み」から2つのファイルをアップロードするか、同じフォルダ内に配置してください。")
     st.stop()
 
 # レース選択プルダウン
@@ -300,7 +319,7 @@ selected_race_id = st.selectbox("🎯 対象レースを選択してください
 # 該当レースのデータ抽出
 race_df = df[df['race_id'] == selected_race_id].copy()
 
-# フィルタリング
+# フィルタリング適用
 filtered_df = race_df.copy()
 
 if syn_iron:
