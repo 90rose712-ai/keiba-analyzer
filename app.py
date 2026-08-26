@@ -187,6 +187,7 @@ st.markdown("""
         border: 1px solid rgba(255, 165, 0, 0.5);
     }
 
+    /* サイドバー専用シナジーリストカード */
     .sidebar-synergy-item {
         background-color: #0d1117;
         border: 1px solid #30363d;
@@ -289,7 +290,6 @@ def format_fup_rank_badge(rank_val):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
-    # 1. 出馬表・指数 CSV の読み込み
     index_src = f_index
     if index_src is None:
         for name in ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv']:
@@ -466,26 +466,21 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             if n < 4:
                 continue
             
-            # ヘッダー行判定
             if '馬名' in parts or '4F' in parts:
                 continue
 
-            # 形式1: TARGET出馬表形式 (race_id, track, dist, umaban, horse, ..., 4F, 3F, 2F, 1F, Lap4, Lap3, Lap2, Lap1)
             h_name, s_4f, s_1f, s_l4, s_l3, s_l2, s_l1 = None, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
             
-            # 各列から馬名候補とタイム候補を走査
             for idx, p in enumerate(parts):
                 if re.match(r'^[\u30A0-\u30FF\* \$]{2,}$', p) and h_name is None:
                     h_name = clean_horse_name(p)
             
-            # タイム列の抽出（通常右側に並ぶ）
             numeric_parts = []
             for p in parts:
                 val = pd.to_numeric(p, errors='coerce')
                 if pd.notnull(val) and 10.0 <= val <= 120.0:
                     numeric_parts.append(val)
             
-            # 坂路時計（4F, 3F, 2F, 1F, Lap4, Lap3, Lap2, Lap1）のパターンマッチ
             if len(numeric_parts) >= 8:
                 s_4f = numeric_parts[0]
                 s_1f = numeric_parts[3]
@@ -529,7 +524,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV の読み込み
+    # 4. ウッド調教 CSV
     df_wood_raw = read_csv_flexible(f_wood, ['出馬表_ウッド.csv', 'ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
@@ -653,7 +648,9 @@ if st.sidebar.button("🔄 最新データへ強制再読み込み", use_contain
 st.sidebar.markdown("---")
 
 
-# --- 左側サイドバー: 黄金シナジー抽出 ---
+# ==============================================================================
+# ★ 左側サイドバー: 全レース横断 黄金シナジー該当馬一覧（開催場所順 × レース番号昇順）
+# ==============================================================================
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
 
 if not df.empty:
@@ -683,6 +680,13 @@ with st.sidebar.expander("📋 【全レース】黄金シナジー該当馬一�
         if any_synergy_df.empty:
             st.caption("現在該当する馬はいません。")
         else:
+            # 競馬場の優先順位マップ
+            venue_prio = {'東京': 1, '中山': 2, '京都': 3, '阪神': 4, '中京': 5, '新潟': 6, '札幌': 7, '函館': 8, '小倉': 9, '福島': 10, 'その他': 99}
+            any_synergy_df['v_prio'] = any_synergy_df['競馬場名'].map(lambda x: venue_prio.get(x, 50))
+            
+            # 開催場所順 -> レース番号昇順 -> 馬番昇順で確実にソート
+            any_synergy_df = any_synergy_df.sort_values(by=['v_prio', 'R番号', '馬番'])
+
             for _, s_row in any_synergy_df.iterrows():
                 s_tags = []
                 if s_row['is_syn_iron']:
