@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import os
+import glob
 import re
 
 # --- ページ基本設定 ---
@@ -254,13 +255,14 @@ def clean_horse_name(name):
     return s
 
 
-# --- CSV読み込み汎用ヘルパー ---
-def read_csv_flexible(file_obj, default_names):
+# --- CSV読み込み汎用ヘルパー（ワイルドカード・data/フォルダ対応） ---
+def read_csv_flexible(file_obj, candidate_patterns):
     src = file_obj
     if src is None:
-        for name in default_names:
-            if os.path.exists(name):
-                src = name
+        for pat in candidate_patterns:
+            matches = glob.glob(pat)
+            if matches:
+                src = matches[0]
                 break
     if src is None:
         return pd.DataFrame()
@@ -316,7 +318,6 @@ def format_fup_rank_badge(rank_val):
         return f"<span class='rank-normal'>{r}位</span>"
 
 
-# --- 印（◎・〇・▲等）バッジ生成ヘルパー ---
 def format_mark_badge(mark_str):
     if not mark_str or pd.isnull(mark_str):
         return ""
@@ -337,11 +338,18 @@ def format_mark_badge(mark_str):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
+    # 1. 出馬表・指数 CSV の探索
+    index_patterns = [
+        'data/出馬表_指数*.csv', '出馬表_指数*.csv',
+        'data/指数、検証用*.csv', '指数、検証用*.csv',
+        'data/指数*.csv', '指数*.csv'
+    ]
     index_src = f_index
     if index_src is None:
-        for name in ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv']:
-            if os.path.exists(name):
-                index_src = name
+        for pat in index_patterns:
+            matches = glob.glob(pat)
+            if matches:
+                index_src = matches[0]
                 break
 
     records = []
@@ -479,7 +487,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
     # 2. GTVオッズ CSV
-    df_gtv = read_csv_flexible(f_gtv, ['GTV馬.csv', 'GTV.csv'])
+    gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv']
+    df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
     if not df_gtv.empty:
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
         if name_col:
@@ -488,11 +497,18 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
     # 3. 坂路調教 CSV
+    sakaro_patterns = [
+        'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
+        'data/坂路、検証用*.csv', '坂路、検証用*.csv',
+        'data/坂路調教*.csv', '坂路調教*.csv',
+        'data/坂路*.csv', '坂路*.csv'
+    ]
     sakaro_src = f_sakaro
     if sakaro_src is None:
-        for name in ['出馬表_坂路.csv', '坂路、検証用.csv', '坂路調教.csv', '坂路.csv']:
-            if os.path.exists(name):
-                sakaro_src = name
+        for pat in sakaro_patterns:
+            matches = glob.glob(pat)
+            if matches:
+                sakaro_src = matches[0]
                 break
 
     df_sakaro_clean = pd.DataFrame()
@@ -517,7 +533,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             n = len(parts)
             if n < 4:
                 continue
-            
             if '馬名' in parts or '4F' in parts:
                 continue
 
@@ -577,7 +592,13 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_完全加速'] = False
 
     # 4. ウッド調教 CSV
-    df_wood_raw = read_csv_flexible(f_wood, ['出馬表_ウッド.csv', 'ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
+    wood_patterns = [
+        'data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv',
+        'data/ウッド、検証用*.csv', 'ウッド、検証用*.csv',
+        'data/ウッド調教*.csv', 'ウッド調教*.csv',
+        'data/ウッド*.csv', 'ウッド*.csv'
+    ]
+    df_wood_raw = read_csv_flexible(f_wood, wood_patterns)
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
         c_w_name = find_col(w_df, ['馬名', '馬 名', '競走馬名'])
@@ -965,8 +986,6 @@ else:
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
         badges_html = " ".join(badges)
-        
-        # 印バッジの生成
         mark_badge_html = format_mark_badge(mark_val)
 
         # ウッド調教テキスト
@@ -1025,7 +1044,6 @@ else:
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
-        # 馬名ヘッダー（馬名 ＋ 印バッジ ＋ シナジーバッジ）
         mark_display = f" {mark_badge_html}" if mark_badge_html else ""
         card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
