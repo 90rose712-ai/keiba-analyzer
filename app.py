@@ -290,6 +290,7 @@ def format_fup_rank_badge(rank_val):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
+    # 1. 出馬表・指数 CSV の読み込み
     index_src = f_index
     if index_src is None:
         for name in ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv']:
@@ -524,7 +525,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV
+    # 4. ウッド調教 CSV の読み込み
     df_wood_raw = read_csv_flexible(f_wood, ['出馬表_ウッド.csv', 'ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
@@ -649,7 +650,7 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
-# ★ 左側サイドバー: 全レース横断 黄金シナジー該当馬一覧（開催場所順 × レース番号昇順）
+# ★ 左側サイドバー: 全レース横断 黄金シナジー該当馬一覧
 # ==============================================================================
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
 
@@ -680,11 +681,8 @@ with st.sidebar.expander("📋 【全レース】黄金シナジー該当馬一�
         if any_synergy_df.empty:
             st.caption("現在該当する馬はいません。")
         else:
-            # 競馬場の優先順位マップ
             venue_prio = {'東京': 1, '中山': 2, '京都': 3, '阪神': 4, '中京': 5, '新潟': 6, '札幌': 7, '函館': 8, '小倉': 9, '福島': 10, 'その他': 99}
             any_synergy_df['v_prio'] = any_synergy_df['競馬場名'].map(lambda x: venue_prio.get(x, 50))
-            
-            # 開催場所順 -> レース番号昇順 -> 馬番昇順で確実にソート
             any_synergy_df = any_synergy_df.sort_values(by=['v_prio', 'R番号', '馬番'])
 
             for _, s_row in any_synergy_df.iterrows():
@@ -730,7 +728,9 @@ if df.empty:
     st.stop()
 
 
-# --- レース選択UI（確実な双方向状態管理） ---
+# ==============================================================================
+# ★ レース選択UI（シナジーマーク自動付加プルダウン）
+# ==============================================================================
 st.markdown("### 🎯 レース選択")
 
 venue_sort_order = ['東京', '中山', '京都', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌', 'その他']
@@ -751,10 +751,25 @@ st.session_state['active_venue'] = chosen_venue
 v_df = df[df['競馬場名'] == chosen_venue]
 races_in_v = v_df[['race_uid', 'race_id', 'R番号', 'track', 'dist']].drop_duplicates('race_uid').sort_values('R番号')
 
+# 各レース内のシナジー該当マークを自動判定してラベルに結合
 race_options = {}
 for _, r_row in races_in_v.iterrows():
-    n_horses = len(df[df['race_uid'] == r_row['race_uid']])
-    lbl = f"{r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]"
+    r_horses = df[df['race_uid'] == r_row['race_uid']]
+    n_horses = len(r_horses)
+    
+    # レース内のシナジーマーク収集
+    marks = []
+    if (r_horses['is_syn_iron'] == True).any():
+        marks.append("💎")
+    if (r_horses['is_syn_high'] == True).any():
+        marks.append("🔥")
+    if (r_horses['is_syn_fup_sakaro'] == True).any():
+        marks.append("✨")
+    if (r_horses['is_syn_bomb'] == True).any():
+        marks.append("💣")
+        
+    marks_str = f" {' '.join(marks)}" if marks else ""
+    lbl = f"{r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]{marks_str}"
     race_options[r_row['race_uid']] = lbl
 
 race_uid_list = list(race_options.keys())
