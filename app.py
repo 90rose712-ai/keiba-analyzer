@@ -75,6 +75,36 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* 印（◎・〇・▲等）専用バッジ */
+    .badge-mark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 13px;
+        padding: 1px 7px;
+        border-radius: 5px;
+        border: 1px solid #ff7961;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    }
+    .badge-mark-honmei {
+        background: linear-gradient(135deg, #FF1744 0%, #D50000 100%);
+        border: 1px solid #FF8A80;
+        color: #ffffff;
+    }
+    .badge-mark-taiko {
+        background: linear-gradient(135deg, #FF9100 0%, #FF6D00 100%);
+        border: 1px solid #FFD180;
+        color: #ffffff;
+    }
+    .badge-mark-ana {
+        background: linear-gradient(135deg, #7C4DFF 0%, #651FFF 100%);
+        border: 1px solid #B388FF;
+        color: #ffffff;
+    }
+
     /* 豪華特注バッジ */
     .badge-synergy {
         display: inline-flex;
@@ -187,7 +217,6 @@ st.markdown("""
         border: 1px solid rgba(255, 165, 0, 0.5);
     }
 
-    /* サイドバー専用シナジーリストカード */
     .sidebar-synergy-item {
         background-color: #0d1117;
         border: 1px solid #30363d;
@@ -287,10 +316,27 @@ def format_fup_rank_badge(rank_val):
         return f"<span class='rank-normal'>{r}位</span>"
 
 
+# --- 印（◎・〇・▲等）バッジ生成ヘルパー ---
+def format_mark_badge(mark_str):
+    if not mark_str or pd.isnull(mark_str):
+        return ""
+    m = str(mark_str).strip()
+    if not m or m in ['nan', 'None', '-']:
+        return ""
+    
+    if m in ['◎', '二重丸']:
+        return f"<span class='badge-mark badge-mark-honmei'>{m}</span>"
+    elif m in ['〇', '○', '丸']:
+        return f"<span class='badge-mark badge-mark-taiko'>{m}</span>"
+    elif m in ['▲', '△', '☆', '★', '注', '穴']:
+        return f"<span class='badge-mark badge-mark-ana'>{m}</span>"
+    else:
+        return f"<span class='badge-mark'>{m}</span>"
+
+
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
-    # 1. 出馬表・指数 CSV の読み込み
     index_src = f_index
     if index_src is None:
         for name in ['出馬表_指数.csv', '指数、検証用.csv', '指数.csv']:
@@ -321,6 +367,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
             race_id, track, dist, umaban, horse_raw = parts[0], "", "", "", None
             trainer, jockey, sire = "", "", ""
+            mark = ""
             pop, finish, fup, fup_rank, f_val, f_rank = None, None, 0, 99, 0.0, 99
             arms_val, arms_rank, tua_val, tua_rank = 0.0, 99, 0.0, 99
 
@@ -329,6 +376,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 horse_raw = parts[4]
                 trainer, jockey = parts[6], parts[7]
                 pop = parts[8]
+                mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[13], errors='coerce')
@@ -344,6 +392,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 horse_raw = parts[4]
                 trainer, jockey = parts[6], parts[7]
                 pop = parts[8]
+                mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
@@ -359,6 +408,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 trainer, jockey = parts[5], parts[6]
                 horse_raw = parts[7]
                 pop = parts[8]
+                mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
@@ -384,6 +434,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                     'dist': dist,
                     '馬番': u_int,
                     '馬名': horse,
+                    '印': mark,
                     '調教師': trainer,
                     '騎手': jockey,
                     '種牡馬': sire,
@@ -436,7 +487,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 3. 坂路調教 CSV の超柔軟パース＆結合
+    # 3. 坂路調教 CSV
     sakaro_src = f_sakaro
     if sakaro_src is None:
         for name in ['出馬表_坂路.csv', '坂路、検証用.csv', '坂路調教.csv', '坂路.csv']:
@@ -525,7 +576,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV の読み込み
+    # 4. ウッド調教 CSV
     df_wood_raw = read_csv_flexible(f_wood, ['出馬表_ウッド.csv', 'ウッド、検証用.csv', 'ウッド調教.csv', 'ウッド.csv'])
     if not df_wood_raw.empty:
         w_df = df_wood_raw[df_wood_raw.iloc[:, 0] != '場所'].copy()
@@ -751,13 +802,11 @@ st.session_state['active_venue'] = chosen_venue
 v_df = df[df['競馬場名'] == chosen_venue]
 races_in_v = v_df[['race_uid', 'race_id', 'R番号', 'track', 'dist']].drop_duplicates('race_uid').sort_values('R番号')
 
-# 各レース内のシナジー該当マークを自動判定してラベルに結合
 race_options = {}
 for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
     n_horses = len(r_horses)
     
-    # レース内のシナジーマーク収集
     marks = []
     if (r_horses['is_syn_iron'] == True).any():
         marks.append("💎")
@@ -877,6 +926,7 @@ else:
         fup_val = row.get('Fup', 0)
         fup_rank = row.get('Fup_rank', 99)
         pop_val = row.get('人気', 99)
+        mark_val = row.get('印', '')
         
         is_w_accel = bool(row.get('is_wood_accel', False))
         w_1f = row.get('wood_1F', 99.0)
@@ -915,6 +965,9 @@ else:
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
         badges_html = " ".join(badges)
+        
+        # 印バッジの生成
+        mark_badge_html = format_mark_badge(mark_val)
 
         # ウッド調教テキスト
         has_wood = pd.notnull(row.get('wood_1F')) or pd.notnull(row.get('wood_5F')) or pd.notnull(row.get('wood_4F'))
@@ -972,6 +1025,8 @@ else:
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
-        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
+        # 馬名ヘッダー（馬名 ＋ 印バッジ ＋ シナジーバッジ）
+        mark_display = f" {mark_badge_html}" if mark_badge_html else ""
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
