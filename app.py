@@ -4,6 +4,7 @@ import numpy as np
 import os
 import glob
 import re
+import datetime
 
 # --- ページ基本設定 ---
 st.set_page_config(
@@ -37,6 +38,23 @@ st.markdown("""
         font-weight: bold;
         color: #f0f6fc;
     }
+    
+    /* 開催日時表示バッジ */
+    .date-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        border: 1px solid #3b82f6;
+        padding: 6px 16px;
+        border-radius: 20px;
+        color: #60a5fa;
+        font-size: 15px;
+        font-weight: bold;
+        margin-bottom: 12px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    }
+    
     .horse-card {
         background-color: #161e2e;
         border-left: 5px solid #238636;
@@ -255,7 +273,7 @@ def clean_horse_name(name):
     return s
 
 
-# --- CSV読み込み汎用ヘルパー（ワイルドカード・data/フォルダ対応） ---
+# --- CSV読み込み汎用ヘルパー ---
 def read_csv_flexible(file_obj, candidate_patterns):
     src = file_obj
     if src is None:
@@ -338,7 +356,6 @@ def format_mark_badge(mark_str):
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
-    # 1. 出馬表・指数 CSV の探索
     index_patterns = [
         'data/出馬表_指数*.csv', '出馬表_指数*.csv',
         'data/指数、検証用*.csv', '指数、検証用*.csv',
@@ -460,7 +477,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main = pd.DataFrame(records)
     if df_main.empty:
-        return pd.DataFrame()
+        return pd.DataFrame(), None
 
     resets = [0]
     for i in range(1, len(df_main)):
@@ -486,9 +503,26 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    # 2. GTVオッズ CSV
+    # 開催日時の推定・抽出
+    detected_date = None
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
+    
+    # GTVファイル名から日付抽出 (例: GTV馬 26.8.23.csv -> 2026-08-23)
+    for pat in gtv_patterns:
+        matched = glob.glob(pat)
+        if matched:
+            d_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{1,2})', matched[0])
+            if d_match:
+                y = int(d_match.group(1)) + 2000 if int(d_match.group(1)) < 100 else int(d_match.group(1))
+                m = int(d_match.group(2))
+                d = int(d_match.group(3))
+                try:
+                    detected_date = datetime.date(y, m, d)
+                except Exception:
+                    pass
+            break
+
     if not df_gtv.empty:
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
         if name_col:
@@ -531,9 +565,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         for line in s_lines:
             parts = [p.strip() for p in line.strip().split(',')]
             n = len(parts)
-            if n < 4:
-                continue
-            if '馬名' in parts or '4F' in parts:
+            if n < 4 or '馬名' in parts or '4F' in parts:
                 continue
 
             h_name, s_4f, s_1f, s_l4, s_l3, s_l2, s_l1 = None, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
@@ -626,6 +658,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             if c_w_date:
                 w_df['調教日'] = pd.to_datetime(w_df[c_w_date].astype(str), format='%Y%m%d', errors='coerce')
                 w_df = w_df.sort_values('調教日')
+                if detected_date is None and not w_df['調教日'].dropna().empty:
+                    detected_date = w_df['調教日'].dropna().iloc[-1].date()
             
             w_latest = w_df.groupby('馬名').last().reset_index()
 
@@ -659,11 +693,14 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['wood_Lap2_rank'] = df_main.groupby('race_uid')['wood_Lap2'].rank(method='min', ascending=True)
     df_main['wood_Lap1_rank'] = df_main.groupby('race_uid')['wood_Lap1'].rank(method='min', ascending=True)
 
-    return df_main
+    if detected_date is None:
+        detected_date = datetime.date(2026, 8, 23)
+
+    return df_main, detected_date
 
 
 # 統合データ読み込み実行
-df = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
+df, race_date = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
 
 
 # --- 黄金シナジー該当フラグ付与 ---
@@ -798,6 +835,16 @@ pat_wood_top3 = st.sidebar.checkbox("⚡ ウッド5F 3位以内")
 if df.empty:
     st.warning("⚠️ CSVデータが読み込まれていません。サイドバーの「📁 4大CSVデータ読み込み」からファイルを指定するか、同一フォルダにCSVを配置してください。")
     st.stop()
+
+
+# ==============================================================================
+# ★ 開催日時バッジ表示（年・月・日・曜日）
+# ==============================================================================
+weekday_kanji = ["月", "火", "水", "木", "金", "土", "日"]
+w_str = weekday_kanji[race_date.weekday()]
+formatted_date_str = f"📅 開催日時: {race_date.year}年{race_date.month}月{race_date.day}日 ({w_str})"
+
+st.markdown(f"<div class='date-header-badge'>{formatted_date_str}</div>", unsafe_allow_html=True)
 
 
 # ==============================================================================
