@@ -160,6 +160,11 @@ st.markdown("""
         color: #2b1d00;
         border: 1px solid #FFE066;
     }
+    .badge-s1 {
+        background: linear-gradient(135deg, #9C27B0 0%, #E040FB 100%);
+        color: #ffffff;
+        border: 1px solid #EA80FC;
+    }
     .badge-f1 {
         background: linear-gradient(135deg, #F7971E 0%, #FFD200 100%);
         color: #2b1d00;
@@ -393,8 +398,12 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             race_id, track, dist, umaban, horse_raw = parts[0], "", "", "", None
             trainer, jockey, sire = "", "", ""
             mark = ""
-            pop, finish, fup, fup_rank, f_val, f_rank = None, None, 0, 99, 0.0, 99
-            arms_val, arms_rank, tua_val, tua_rank = 0.0, 99, 0.0, 99
+            pop, finish = None, None
+            fup, fup_rank = 0, 99
+            s_val, s_rank = 0.0, 99
+            f_val, f_rank = 0.0, 99
+            arms_val, arms_rank = 0.0, 99
+            tua_val, tua_rank = 0.0, 99
 
             if n == 24:
                 track, dist, umaban = parts[1], parts[2], parts[3]
@@ -403,6 +412,9 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 pop = parts[8]
                 mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
+                # 列11 (index 10) / 列12 (index 11) をS指数・S順位として抽出
+                s_val = pd.to_numeric(parts[10], errors='coerce')
+                s_rank = pd.to_numeric(parts[11], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[13], errors='coerce')
                 f_rank = pd.to_numeric(parts[14], errors='coerce')
@@ -419,6 +431,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 pop = parts[8]
                 mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
+                s_val = pd.to_numeric(parts[10], errors='coerce')
+                s_rank = pd.to_numeric(parts[11], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
                 f_rank = pd.to_numeric(parts[13], errors='coerce')
@@ -435,6 +449,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 pop = parts[8]
                 mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
+                s_val = pd.to_numeric(parts[10], errors='coerce')
+                s_rank = pd.to_numeric(parts[11], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
                 f_rank = pd.to_numeric(parts[13], errors='coerce')
@@ -467,6 +483,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                     '着順': fin_int,
                     'Fup': fup if not np.isnan(fup) else 0,
                     'Fup_rank': int(fup_rank) if not np.isnan(fup_rank) else 99,
+                    'S指数': s_val if not np.isnan(s_val) else 0.0,
+                    'S_rank': int(s_rank) if not np.isnan(s_rank) else 99,
                     'F指数': f_val if not np.isnan(f_val) else 0.0,
                     'F_rank': int(f_rank) if not np.isnan(f_rank) else 99,
                     'arms': arms_val if not np.isnan(arms_val) else 0.0,
@@ -508,7 +526,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
     
-    # GTVファイル名から日付抽出 (例: GTV馬 26.8.23.csv -> 2026-08-23)
     for pat in gtv_patterns:
         matched = glob.glob(pat)
         if matched:
@@ -821,6 +838,7 @@ st.sidebar.markdown("---")
 
 # --- サイドバー: 📊 指数黄金パターン抽出 ---
 st.sidebar.markdown("### 📊 指数黄金パターン抽出")
+pat_s1 = st.sidebar.checkbox("⚡ S指数 1位 (スピード軸)")
 pat_f1 = st.sidebar.checkbox("🥇 F指数 1位 (勝率22.1% / 複勝率52.9%)")
 pat_f66 = st.sidebar.checkbox("🔥 F指数 66以上 (高信頼)")
 pat_f1_arms3 = st.sidebar.checkbox("🎯 F指数1位 ＋ arms3位以内")
@@ -924,6 +942,9 @@ if syn_f1_rap:
 if syn_bomb:
     filtered_df = filtered_df[filtered_df['is_syn_bomb'] == True]
 
+if pat_s1:
+    filtered_df = filtered_df[filtered_df['S_rank'] == 1]
+
 if pat_f1:
     filtered_df = filtered_df[filtered_df['F_rank'] == 1]
 
@@ -987,6 +1008,8 @@ if filtered_df.empty:
     st.info("条件に一致する馬が見つかりませんでした。")
 else:
     for _, row in filtered_df.iterrows():
+        s_rank = row.get('S_rank', 99)
+        s_val = row.get('S指数', 0.0)
         f_rank = row.get('F_rank', 99)
         f_val = row.get('F指数', 0.0)
         arms_rank = row.get('arms_rank', 99)
@@ -1018,17 +1041,25 @@ else:
         elif fup_val >= 5:
             badges.append("<span class='badge-synergy badge-fup-high'>⚡ Fup 5点+</span>")
             
+        # S指数1位
+        if s_rank == 1:
+            badges.append("<span class='badge-synergy badge-s1'>⚡ S1位</span>")
+            
+        # F指数1位
         if f_rank == 1 and not row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-f1'>👑 F1位</span>")
         elif f_val >= 66 and not (f_rank == 1 or (w_1f <= 11.5 and is_w_accel)):
             badges.append("<span class='badge-synergy badge-f1'>🔥 F66+</span>")
             
+        # arms指数1位
         if arms_rank == 1:
             badges.append("<span class='badge-synergy badge-arms1'>🚀 arms1位</span>")
             
+        # tua指数1位
         if tua_rank == 1:
             badges.append("<span class='badge-synergy badge-tua1'>🛡️ tua1位</span>")
 
+        # 爆弾穴馬
         if row.get('is_syn_bomb', False):
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
@@ -1087,11 +1118,15 @@ else:
             
         fup_rank_html = format_fup_rank_badge(fup_rank)
         
+        # S指数・F指数・arms・tua 各順位バッジ生成
+        s_badge = format_rank_badge(row.get('S_rank'))
         f_badge = format_rank_badge(row.get('F_rank'))
         arms_badge = format_rank_badge(row.get('arms_rank'))
         tua_badge = format_rank_badge(row.get('tua_rank'))
 
         mark_display = f" {mark_badge_html}" if mark_badge_html else ""
-        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
+        
+        # 能力指数欄に S指数 を追加
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
