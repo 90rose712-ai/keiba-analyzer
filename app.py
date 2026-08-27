@@ -412,7 +412,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 pop = parts[8]
                 mark = parts[9] if n > 9 else ""
                 fup = pd.to_numeric(parts[10], errors='coerce')
-                # 列11 (index 10) / 列12 (index 11) をS指数・S順位として抽出
                 s_val = pd.to_numeric(parts[10], errors='coerce')
                 s_rank = pd.to_numeric(parts[11], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
@@ -547,7 +546,9 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
             df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
-    # 3. 坂路調教 CSV
+    # ==============================================================================
+    # 3. 坂路調教 CSV（同一馬が複数ある場合は全体4F最速レコードを確実に採用）
+    # ==============================================================================
     sakaro_patterns = [
         'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
         'data/坂路、検証用*.csv', '坂路、検証用*.csv',
@@ -623,13 +624,22 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 })
 
         if s_records:
-            df_sakaro_clean = pd.DataFrame(s_records)
+            df_s_all = pd.DataFrame(s_records)
+            # 全体4Fタイムが有効なものを優先し、最も速いタイム（最小値）で並べ替え
+            df_s_valid = df_s_all.dropna(subset=['坂路_4F']).sort_values('坂路_4F', ascending=True)
+            df_sakaro_clean = df_s_valid.drop_duplicates('馬名', keep='first').copy()
+            
+            # 4Fが計測されていない馬も拾う
+            remaining = df_s_all[~df_s_all['馬名'].isin(df_sakaro_clean['馬名'])].drop_duplicates('馬名')
+            df_sakaro_clean = pd.concat([df_sakaro_clean, remaining], ignore_index=True)
+
+            # 最速時計のLapをもとに完全加速判定
             df_sakaro_clean['坂路_完全加速'] = (
                 (df_sakaro_clean['坂路_Lap4'] > df_sakaro_clean['坂路_Lap3']) &
                 (df_sakaro_clean['坂路_Lap3'] > df_sakaro_clean['坂路_Lap2']) &
                 (df_sakaro_clean['坂路_Lap2'] > df_sakaro_clean['坂路_Lap1'])
             )
-            df_main = pd.merge(df_main, df_sakaro_clean.drop_duplicates('馬名'), on='馬名', how='left')
+            df_main = pd.merge(df_main, df_sakaro_clean, on='馬名', how='left')
 
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan
@@ -640,7 +650,9 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV
+    # ==============================================================================
+    # 4. ウッド調教 CSV（同一馬が複数ある場合は全体5F最速レコードを確実に採用）
+    # ==============================================================================
     wood_patterns = [
         'data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv',
         'data/ウッド、検証用*.csv', 'ウッド、検証用*.csv',
@@ -674,14 +686,19 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
             if c_w_date:
                 w_df['調教日'] = pd.to_datetime(w_df[c_w_date].astype(str), format='%Y%m%d', errors='coerce')
-                w_df = w_df.sort_values('調教日')
                 if detected_date is None and not w_df['調教日'].dropna().empty:
                     detected_date = w_df['調教日'].dropna().iloc[-1].date()
             
-            w_latest = w_df.groupby('馬名').last().reset_index()
+            # 全体5Fタイム最速（最小値）を優先抽出
+            w_sorted_5f = w_df.dropna(subset=['wood_5F']).sort_values('wood_5F', ascending=True)
+            w_best = w_sorted_5f.drop_duplicates('馬名', keep='first').copy()
+            
+            # 5F未計測の馬は1F最速タイムを採用
+            w_remain = w_df[~w_df['馬名'].isin(w_best['馬名'])].sort_values('wood_1F', ascending=True).drop_duplicates('馬名', keep='first')
+            w_final = pd.concat([w_best, w_remain], ignore_index=True)
 
             wood_cols = ['馬名', 'wood_place', 'wood_5F', 'wood_4F', 'wood_1F', 'wood_Lap4', 'wood_Lap3', 'wood_Lap2', 'wood_Lap1']
-            df_main = pd.merge(df_main, w_latest[wood_cols].drop_duplicates('馬名'), on='馬名', how='left')
+            df_main = pd.merge(df_main, w_final[wood_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
     if 'wood_1F' not in df_main.columns:
         df_main['wood_place'] = ""
@@ -697,7 +714,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['wood_accel'] = df_main['wood_Lap2'] - df_main['wood_Lap1']
     df_main['is_wood_accel'] = (df_main['wood_accel'] > 0) & (df_main['wood_accel'].notna())
 
-    # 坂路・ウッドのレース内順位
+    # 坂路・ウッドのレース内順位（最速時計を基準に算出）
     df_main['坂路_4F_rank'] = df_main.groupby('race_uid')['坂路_4F'].rank(method='min', ascending=True)
     df_main['坂路_Lap4_rank'] = df_main.groupby('race_uid')['坂路_Lap4'].rank(method='min', ascending=True)
     df_main['坂路_Lap3_rank'] = df_main.groupby('race_uid')['坂路_Lap3'].rank(method='min', ascending=True)
@@ -1066,7 +1083,7 @@ else:
         badges_html = " ".join(badges)
         mark_badge_html = format_mark_badge(mark_val)
 
-        # ウッド調教テキスト
+        # ウッド調教テキスト（最速タイム採用）
         has_wood = pd.notnull(row.get('wood_1F')) or pd.notnull(row.get('wood_5F')) or pd.notnull(row.get('wood_4F'))
         if has_wood:
             place = str(row.get('wood_place', ''))
@@ -1088,7 +1105,7 @@ else:
         else:
             wood_info = "ウッド計測なし"
 
-        # 坂路調教テキスト
+        # 坂路調教テキスト（全体4F最速タイム採用）
         has_sakaro = pd.notnull(row.get('坂路_4F')) or pd.notnull(row.get('坂路_1F'))
         if has_sakaro:
             s_accel_str = "<span class='badge-accel'>完全加速</span>" if is_s_accel else "<span class='badge-decel'>非加速</span>"
@@ -1126,7 +1143,6 @@ else:
 
         mark_display = f" {mark_badge_html}" if mark_badge_html else ""
         
-        # 能力指数欄に S指数 を追加
         card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
