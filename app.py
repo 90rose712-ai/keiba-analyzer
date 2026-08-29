@@ -5,6 +5,8 @@ import os
 import glob
 import re
 import datetime
+import requests
+from bs4 import BeautifulSoup
 
 # --- ページ基本設定 ---
 st.set_page_config(
@@ -325,7 +327,7 @@ def clean_horse_name(name):
     return s
 
 
-# --- CSV読み込み汎用ヘルパー（超柔軟対応版） ---
+# --- CSV読み込み汎用ヘルパー ---
 def read_csv_flexible(file_obj, candidate_patterns):
     src = file_obj
     if src is None:
@@ -458,6 +460,58 @@ def evaluate_sire_cushion(sire_name, band):
             return "<span class='badge-cushion-fit'>🟢 クッション適</span>"
             
     return ""
+
+
+# ==============================================================================
+# ★ スマホ用：リアルタイムオッズ・馬体重スクレイピング関数
+# ==============================================================================
+def fetch_live_odds_and_weight(race_date_str, venue_name, race_no):
+    venue_code_map = {
+        '札幌': '01', '函館': '02', '福島': '03', '新潟': '04', '東京': '05',
+        '中山': '06', '中京': '07', '京都': '08', '阪神': '09', '小倉': '10'
+    }
+    v_code = venue_code_map.get(venue_name)
+    if not v_code:
+        return {}
+
+    url = f"https://race.netkeiba.com/race/shutuba.html"
+    params = {
+        'race_id': f"{race_date_str[:4]}{v_code}{int(race_no):02d}"
+    }
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
+    }
+
+    try:
+        res = requests.get(url, params=params, headers=headers, timeout=5)
+        res.encoding = 'euc-jp'
+        soup = BeautifulSoup(res.text, 'html.parser')
+        
+        results = {}
+        rows = soup.select('tr.HorseList')
+        for tr in rows:
+            h_tag = tr.select_one('.HorseName a')
+            h_name = clean_horse_name(h_tag.text) if h_tag else ""
+            
+            odds_tag = tr.select_one('.Popular span')
+            odds_val = odds_tag.text.strip() if odds_tag else ""
+            
+            pop_tag = tr.select_one('.Popular_Ninki span')
+            pop_val = pop_tag.text.strip() if pop_tag else ""
+            
+            weight_tag = tr.select_one('.Weight')
+            weight_val = weight_tag.text.strip() if weight_tag else ""
+
+            if h_name:
+                results[h_name] = {
+                    'live_odds': odds_val,
+                    'live_pop': pop_val,
+                    'live_weight': weight_val
+                }
+        return results
+    except Exception:
+        return {}
 
 
 # --- データロード＆4CSV統合処理 ---
@@ -604,18 +658,11 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    # ==============================================================================
-    # 2. GTV馬 CSV の結合 & 柔軟な日付抽出
-    # ==============================================================================
+    # GTV馬 CSV 結合 & 柔軟な日付抽出
     detected_date = None
-    gtv_patterns = [
-        'data/GTV馬*.csv', 'GTV馬*.csv',
-        'data/GTV*.csv', 'GTV*.csv',
-        'data/*GTV*.csv', '*GTV*.csv'
-    ]
+    gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv', 'data/*GTV*.csv', '*GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
     
-    # アップロードオブジェクトまたはファイルパスから日付を抽出
     source_name = getattr(f_gtv, 'name', '') if f_gtv is not None else ''
     if not source_name:
         for pat in gtv_patterns:
@@ -625,7 +672,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 break
 
     if source_name:
-        # パターン1: 26.8.30 または 2026.8.30 / 26_8_30
         d_match = re.search(r'(\d{1,4})[._](\d{1,2})[._](\d{1,2})', source_name)
         if d_match:
             y_raw = int(d_match.group(1))
@@ -637,7 +683,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             except Exception:
                 pass
         else:
-            # パターン2: 8_30 または 8.30（当年2026年として処理）
             d_match_short = re.search(r'(\d{1,2})[._](\d{1,2})', source_name)
             if d_match_short:
                 m = int(d_match_short.group(1))
@@ -699,7 +744,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 continue
 
             h_name, s_4f, s_1f, s_l4, s_l3, s_l2, s_l1 = None, np.nan, np.nan, np.nan, np.nan, np.nan, np.nan
-            
             for idx, p in enumerate(parts):
                 if re.match(r'^[\u30A0-\u30FF\* \$]{2,}$', p) and h_name is None:
                     h_name = clean_horse_name(p)
@@ -739,7 +783,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             df_s_all = pd.DataFrame(s_records)
             df_s_valid = df_s_all.dropna(subset=['坂路_4F']).sort_values('坂路_4F', ascending=True)
             df_sakaro_clean = df_s_valid.drop_duplicates('馬名', keep='first').copy()
-            
             remaining = df_s_all[~df_s_all['馬名'].isin(df_sakaro_clean['馬名'])].drop_duplicates('馬名')
             df_sakaro_clean = pd.concat([df_sakaro_clean, remaining], ignore_index=True)
 
@@ -798,7 +841,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             
             w_sorted_5f = w_df.dropna(subset=['wood_5F']).sort_values('wood_5F', ascending=True)
             w_best = w_sorted_5f.drop_duplicates('馬名', keep='first').copy()
-            
             w_remain = w_df[~w_df['馬名'].isin(w_best['馬名'])].sort_values('wood_1F', ascending=True).drop_duplicates('馬名', keep='first')
             w_final = pd.concat([w_best, w_remain], ignore_index=True)
 
@@ -815,11 +857,9 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['wood_Lap2'] = np.nan
         df_main['wood_Lap1'] = np.nan
 
-    # ウッド加速判定
     df_main['wood_accel'] = df_main['wood_Lap2'] - df_main['wood_Lap1']
     df_main['is_wood_accel'] = (df_main['wood_accel'] > 0) & (df_main['wood_accel'].notna())
 
-    # 坂路・ウッドのレース内順位
     df_main['坂路_4F_rank'] = df_main.groupby('race_uid')['坂路_4F'].rank(method='min', ascending=True)
     df_main['坂路_Lap4_rank'] = df_main.groupby('race_uid')['坂路_Lap4'].rank(method='min', ascending=True)
     df_main['坂路_Lap3_rank'] = df_main.groupby('race_uid')['坂路_Lap3'].rank(method='min', ascending=True)
@@ -838,7 +878,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     return df_main, detected_date
 
 
-# 統合データ読み込み実行
 df, race_date = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
 
 
@@ -1028,7 +1067,6 @@ for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
     n_horses = len(r_horses)
     
-    # シナジーマーク収集
     marks = []
     if (r_horses['is_syn_iron'] == True).any():
         marks.append("💎")
@@ -1043,7 +1081,6 @@ for _, r_row in races_in_v.iterrows():
         
     marks_str = f" {' '.join(marks)}" if marks else ""
     
-    # 10列目の印（C, K等）を収集
     race_horse_marks = []
     for hm in r_horses['印'].dropna().unique():
         hm_s = str(hm).strip()
@@ -1071,6 +1108,40 @@ selected_race_uid = st.selectbox(
 )
 
 race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
+selected_r_num = race_df['R番号'].iloc[0] if not race_df.empty else 1
+
+# ==============================================================================
+# ★ スマホ用：ワンタップでリアルタイムオッズ・馬体重を取得・更新
+# ==============================================================================
+live_data_store_key = f"live_data_{selected_race_uid}"
+if live_data_store_key not in st.session_state:
+    st.session_state[live_data_store_key] = {}
+
+col_btn1, col_btn2 = st.columns([1, 2])
+with col_btn1:
+    if st.button("⚡ リアルタイムオッズ・馬体重を取得", use_container_width=True):
+        with st.spinner("Webから最新オッズ・馬体重を取得中..."):
+            date_str = race_date.strftime('%Y%m%d')
+            fetched = fetch_live_odds_and_weight(date_str, chosen_venue, selected_r_num)
+            if fetched:
+                st.session_state[live_data_store_key] = fetched
+                st.success(f"取得完了 ({len(fetched)}頭)")
+            else:
+                st.warning("速報データがまだ発表されていないか、取得できませんでした。")
+
+live_info_dict = st.session_state.get(live_data_store_key, {})
+
+# 取得した最新オッズ・馬体重を反映
+if live_info_dict:
+    for idx, r_row in race_df.iterrows():
+        h_name = r_row['馬名']
+        if h_name in live_info_dict:
+            info = live_info_dict[h_name]
+            if info.get('live_pop') and str(info['live_pop']).isdigit():
+                race_df.loc[idx, '人気'] = int(info['live_pop'])
+            race_df.loc[idx, 'live_odds'] = info.get('live_odds', '')
+            race_df.loc[idx, 'live_weight'] = info.get('live_weight', '')
+
 filtered_df = race_df.copy()
 
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
@@ -1194,6 +1265,9 @@ else:
         sire_name = row.get('種牡馬', '')
         is_gtv = bool(row.get('is_gtv_horse', False))
         
+        live_odds = row.get('live_odds', '')
+        live_weight = row.get('live_weight', '')
+
         is_w_accel = bool(row.get('is_wood_accel', False))
         w_1f = row.get('wood_1F', 99.0)
         is_s_accel = bool(row.get('坂路_完全加速', False))
@@ -1297,7 +1371,11 @@ else:
 
         u_no = row['馬番']
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
-        pop_str = f"{int(row['人気'])} 番人気" if pd.notnull(row.get('人気')) else "- 番人気"
+        
+        # オッズ・人気・馬体重の表示
+        pop_text = f"{int(row['人気'])}番人気" if pd.notnull(row.get('人気')) else "- 番人気"
+        odds_text = f" | <strong>オッズ:</strong> {live_odds}倍" if live_odds else ""
+        weight_text = f" | <strong>馬体重:</strong> {live_weight}" if live_weight else ""
         
         # Fup数値 & 順位のカラーハイライト
         if pd.notnull(fup_val) and fup_val >= 5:
@@ -1317,6 +1395,6 @@ else:
 
         mark_display = f" {mark_badge_html}" if mark_badge_html else ""
         
-        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気/状況:</strong> {pop_text}{odds_text}{weight_text}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
