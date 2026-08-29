@@ -463,64 +463,80 @@ def evaluate_sire_cushion(sire_name, band):
 
 
 # ==============================================================================
-# ★ オッズ・馬体重の分離スクレイピング（馬体重が未発表でもオッズを確実に取得）
+# ★ スクレイピング：リアルタイムオッズ & 馬体重 取得エンジン
 # ==============================================================================
-def fetch_live_odds_and_weight(race_date_str, venue_name, race_no):
+def fetch_web_data(race_date_obj, venue_name, race_no, target_type="all"):
+    """
+    target_type: "odds" (オッズのみ), "weight" (馬体重のみ), "all" (両方)
+    """
     venue_code_map = {
         '札幌': '01', '函館': '02', '福島': '03', '新潟': '04', '東京': '05',
         '中山': '06', '中京': '07', '京都': '08', '阪神': '09', '小倉': '10'
     }
-    v_code = venue_code_map.get(venue_name)
-    if not v_code:
-        return {}
-
-    url = f"https://race.netkeiba.com/race/shutuba.html"
-    params = {
-        'race_id': f"{race_date_str[:4]}{v_code}{int(race_no):02d}"
-    }
+    v_code = venue_code_map.get(venue_name, '07')
+    y_str = str(race_date_obj.year)
     
     headers = {
-        'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
     }
 
     results = {}
-    try:
-        res = requests.get(url, params=params, headers=headers, timeout=5)
-        res.encoding = 'euc-jp'
-        soup = BeautifulSoup(res.text, 'html.parser')
-        
-        rows = soup.select('tr.HorseList')
-        for tr in rows:
-            h_tag = tr.select_one('.HorseName a')
-            h_name = clean_horse_name(h_tag.text) if h_tag else ""
+    
+    # 開催回・日の組み合わせを探索
+    for kai in range(1, 6):
+        for nichi in range(1, 13):
+            race_id_candidate = f"{y_str}{v_code}{kai:02d}{nichi:02d}{int(race_no):02d}"
+            url = f"https://race.netkeiba.com/race/shutuba.html?race_id={race_id_candidate}"
             
-            # オッズ取得（複数パターン対応）
-            odds_val = ""
-            odds_tag = tr.select_one('.Popular span') or tr.select_one('.Popular')
-            if odds_tag:
-                odds_val = odds_tag.text.strip()
-            
-            # 人気順取得
-            pop_val = ""
-            pop_tag = tr.select_one('.Popular_Ninki span') or tr.select_one('.Popular_Ninki')
-            if pop_tag:
-                pop_val = pop_tag.text.strip()
-            
-            # 馬体重取得（発表前でもオッズ取得に影響を与えない）
-            weight_val = ""
-            weight_tag = tr.select_one('.Weight')
-            if weight_tag:
-                weight_val = weight_tag.text.strip()
-
-            if h_name and (odds_val or pop_val):
-                results[h_name] = {
-                    'live_odds': odds_val,
-                    'live_pop': pop_val,
-                    'live_weight': weight_val
-                }
-        return results
-    except Exception:
-        return {}
+            try:
+                res = requests.get(url, headers=headers, timeout=3)
+                if res.status_code != 200:
+                    continue
+                res.encoding = 'euc-jp'
+                soup = BeautifulSoup(res.text, 'html.parser')
+                
+                rows = soup.select('tr.HorseList')
+                if not rows:
+                    continue
+                
+                found_valid = False
+                for tr in rows:
+                    h_tag = tr.select_one('.HorseName a')
+                    h_name = clean_horse_name(h_tag.text) if h_tag else ""
+                    
+                    odds_val = ""
+                    pop_val = ""
+                    weight_val = ""
+                    
+                    if target_type in ["odds", "all"]:
+                        odds_tag = tr.select_one('.Popular span') or tr.select_one('.Popular')
+                        if odds_tag and odds_tag.text.strip() not in ['---', '']:
+                            odds_val = odds_tag.text.strip()
+                            found_valid = True
+                        
+                        pop_tag = tr.select_one('.Popular_Ninki span') or tr.select_one('.Popular_Ninki')
+                        if pop_tag and pop_tag.text.strip().isdigit():
+                            pop_val = pop_tag.text.strip()
+                    
+                    if target_type in ["weight", "all"]:
+                        weight_tag = tr.select_one('.Weight')
+                        if weight_tag and weight_tag.text.strip() not in ['計不', '---', '']:
+                            weight_val = weight_tag.text.strip()
+                            found_valid = True
+                    
+                    if h_name:
+                        results[h_name] = {
+                            'live_odds': odds_val,
+                            'live_pop': pop_val,
+                            'live_weight': weight_val
+                        }
+                
+                if found_valid:
+                    return results
+            except Exception:
+                continue
+                
+    return results
 
 
 # --- データロード＆4CSV統合処理 ---
@@ -667,7 +683,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    # GTV馬 CSV 結合 & 柔軟な日付抽出
+    # GTV馬 CSV 結合
     detected_date = None
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv', 'data/*GTV*.csv', '*GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
@@ -1055,7 +1071,7 @@ st.markdown(f"<div class='date-header-badge'>{formatted_date_str}</div>", unsafe
 
 
 # ==============================================================================
-# ★ レース選択UI（シナジーマーク ＋ GTV ＋ 10列目印マーク 自動付加プルダウン）
+# ★ レース選択UI
 # ==============================================================================
 st.markdown("### 🎯 レース選択")
 
@@ -1121,23 +1137,42 @@ selected_r_num = race_df['R番号'].iloc[0] if not race_df.empty else 1
 
 
 # ==============================================================================
-# ★ スマホ用：オッズ単独でも取得できるリアルタイム更新ボタン
+# ★ スマホ用：オッズ取得・馬体重取得の個別ボタン
 # ==============================================================================
 live_data_store_key = f"live_data_{selected_race_uid}"
 if live_data_store_key not in st.session_state:
     st.session_state[live_data_store_key] = {}
 
-col_btn1, col_btn2 = st.columns([1, 2])
+col_btn1, col_btn2 = st.columns(2)
 with col_btn1:
-    if st.button("⚡ リアルタイムオッズを取得", use_container_width=True):
+    if st.button("⚡ リアルタイムオッズ取得", use_container_width=True):
         with st.spinner("最新オッズを取得中..."):
-            date_str = race_date.strftime('%Y%m%d')
-            fetched = fetch_live_odds_and_weight(date_str, chosen_venue, selected_r_num)
-            if fetched:
-                st.session_state[live_data_store_key] = fetched
-                st.success(f"最新オッズを反映しました ({len(fetched)}頭)")
+            fetched_odds = fetch_web_data(race_date, chosen_venue, selected_r_num, target_type="odds")
+            if fetched_odds:
+                for h_k, h_v in fetched_odds.items():
+                    if h_k not in st.session_state[live_data_store_key]:
+                        st.session_state[live_data_store_key][h_k] = {}
+                    if h_v.get('live_odds'):
+                        st.session_state[live_data_store_key][h_k]['live_odds'] = h_v['live_odds']
+                    if h_v.get('live_pop'):
+                        st.session_state[live_data_store_key][h_k]['live_pop'] = h_v['live_pop']
+                st.success(f"オッズ更新完了 ({len(fetched_odds)}頭)")
             else:
                 st.warning("オッズがまだ発表されていないか、取得できませんでした。")
+
+with col_btn2:
+    if st.button("⚖️ 馬体重速報を取得", use_container_width=True):
+        with st.spinner("馬体重速報を取得中..."):
+            fetched_weight = fetch_web_data(race_date, chosen_venue, selected_r_num, target_type="weight")
+            valid_w = {k: v for k, v in fetched_weight.items() if v.get('live_weight')}
+            if valid_w:
+                for h_k, h_v in valid_w.items():
+                    if h_k not in st.session_state[live_data_store_key]:
+                        st.session_state[live_data_store_key][h_k] = {}
+                    st.session_state[live_data_store_key][h_k]['live_weight'] = h_v['live_weight']
+                st.success(f"馬体重更新完了 ({len(valid_w)}頭)")
+            else:
+                st.warning("馬体重はまだ発表されていません（発走約1時間前〜70分前に発表）。")
 
 live_info_dict = st.session_state.get(live_data_store_key, {})
 
@@ -1148,8 +1183,10 @@ if live_info_dict:
             info = live_info_dict[h_name]
             if info.get('live_pop') and str(info['live_pop']).isdigit():
                 race_df.loc[idx, '人気'] = int(info['live_pop'])
-            race_df.loc[idx, 'live_odds'] = info.get('live_odds', '')
-            race_df.loc[idx, 'live_weight'] = info.get('live_weight', '')
+            if info.get('live_odds'):
+                race_df.loc[idx, 'live_odds'] = info.get('live_odds')
+            if info.get('live_weight'):
+                race_df.loc[idx, 'live_weight'] = info.get('live_weight')
 
 filtered_df = race_df.copy()
 
