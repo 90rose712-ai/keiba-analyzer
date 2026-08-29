@@ -94,6 +94,32 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* GTV馬専用バッジ */
+    .badge-gtv-dirt {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #fbbf24;
+        box-shadow: 0 1px 4px rgba(245, 158, 11, 0.4);
+    }
+    .badge-gtv-normal {
+        display: inline-flex;
+        align-items: center;
+        background: linear-gradient(135deg, #4b5563 0%, #374151 100%);
+        color: #f3f4f6;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #9ca3af;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
     /* 10列目「印（C, K等）」専用バッジ */
     .badge-mark-c {
         display: inline-flex;
@@ -576,7 +602,9 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    # 開催日時の推定・抽出
+    # ==============================================================================
+    # 2. GTV馬 CSV の結合 & 判定
+    # ==============================================================================
     detected_date = None
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
@@ -599,10 +627,16 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
         if name_col:
             df_gtv['馬名'] = df_gtv[name_col].apply(clean_horse_name)
+            df_gtv['is_gtv_horse'] = True
             gtv_cols = [c for c in df_gtv.columns if c not in ['馬名', name_col]]
-            df_main = pd.merge(df_main, df_gtv[['馬名'] + gtv_cols].drop_duplicates('馬名'), on='馬名', how='left')
+            df_main = pd.merge(df_main, df_gtv[['馬名', 'is_gtv_horse'] + [c for c in gtv_cols if c != 'is_gtv_horse']].drop_duplicates('馬名'), on='馬名', how='left')
+    
+    if 'is_gtv_horse' not in df_main.columns:
+        df_main['is_gtv_horse'] = False
+    else:
+        df_main['is_gtv_horse'] = df_main['is_gtv_horse'].fillna(False).astype(bool)
 
-    # 3. 坂路調教 CSV（最速タイム抽出）
+    # 3. 坂路調教 CSV
     sakaro_patterns = [
         'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
         'data/坂路、検証用*.csv', '坂路、検証用*.csv',
@@ -701,7 +735,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV（最速タイム抽出）
+    # 4. ウッド調教 CSV
     wood_patterns = [
         'data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv',
         'data/ウッド、検証用*.csv', 'ウッド、検証用*.csv',
@@ -872,8 +906,15 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
-# ★ 左側サイドバー: 🎯 10列目「印（C, K等）」抽出フィルター
+# ★ 左側サイドバー: 🎯 GTV馬抽出 ＆ 10列目印フィルター
 # ==============================================================================
+st.sidebar.markdown("### 🎯 GTV該当馬 抽出")
+gtv_cnt = int(df['is_gtv_horse'].sum())
+gtv_dirt_cnt = int((df['is_gtv_horse'] & df['track'].str.contains('ダ') & (df['人気'] >= 4)).sum())
+
+filter_gtv_all = st.sidebar.checkbox(f"🎯 GTV該当馬すべて (該当: {gtv_cnt}頭)", help="単勝回収率86%・万能高期待値ロジック")
+filter_gtv_dirt = st.sidebar.checkbox(f"🔥 GTVダート穴馬 (4人気以下) (該当: {gtv_dirt_cnt}頭)", help="ダート×4人気以下＝単勝回収率97%")
+
 st.sidebar.markdown("### 🎯 印（10列目）抽出")
 
 valid_marks_in_df = [m for m in df['印'].dropna().unique() if str(m).strip() not in ['', 'nan', 'None', '-', '0']]
@@ -942,7 +983,7 @@ st.markdown(f"<div class='date-header-badge'>{formatted_date_str}</div>", unsafe
 
 
 # ==============================================================================
-# ★ レース選択UI（シナジーマーク ＋ 10列目印マーク 自動付加プルダウン）
+# ★ レース選択UI（シナジーマーク ＋ GTV ＋ 10列目印マーク 自動付加プルダウン）
 # ==============================================================================
 st.markdown("### 🎯 レース選択")
 
@@ -973,6 +1014,8 @@ for _, r_row in races_in_v.iterrows():
         marks.append("✨")
     if (r_horses['is_syn_bomb'] == True).any():
         marks.append("💣")
+    if (r_horses['is_gtv_horse'] == True).any():
+        marks.append("🎯")
         
     marks_str = f" {' '.join(marks)}" if marks else ""
     
@@ -1007,6 +1050,15 @@ race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
 filtered_df = race_df.copy()
 
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
+is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filtered_df.empty else False
+
+
+# --- GTV馬フィルタリング処理 ---
+if filter_gtv_all:
+    filtered_df = filtered_df[filtered_df['is_gtv_horse'] == True]
+
+if filter_gtv_dirt:
+    filtered_df = filtered_df[filtered_df['is_gtv_horse'] & is_dirt_race & (filtered_df['人気'] >= 4)]
 
 
 # --- 10列目印フィルタリング処理 ---
@@ -1116,6 +1168,7 @@ else:
         pop_val = row.get('人気', 99)
         mark_val = row.get('印', '')
         sire_name = row.get('種牡馬', '')
+        is_gtv = bool(row.get('is_gtv_horse', False))
         
         is_w_accel = bool(row.get('is_wood_accel', False))
         w_1f = row.get('wood_1F', 99.0)
@@ -1124,6 +1177,13 @@ else:
         # --- 豪華特注バッジ判定 ---
         badges = []
         
+        # GTV馬バッジ（ダート4人気以下は特注バッジ）
+        if is_gtv:
+            if is_dirt_race and pd.notnull(pop_val) and pop_val >= 4:
+                badges.append("<span class='badge-gtv-dirt'>🔥 GTVダート穴 (回収97%)</span>")
+            else:
+                badges.append("<span class='badge-gtv-normal'>🎯 GTV該当馬</span>")
+
         # クッション値 × 種牡馬バイアス（芝レースのみ表示）
         cushion_badge_html = ""
         if is_turf_race and sire_name:
