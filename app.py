@@ -94,6 +94,47 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* 10列目「印（C, K等）」専用バッジ */
+    .badge-mark-c {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #67e8f9;
+        box-shadow: 0 1px 4px rgba(0, 198, 255, 0.4);
+    }
+    .badge-mark-k {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #f12711 0%, #f5af19 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #fde047;
+        box-shadow: 0 1px 4px rgba(245, 175, 25, 0.4);
+    }
+    .badge-mark-general {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #8a2387 0%, #e94057 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #f472b6;
+        box-shadow: 0 1px 4px rgba(233, 64, 87, 0.4);
+    }
+
     /* クッション値 適性・危険バッジ */
     .badge-cushion-fit {
         display: inline-flex;
@@ -118,36 +159,6 @@ st.markdown("""
         border-radius: 6px;
         border: 1px solid #f87171;
         box-shadow: 0 1px 3px rgba(0,0,0,0.4);
-    }
-
-    /* 印（◎・〇・▲等）専用バッジ */
-    .badge-mark {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #e53935 0%, #b71c1c 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 13px;
-        padding: 1px 7px;
-        border-radius: 5px;
-        border: 1px solid #ff7961;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.5);
-    }
-    .badge-mark-honmei {
-        background: linear-gradient(135deg, #FF1744 0%, #D50000 100%);
-        border: 1px solid #FF8A80;
-        color: #ffffff;
-    }
-    .badge-mark-taiko {
-        background: linear-gradient(135deg, #FF9100 0%, #FF6D00 100%);
-        border: 1px solid #FFD180;
-        color: #ffffff;
-    }
-    .badge-mark-ana {
-        background: linear-gradient(135deg, #7C4DFF 0%, #651FFF 100%);
-        border: 1px solid #B388FF;
-        color: #ffffff;
     }
 
     /* 豪華特注バッジ */
@@ -367,21 +378,20 @@ def format_fup_rank_badge(rank_val):
         return f"<span class='rank-normal'>{r}位</span>"
 
 
+# --- 10列目の印（C, K等）バッジ生成ヘルパー ---
 def format_mark_badge(mark_str):
     if not mark_str or pd.isnull(mark_str):
         return ""
     m = str(mark_str).strip()
-    if not m or m in ['nan', 'None', '-']:
+    if not m or m in ['nan', 'None', '-', '0']:
         return ""
     
-    if m in ['◎', '二重丸']:
-        return f"<span class='badge-mark badge-mark-honmei'>{m}</span>"
-    elif m in ['〇', '○', '丸']:
-        return f"<span class='badge-mark badge-mark-taiko'>{m}</span>"
-    elif m in ['▲', '△', '☆', '★', '注', '穴']:
-        return f"<span class='badge-mark badge-mark-ana'>{m}</span>"
+    if m.upper() == 'C':
+        return f"<span class='badge-mark-c'>C</span>"
+    elif m.upper() == 'K':
+        return f"<span class='badge-mark-k'>K</span>"
     else:
-        return f"<span class='badge-mark'>{m}</span>"
+        return f"<span class='badge-mark-general'>{m}</span>"
 
 
 # --- クッション値 × 種牡馬適性ロジック ---
@@ -413,7 +423,6 @@ def evaluate_sire_cushion(sire_name, band):
         return ""
     sire = str(sire_name).strip()
     
-    # 帯ごとの種牡馬適性定義
     high_fit_sires = ['ロードカナロア', 'エピファネイア', 'キズナ', 'モーリス', 'ディープインパクト', 'ドゥラメンテ', 'イスラボニータ', 'ダイワメジャー', 'スワーヴリチャード', 'ブリックスアンドモルタル']
     high_danger_sires = ['ハービンジャー', 'オルフェーヴル', 'ルーラーシップ', 'ドレフォン', 'ゴールドシップ', 'リアルスティール']
 
@@ -486,15 +495,16 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             arms_val, arms_rank = 0.0, 99
             tua_val, tua_rank = 0.0, 99
 
-            if n == 24:
+            # 10列目 (parts[9]) を「印（C, K等）」として正確に読み込み
+            if n >= 24:
                 track, dist, umaban = parts[1], parts[2], parts[3]
                 horse_raw = parts[4]
                 trainer, jockey = parts[6], parts[7]
                 pop = parts[8]
                 mark = parts[9] if n > 9 else ""
-                fup = pd.to_numeric(parts[10], errors='coerce')
                 s_val = pd.to_numeric(parts[10], errors='coerce')
                 s_rank = pd.to_numeric(parts[11], errors='coerce')
+                fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[13], errors='coerce')
                 f_rank = pd.to_numeric(parts[14], errors='coerce')
@@ -502,7 +512,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 arms_rank = pd.to_numeric(parts[17], errors='coerce')
                 tua_val = pd.to_numeric(parts[19], errors='coerce')
                 tua_rank = pd.to_numeric(parts[20], errors='coerce')
-                finish = parts[22]
+                finish = parts[22] if n > 22 else ""
                 sire = parts[23] if n > 23 else ""
             elif n == 23:
                 track, dist, umaban = parts[1], parts[2], parts[3]
@@ -510,9 +520,9 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 trainer, jockey = parts[6], parts[7]
                 pop = parts[8]
                 mark = parts[9] if n > 9 else ""
-                fup = pd.to_numeric(parts[10], errors='coerce')
                 s_val = pd.to_numeric(parts[10], errors='coerce')
                 s_rank = pd.to_numeric(parts[11], errors='coerce')
+                fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
                 f_val = pd.to_numeric(parts[12], errors='coerce')
                 f_rank = pd.to_numeric(parts[13], errors='coerce')
@@ -522,24 +532,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                 tua_rank = pd.to_numeric(parts[19], errors='coerce')
                 finish = parts[20]
                 sire = parts[21] if n > 21 else ""
-            elif n >= 26:
-                track, dist, umaban = parts[1], parts[2], parts[3]
-                trainer, jockey = parts[5], parts[6]
-                horse_raw = parts[7]
-                pop = parts[8]
-                mark = parts[9] if n > 9 else ""
-                fup = pd.to_numeric(parts[10], errors='coerce')
-                s_val = pd.to_numeric(parts[10], errors='coerce')
-                s_rank = pd.to_numeric(parts[11], errors='coerce')
-                fup_rank = pd.to_numeric(parts[11], errors='coerce')
-                f_val = pd.to_numeric(parts[12], errors='coerce')
-                f_rank = pd.to_numeric(parts[13], errors='coerce')
-                arms_val = pd.to_numeric(parts[18], errors='coerce')
-                arms_rank = pd.to_numeric(parts[19], errors='coerce')
-                tua_val = pd.to_numeric(parts[21], errors='coerce')
-                tua_rank = pd.to_numeric(parts[22], errors='coerce')
-                finish = parts[24]
-                sire = parts[25] if n > 25 else ""
             else:
                 continue
 
@@ -555,7 +547,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
                     'dist': dist,
                     '馬番': u_int,
                     '馬名': horse,
-                    '印': mark,
+                    '印': str(mark).strip(),
                     '調教師': trainer,
                     '騎手': jockey,
                     '種牡馬': sire,
@@ -861,10 +853,8 @@ turf_condition = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重"
 
 st.sidebar.markdown(f"### 芝クッション値 ({st.session_state['active_venue']})")
 
-# 競馬場ごとのクッション値デフォルト設定
 default_cushions = {'札幌': 7.5, '函館': 7.4, '中京': 9.5, '新潟': 9.4, '東京': 9.6, '中山': 9.8, '京都': 9.5, '阪神': 9.6, '小倉': 9.3, '福島': 9.2}
 
-# セッションステートに競馬場別のクッション値を保持・固定
 cushion_state_key = f"cushion_val_{st.session_state['active_venue']}"
 if cushion_state_key not in st.session_state:
     st.session_state[cushion_state_key] = default_cushions.get(st.session_state['active_venue'], 9.5)
@@ -879,7 +869,6 @@ current_cushion_val = st.sidebar.number_input(
     label_visibility="collapsed"
 )
 
-# 判定帯の算出
 current_band = get_cushion_band(st.session_state['active_venue'], current_cushion_val)
 if current_band == "high":
     band_label = f"📍 判定帯: 硬め・高クッション ({current_cushion_val})"
@@ -895,6 +884,35 @@ st.sidebar.button(band_label, use_container_width=True)
 if st.sidebar.button("🔄 最新データへ強制再読み込み", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
+
+st.sidebar.markdown("---")
+
+
+# ==============================================================================
+# ★ 左側サイドバー: 🎯 10列目「印（C, K等）」抽出フィルター
+# ==============================================================================
+st.sidebar.markdown("### 🎯 印（10列目）抽出")
+
+valid_marks_in_df = [m for m in df['印'].dropna().unique() if str(m).strip() not in ['', 'nan', 'None', '-', '0']]
+has_any_mark_cnt = int(df['印'].isin(valid_marks_in_df).sum())
+
+filter_mark_any = st.sidebar.checkbox(f"🎯 印付き馬すべて (該当: {has_any_mark_cnt}頭)")
+
+# C, K を優先的にチェックボックス化
+has_c = 'C' in [str(m).upper() for m in valid_marks_in_df]
+has_k = 'K' in [str(m).upper() for m in valid_marks_in_df]
+
+c_m1, c_m2 = st.sidebar.columns(2)
+with c_m1:
+    filter_mark_c = st.checkbox("【C】印馬", value=False) if has_c else False
+with c_m2:
+    filter_mark_k = st.checkbox("【K】印馬", value=False) if has_k else False
+
+# その他記号用のマルチセレクト（データに存在する場合）
+other_marks = [m for m in valid_marks_in_df if str(m).upper() not in ['C', 'K']]
+selected_other_marks = []
+if other_marks:
+    selected_other_marks = st.sidebar.multiselect("その他印選択", options=other_marks, default=[])
 
 st.sidebar.markdown("---")
 
@@ -980,7 +998,7 @@ st.markdown(f"<div class='date-header-badge'>{formatted_date_str}</div>", unsafe
 
 
 # ==============================================================================
-# ★ レース選択UI（シナジーマーク自動付加プルダウン）
+# ★ レース選択UI（シナジーマーク ＋ 10列目印マーク 自動付加プルダウン）
 # ==============================================================================
 st.markdown("### 🎯 レース選択")
 
@@ -1001,6 +1019,7 @@ for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
     n_horses = len(r_horses)
     
+    # シナジーマーク収集
     marks = []
     if (r_horses['is_syn_iron'] == True).any():
         marks.append("💎")
@@ -1012,7 +1031,17 @@ for _, r_row in races_in_v.iterrows():
         marks.append("💣")
         
     marks_str = f" {' '.join(marks)}" if marks else ""
-    lbl = f"{r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]{marks_str}"
+    
+    # 10列目の印（C, K等）を収集
+    race_horse_marks = []
+    for hm in r_horses['印'].dropna().unique():
+        hm_s = str(hm).strip()
+        if hm_s and hm_s not in ['', 'nan', 'None', '-', '0'] and hm_s not in race_horse_marks:
+            race_horse_marks.append(hm_s)
+    
+    horse_marks_str = f" [{ ' '.join(race_horse_marks) }]" if race_horse_marks else ""
+
+    lbl = f"{r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]{marks_str}{horse_marks_str}"
     race_options[r_row['race_uid']] = lbl
 
 race_uid_list = list(race_options.keys())
@@ -1033,11 +1062,24 @@ selected_race_uid = st.selectbox(
 race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
 filtered_df = race_df.copy()
 
-# 現在のレースが芝コースか判定
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
 
 
-# --- フィルタリング処理 ---
+# --- 10列目印フィルタリング処理 ---
+if filter_mark_any:
+    filtered_df = filtered_df[filtered_df['印'].isin(valid_marks_in_df)]
+
+if filter_mark_c:
+    filtered_df = filtered_df[filtered_df['印'].str.upper() == 'C']
+
+if filter_mark_k:
+    filtered_df = filtered_df[filtered_df['印'].str.upper() == 'K']
+
+if selected_other_marks:
+    filtered_df = filtered_df[filtered_df['印'].isin(selected_other_marks)]
+
+
+# --- シナジー・指数フィルタリング処理 ---
 if syn_iron:
     filtered_df = filtered_df[filtered_df['is_syn_iron'] == True]
 
@@ -1183,6 +1225,8 @@ else:
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
         badges_html = " ".join(badges)
+        
+        # 10列目の印（C, K等）バッジ生成
         mark_badge_html = format_mark_badge(mark_val)
 
         # ウッド調教テキスト（最速タイム採用）
