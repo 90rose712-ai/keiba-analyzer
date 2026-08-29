@@ -325,7 +325,7 @@ def clean_horse_name(name):
     return s
 
 
-# --- CSV読み込み汎用ヘルパー ---
+# --- CSV読み込み汎用ヘルパー（超柔軟対応版） ---
 def read_csv_flexible(file_obj, candidate_patterns):
     src = file_obj
     if src is None:
@@ -337,15 +337,17 @@ def read_csv_flexible(file_obj, candidate_patterns):
     if src is None:
         return pd.DataFrame()
     
-    try:
-        return pd.read_csv(src, encoding='shift-jis')
-    except Exception:
+    encodings = ['utf-8-sig', 'shift-jis', 'utf-8', 'cp932']
+    for enc in encodings:
         try:
             if hasattr(src, 'seek'):
                 src.seek(0)
-            return pd.read_csv(src, encoding='utf-8', errors='ignore')
+            df = pd.read_csv(src, encoding=enc)
+            if not df.empty:
+                return df
         except Exception:
-            return pd.DataFrame()
+            continue
+    return pd.DataFrame()
 
 
 def find_col(df, candidates):
@@ -603,39 +605,47 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
     # ==============================================================================
-    # 2. GTV馬 CSV の結合 & 柔軟な日付抽出（8_30, 8.30, 26.8.30 すべてに対応）
+    # 2. GTV馬 CSV の結合 & 柔軟な日付抽出
     # ==============================================================================
     detected_date = None
-    gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv']
+    gtv_patterns = [
+        'data/GTV馬*.csv', 'GTV馬*.csv',
+        'data/GTV*.csv', 'GTV*.csv',
+        'data/*GTV*.csv', '*GTV*.csv'
+    ]
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
     
-    # GTVファイル名から開催日を推定
-    for pat in gtv_patterns:
-        matched = glob.glob(pat)
-        if matched:
-            fname = os.path.basename(matched[0])
-            # パターン1: 26.8.30 または 2026.8.30 / 26_8_30
-            d_match = re.search(r'(\d{1,4})[._](\d{1,2})[._](\d{1,2})', fname)
-            if d_match:
-                y_raw = int(d_match.group(1))
-                y = y_raw + 2000 if y_raw < 100 else y_raw
-                m = int(d_match.group(2))
-                d = int(d_match.group(3))
+    # アップロードオブジェクトまたはファイルパスから日付を抽出
+    source_name = getattr(f_gtv, 'name', '') if f_gtv is not None else ''
+    if not source_name:
+        for pat in gtv_patterns:
+            matched = glob.glob(pat)
+            if matched:
+                source_name = os.path.basename(matched[0])
+                break
+
+    if source_name:
+        # パターン1: 26.8.30 または 2026.8.30 / 26_8_30
+        d_match = re.search(r'(\d{1,4})[._](\d{1,2})[._](\d{1,2})', source_name)
+        if d_match:
+            y_raw = int(d_match.group(1))
+            y = y_raw + 2000 if y_raw < 100 else y_raw
+            m = int(d_match.group(2))
+            d = int(d_match.group(3))
+            try:
+                detected_date = datetime.date(y, m, d)
+            except Exception:
+                pass
+        else:
+            # パターン2: 8_30 または 8.30（当年2026年として処理）
+            d_match_short = re.search(r'(\d{1,2})[._](\d{1,2})', source_name)
+            if d_match_short:
+                m = int(d_match_short.group(1))
+                d = int(d_match_short.group(2))
                 try:
-                    detected_date = datetime.date(y, m, d)
+                    detected_date = datetime.date(2026, m, d)
                 except Exception:
                     pass
-            else:
-                # パターン2: 8_30 または 8.30（当年2026年として処理）
-                d_match_short = re.search(r'(\d{1,2})[._](\d{1,2})', fname)
-                if d_match_short:
-                    m = int(d_match_short.group(1))
-                    d = int(d_match_short.group(2))
-                    try:
-                        detected_date = datetime.date(2026, m, d)
-                    except Exception:
-                        pass
-            break
 
     if not df_gtv.empty:
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
