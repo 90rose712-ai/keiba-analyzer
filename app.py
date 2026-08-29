@@ -603,24 +603,38 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
     # ==============================================================================
-    # 2. GTV馬 CSV の結合 & 判定
+    # 2. GTV馬 CSV の結合 & 柔軟な日付抽出（8_30, 8.30, 26.8.30 すべてに対応）
     # ==============================================================================
     detected_date = None
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
     
+    # GTVファイル名から開催日を推定
     for pat in gtv_patterns:
         matched = glob.glob(pat)
         if matched:
-            d_match = re.search(r'(\d{1,2})\.(\d{1,2})\.(\d{1,2})', matched[0])
+            fname = os.path.basename(matched[0])
+            # パターン1: 26.8.30 または 2026.8.30 / 26_8_30
+            d_match = re.search(r'(\d{1,4})[._](\d{1,2})[._](\d{1,2})', fname)
             if d_match:
-                y = int(d_match.group(1)) + 2000 if int(d_match.group(1)) < 100 else int(d_match.group(1))
+                y_raw = int(d_match.group(1))
+                y = y_raw + 2000 if y_raw < 100 else y_raw
                 m = int(d_match.group(2))
                 d = int(d_match.group(3))
                 try:
                     detected_date = datetime.date(y, m, d)
                 except Exception:
                     pass
+            else:
+                # パターン2: 8_30 または 8.30（当年2026年として処理）
+                d_match_short = re.search(r'(\d{1,2})[._](\d{1,2})', fname)
+                if d_match_short:
+                    m = int(d_match_short.group(1))
+                    d = int(d_match_short.group(2))
+                    try:
+                        detected_date = datetime.date(2026, m, d)
+                    except Exception:
+                        pass
             break
 
     if not df_gtv.empty:
@@ -636,7 +650,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     else:
         df_main['is_gtv_horse'] = df_main['is_gtv_horse'].fillna(False).astype(bool)
 
-    # 3. 坂路調教 CSV
+    # 3. 坂路調教 CSV（最速タイム抽出）
     sakaro_patterns = [
         'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
         'data/坂路、検証用*.csv', '坂路、検証用*.csv',
@@ -735,7 +749,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV
+    # 4. ウッド調教 CSV（最速タイム抽出）
     wood_patterns = [
         'data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv',
         'data/ウッド、検証用*.csv', 'ウッド、検証用*.csv',
@@ -809,7 +823,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['wood_Lap1_rank'] = df_main.groupby('race_uid')['wood_Lap1'].rank(method='min', ascending=True)
 
     if detected_date is None:
-        detected_date = datetime.date(2026, 8, 23)
+        detected_date = datetime.date(2026, 8, 30)
 
     return df_main, detected_date
 
