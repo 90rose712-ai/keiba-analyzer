@@ -277,22 +277,6 @@ st.markdown("""
         border-radius: 4px;
         border: 1px solid rgba(255, 165, 0, 0.5);
     }
-
-    .sidebar-synergy-item {
-        background-color: #0d1117;
-        border: 1px solid #30363d;
-        border-left: 3px solid #f78166;
-        padding: 8px 10px;
-        border-radius: 6px;
-        margin-bottom: 6px;
-        font-size: 12px;
-        line-height: 1.4;
-    }
-    .sidebar-synergy-header {
-        font-weight: bold;
-        color: #ffffff;
-        margin-bottom: 2px;
-    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -495,7 +479,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             arms_val, arms_rank = 0.0, 99
             tua_val, tua_rank = 0.0, 99
 
-            # 10列目 (parts[9]) を「印（C, K等）」として正確に読み込み
             if n >= 24:
                 track, dist, umaban = parts[1], parts[2], parts[3]
                 horse_raw = parts[4]
@@ -898,7 +881,6 @@ has_any_mark_cnt = int(df['印'].isin(valid_marks_in_df).sum())
 
 filter_mark_any = st.sidebar.checkbox(f"🎯 印付き馬すべて (該当: {has_any_mark_cnt}頭)")
 
-# C, K を優先的にチェックボックス化
 has_c = 'C' in [str(m).upper() for m in valid_marks_in_df]
 has_k = 'K' in [str(m).upper() for m in valid_marks_in_df]
 
@@ -908,7 +890,6 @@ with c_m1:
 with c_m2:
     filter_mark_k = st.checkbox("【K】印馬", value=False) if has_k else False
 
-# その他記号用のマルチセレクト（データに存在する場合）
 other_marks = [m for m in valid_marks_in_df if str(m).upper() not in ['C', 'K']]
 selected_other_marks = []
 if other_marks:
@@ -918,7 +899,7 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
-# ★ 左側サイドバー: 全レース横断 黄金シナジー該当馬一覧
+# ★ 左側サイドバー: 👑 黄金シナジー抽出
 # ==============================================================================
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
 
@@ -933,43 +914,6 @@ syn_high = st.sidebar.checkbox(f"🔥 高確率軸馬 (該当: {high_cnt}頭)", 
 syn_fup_sakaro = st.sidebar.checkbox(f"✨ Fup2(5〜7点) × 坂路完全 (該当: {fup_sakaro_cnt}頭)", help="坂路完全加速かつFup高評価")
 syn_f1_rap = st.sidebar.checkbox(f"🔥 SSS級・F1位 × 究極ラップ (該当: {f1_rap_cnt}頭)")
 syn_bomb = st.sidebar.checkbox(f"💣 爆弾穴馬 (該当: {bomb_cnt}頭)")
-
-with st.sidebar.expander("📋 【全レース】黄金シナジー該当馬一覧", expanded=True):
-    any_synergy_df = df[
-        (df['is_syn_iron'] == True) |
-        (df['is_syn_high'] == True) |
-        (df['is_syn_fup_sakaro'] == True) |
-        (df['is_syn_bomb'] == True)
-    ].copy()
-
-    if any_synergy_df.empty:
-        st.caption("現在該当する馬はいません。")
-    else:
-        venue_prio = {'東京': 1, '中山': 2, '京都': 3, '阪神': 4, '中京': 5, '新潟': 6, '札幌': 7, '函館': 8, '小倉': 9, '福島': 10, 'その他': 99}
-        any_synergy_df['v_prio'] = any_synergy_df['競馬場名'].map(lambda x: venue_prio.get(x, 50))
-        any_synergy_df = any_synergy_df.sort_values(by=['v_prio', 'R番号', '馬番'])
-
-        for _, s_row in any_synergy_df.iterrows():
-            s_tags = []
-            if s_row['is_syn_iron']:
-                s_tags.append("💎鉄板軸")
-            elif s_row['is_syn_high']:
-                s_tags.append("🔥高確率軸")
-            if s_row['is_syn_fup_sakaro']:
-                s_tags.append("✨Fup坂路")
-            if s_row['is_syn_bomb']:
-                s_tags.append("💣爆弾")
-            
-            tag_str = " ".join(s_tags)
-            u_str = f"{int(s_row['馬番'])}番" if pd.notnull(s_row['馬番']) and s_row['馬番'] != 99 else ""
-            
-            st.markdown(f"""
-            <div class='sidebar-synergy-item'>
-                <div class='sidebar-synergy-header'>[{s_row['race_id']}] {u_str} {s_row['馬名']}</div>
-                <div style='color:#58a6ff;font-weight:bold;margin-top:2px;'>{tag_str}</div>
-                <div style='color:#8b949e;font-size:11px;'>F:{s_row['F指数']}({s_row['F_rank']}位) | Fup:{int(s_row['Fup'])}点</div>
-            </div>
-            """, unsafe_allow_html=True)
 
 st.sidebar.markdown("---")
 
