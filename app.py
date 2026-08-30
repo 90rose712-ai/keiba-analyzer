@@ -466,9 +466,6 @@ def evaluate_sire_cushion(sire_name, band):
 # ★ スクレイピング：リアルタイムオッズ & 馬体重 取得エンジン
 # ==============================================================================
 def fetch_web_data(race_date_obj, venue_name, race_no, target_type="all"):
-    """
-    target_type: "odds" (オッズのみ), "weight" (馬体重のみ), "all" (両方)
-    """
     venue_code_map = {
         '札幌': '01', '函館': '02', '福島': '03', '新潟': '04', '東京': '05',
         '中山': '06', '中京': '07', '京都': '08', '阪神': '09', '小倉': '10'
@@ -482,7 +479,6 @@ def fetch_web_data(race_date_obj, venue_name, race_no, target_type="all"):
 
     results = {}
     
-    # 開催回・日の組み合わせを探索
     for kai in range(1, 6):
         for nichi in range(1, 13):
             race_id_candidate = f"{y_str}{v_code}{kai:02d}{nichi:02d}{int(race_no):02d}"
@@ -1418,10 +1414,11 @@ else:
         u_no = row['馬番']
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
         
-        # オッズ・人気・馬体重の表示
-        pop_text = f"{int(row['人気'])}番人気" if pd.notnull(row.get('人気')) else "- 番人気"
-        odds_text = f" | <strong>オッズ:</strong> {live_odds}倍" if live_odds else ""
-        weight_text = f" | <strong>馬体重:</strong> {live_weight}" if live_weight else ""
+        # 単勝オッズ・人気順・馬体重の専用表示フォーマット
+        pop_num = f"{int(row['人気'])}番人気" if pd.notnull(row.get('人気')) else "- 番人気"
+        odds_val_str = f"{live_odds}倍" if live_odds else "- 倍"
+        odds_display = f"<strong>{odds_val_str}</strong> ({pop_num})"
+        weight_display = f"<strong>{live_weight}</strong>" if live_weight else "<span style='color:#8b949e;'>未取得 (発表前)</span>"
         
         # Fup数値 & 順位のカラーハイライト
         if pd.notnull(fup_val) and fup_val >= 5:
@@ -1441,6 +1438,6 @@ else:
 
         mark_display = f" {mark_badge_html}" if mark_badge_html else ""
         
-        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気/状況:</strong> {pop_text}{odds_text}{weight_text}</li></ul></div>"
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>単勝オッズ/人気</strong>: {odds_display}</li><li><strong>馬体重</strong>: {weight_display}</li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html})</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
