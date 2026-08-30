@@ -94,6 +94,58 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* 厩舎好走パターン専用バッジ */
+    .badge-stable-sugiyama {
+        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #fcd34d;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .badge-stable-nakauchida {
+        background: linear-gradient(135deg, #059669 0%, #047857 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #6ee7b7;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .badge-stable-yahagi {
+        background: linear-gradient(135deg, #4338ca 0%, #3730a3 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #a5b4fc;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .badge-stable-kimura {
+        background: linear-gradient(135deg, #be123c 0%, #9f1239 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #fda4af;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+    .badge-stable-general {
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #7dd3fc;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+    }
+
     /* GTV馬専用バッジ */
     .badge-gtv-dirt {
         display: inline-flex;
@@ -460,6 +512,75 @@ def evaluate_sire_cushion(sire_name, band):
     return ""
 
 
+# ==============================================================================
+# ★ 厩舎好走パターン 自動判定関数
+# ==============================================================================
+def get_stable_synergy_badges(row):
+    trainer = str(row.get('調教師', ''))
+    jockey = str(row.get('騎手', ''))
+    f_rank = row.get('F_rank', 99)
+    fup_val = row.get('Fup', 0)
+    
+    s_4f = row.get('坂路_4F', np.nan)
+    s_1f = row.get('坂路_1F', np.nan)
+    s_l2 = row.get('坂路_Lap2', np.nan)
+    s_l1 = row.get('坂路_Lap1', np.nan)
+    is_s_accel = bool(row.get('坂路_完全加速', False))
+    
+    w_6f = row.get('wood_6F', np.nan)
+    w_1f = row.get('wood_1F', np.nan)
+    
+    badges = []
+    
+    # 1. 杉山晴紀厩舎
+    if '杉山晴' in trainer:
+        if pd.notnull(s_1f) and s_1f <= 11.9 and is_s_accel:
+            badges.append("<span class='badge-stable-sugiyama'>🏅 杉山・MAX坂路</span>")
+        elif pd.notnull(s_4f) and s_4f <= 52.9 and pd.notnull(s_1f) and s_1f <= 12.2:
+            badges.append("<span class='badge-stable-sugiyama'>🏅 杉山・黄金坂路</span>")
+        if '西村淳' in jockey:
+            badges.append("<span class='badge-stable-sugiyama'>🤝 杉山×西村淳</span>")
+            
+    # 2. 中内田充正厩舎
+    if '中内田' in trainer:
+        if '川田' in jockey and f_rank == 1:
+            badges.append("<span class='badge-stable-nakauchida'>👑 中内田×川田×F1</span>")
+        if pd.notnull(w_1f) and 11.0 <= w_1f <= 11.3:
+            badges.append("<span class='badge-stable-nakauchida'>⚔️ 中内田・CW究極</span>")
+            
+    # 3. 矢作芳人厩舎
+    if '矢作' in trainer:
+        if pd.notnull(s_l2) and pd.notnull(s_l1) and 12.0 <= s_l2 <= 12.9 and 12.0 <= s_l1 <= 12.9 and s_l2 > s_l1:
+            if pd.notnull(s_4f) and s_4f <= 53.0:
+                badges.append("<span class='badge-stable-yahagi'>🌪️ 矢作・A2猛時計</span>")
+            else:
+                badges.append("<span class='badge-stable-yahagi'>🌪️ 矢作・A2加速</span>")
+                
+    # 4. 木村哲也厩舎
+    if '木村哲' in trainer or '木村' in trainer:
+        if 'ルメール' in jockey and fup_val >= 5:
+            badges.append("<span class='badge-stable-kimura'>🎯 木村哲×ルメール</span>")
+        if pd.notnull(w_1f) and w_1f <= 11.5:
+            badges.append("<span class='badge-stable-kimura'>⚔️ 木村哲・南W勝負</span>")
+            
+    # 5. 安田厩舎 (安田隆行 / 安田翔伍)
+    if '安田' in trainer:
+        if pd.notnull(s_4f) and s_4f <= 51.9:
+            badges.append("<span class='badge-stable-general'>⚡ 安田・坂路猛時計</span>")
+            
+    # 6. 松永幹夫厩舎
+    if '松永幹' in trainer:
+        if pd.notnull(s_1f) and s_1f <= 12.0 and is_s_accel:
+            badges.append("<span class='badge-stable-general'>🏇 松永幹・坂路加速</span>")
+            
+    # 7. 藤原英昭厩舎
+    if '藤原英' in trainer or '藤原' in trainer:
+        if pd.notnull(w_6f) and w_6f <= 82.0:
+            badges.append("<span class='badge-stable-general'>🏛️ 藤原英・CW好時計</span>")
+            
+    return badges
+
+
 # --- データロード＆4CSV統合処理 ---
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
@@ -651,7 +772,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     else:
         df_main['is_gtv_horse'] = df_main['is_gtv_horse'].fillna(False).astype(bool)
 
-    # 3. 坂路調教 CSV（最速タイム抽出）
+    # 3. 坂路調教 CSV
     sakaro_patterns = [
         'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
         'data/坂路、検証用*.csv', '坂路、検証用*.csv',
@@ -748,7 +869,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         df_main['坂路_Lap1'] = np.nan
         df_main['坂路_完全加速'] = False
 
-    # 4. ウッド調教 CSV（最速タイム抽出）
+    # 4. ウッド調教 CSV
     wood_patterns = [
         'data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv',
         'data/ウッド、検証用*.csv', 'ウッド、検証用*.csv',
@@ -761,6 +882,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         c_w_name = find_col(w_df, ['馬名', '馬 名', '競走馬名'])
         if c_w_name:
             w_df['馬名'] = w_df[c_w_name].apply(clean_horse_name)
+            c_w_6f = find_col(w_df, ['6F', '６Ｆ', '６F', '6f'])
             c_w_5f = find_col(w_df, ['5F', '５Ｆ', '５F', '5f'])
             c_w_4f = find_col(w_df, ['4F', '４Ｆ', '４F', '4f'])
             c_w_1f = find_col(w_df, ['1F', '１Ｆ', '１F', '1f'])
@@ -771,6 +893,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             c_w_plc = find_col(w_df, ['場所', '調教場', '場'])
             c_w_date = find_col(w_df, ['年月日', '日付', '日付S'])
 
+            w_df['wood_6F'] = pd.to_numeric(w_df[c_w_6f], errors='coerce') if c_w_6f else np.nan
             w_df['wood_5F'] = pd.to_numeric(w_df[c_w_5f], errors='coerce') if c_w_5f else np.nan
             w_df['wood_4F'] = pd.to_numeric(w_df[c_w_4f], errors='coerce') if c_w_4f else np.nan
             w_df['wood_1F'] = pd.to_numeric(w_df[c_w_1f], errors='coerce') if c_w_1f else np.nan
@@ -790,11 +913,12 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             w_remain = w_df[~w_df['馬名'].isin(w_best['馬名'])].sort_values('wood_1F', ascending=True).drop_duplicates('馬名', keep='first')
             w_final = pd.concat([w_best, w_remain], ignore_index=True)
 
-            wood_cols = ['馬名', 'wood_place', 'wood_5F', 'wood_4F', 'wood_1F', 'wood_Lap4', 'wood_Lap3', 'wood_Lap2', 'wood_Lap1']
+            wood_cols = ['馬名', 'wood_place', 'wood_6F', 'wood_5F', 'wood_4F', 'wood_1F', 'wood_Lap4', 'wood_Lap3', 'wood_Lap2', 'wood_Lap1']
             df_main = pd.merge(df_main, w_final[wood_cols].drop_duplicates('馬名'), on='馬名', how='left')
 
     if 'wood_1F' not in df_main.columns:
         df_main['wood_place'] = ""
+        df_main['wood_6F'] = np.nan
         df_main['wood_5F'] = np.nan
         df_main['wood_4F'] = np.nan
         df_main['wood_1F'] = np.nan
@@ -856,6 +980,8 @@ if not df.empty:
             ((df['坂路_1F'] <= 12.4) & (df['坂路_完全加速'] == True))
         )
     )
+    # 厩舎好走パターンの判定フラグ
+    df['has_stable_pattern'] = df.apply(lambda r: len(get_stable_synergy_badges(r)) > 0, axis=1)
 
 
 # --- メイン画面準備 & 競馬場一覧取得 ---
@@ -949,6 +1075,16 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
+# ★ 左側サイドバー: 🏛️ 厩舎黄金パターン抽出
+# ==============================================================================
+st.sidebar.markdown("### 🏛️ 厩舎黄金調教 抽出")
+stable_pat_cnt = int(df['has_stable_pattern'].sum())
+filter_stable_all = st.sidebar.checkbox(f"🏅 厩舎好走パターン該当馬 (該当: {stable_pat_cnt}頭)", help="杉山・中内田・矢作・木村哲などの調教黄金パターン")
+
+st.sidebar.markdown("---")
+
+
+# ==============================================================================
 # ★ 左側サイドバー: 👑 黄金シナジー抽出
 # ==============================================================================
 st.sidebar.markdown("### 👑 黄金シナジー抽出")
@@ -1024,6 +1160,8 @@ for _, r_row in races_in_v.iterrows():
         marks.append("💣")
     if (r_horses['is_gtv_horse'] == True).any():
         marks.append("🎯")
+    if (r_horses['has_stable_pattern'] == True).any():
+        marks.append("🏅")
         
     marks_str = f" {' '.join(marks)}" if marks else ""
     
@@ -1060,13 +1198,16 @@ is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filte
 is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filtered_df.empty else False
 
 
+# --- 厩舎好走パターンフィルタリング ---
+if filter_stable_all:
+    filtered_df = filtered_df[filtered_df['has_stable_pattern'] == True]
+
 # --- GTV馬フィルタリング処理 ---
 if filter_gtv_all:
     filtered_df = filtered_df[filtered_df['is_gtv_horse'] == True]
 
 if filter_gtv_dirt:
     filtered_df = filtered_df[filtered_df['is_gtv_horse'] & is_dirt_race & (filtered_df['人気'] >= 4)]
-
 
 # --- 10列目印フィルタリング処理 ---
 if filter_mark_any:
@@ -1080,7 +1221,6 @@ if filter_mark_k:
 
 if selected_other_marks:
     filtered_df = filtered_df[filtered_df['印'].isin(selected_other_marks)]
-
 
 # --- シナジー・指数フィルタリング処理 ---
 if syn_iron:
@@ -1176,7 +1316,7 @@ else:
         mark_val = row.get('印', '')
         sire_name = row.get('種牡馬', '')
         is_gtv = bool(row.get('is_gtv_horse', False))
-        
+
         is_w_accel = bool(row.get('is_wood_accel', False))
         w_1f = row.get('wood_1F', 99.0)
         is_s_accel = bool(row.get('坂路_完全加速', False))
@@ -1184,20 +1324,25 @@ else:
         # --- 豪華特注バッジ判定 ---
         badges = []
         
-        # GTV馬バッジ（ダート4人気以下は特注バッジ）
+        # 1. 厩舎黄金パターンバッジ（被らない独自マーク・カラー）
+        stable_badges = get_stable_synergy_badges(row)
+        badges.extend(stable_badges)
+
+        # 2. GTV馬バッジ
         if is_gtv:
             if is_dirt_race and pd.notnull(pop_val) and pop_val >= 4:
                 badges.append("<span class='badge-gtv-dirt'>🔥 GTVダート穴 (回収97%)</span>")
             else:
                 badges.append("<span class='badge-gtv-normal'>🎯 GTV該当馬</span>")
 
-        # クッション値 × 種牡馬バイアス（芝レースのみ表示）
+        # 3. クッション値 × 種牡馬バイアス（芝レースのみ）
         cushion_badge_html = ""
         if is_turf_race and sire_name:
             cushion_badge_html = evaluate_sire_cushion(sire_name, current_band)
             if cushion_badge_html:
                 badges.append(cushion_badge_html)
 
+        # 4. 指数シナジーバッジ
         if row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
         elif row.get('is_syn_high', False):
