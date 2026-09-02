@@ -94,6 +94,38 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* === 🎯 狙い目専用バッジ === */
+    .badge-target-win {
+        background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid #fda4af;
+        box-shadow: 0 2px 6px rgba(225, 29, 72, 0.5);
+    }
+    .badge-target-axis {
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid #93c5fd;
+        box-shadow: 0 2px 6px rgba(37, 99, 235, 0.5);
+    }
+    .badge-target-himo {
+        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 3px 10px;
+        border-radius: 6px;
+        border: 1px solid #fde68a;
+        box-shadow: 0 2px 6px rgba(217, 119, 6, 0.5);
+    }
+
     /* 厩舎好走パターン専用バッジ */
     .badge-stable-sugiyama {
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
@@ -316,30 +348,38 @@ st.markdown("""
         font-size: 11px;
     }
 
-    /* 順位カラーハイライト */
+    /* === 順位カラーハイライト（馬券内率の高い1〜5位まで色付け） === */
     .rank-1st {
         color: #FFD700;
         font-weight: bold;
-        background-color: rgba(255, 215, 0, 0.18);
-        padding: 1px 5px;
+        background-color: rgba(255, 215, 0, 0.22);
+        padding: 2px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(255, 215, 0, 0.5);
+        border: 1px solid rgba(255, 215, 0, 0.6);
     }
     .rank-2nd {
-        color: #E0E0E0;
+        color: #E2E8F0;
         font-weight: bold;
-        background-color: rgba(224, 224, 224, 0.18);
-        padding: 1px 5px;
+        background-color: rgba(226, 232, 240, 0.20);
+        padding: 2px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(224, 224, 224, 0.5);
+        border: 1px solid rgba(226, 232, 240, 0.6);
     }
     .rank-3rd {
-        color: #CD7F32;
+        color: #F97316;
         font-weight: bold;
-        background-color: rgba(205, 127, 50, 0.18);
-        padding: 1px 5px;
+        background-color: rgba(249, 115, 22, 0.20);
+        padding: 2px 6px;
         border-radius: 4px;
-        border: 1px solid rgba(205, 127, 50, 0.5);
+        border: 1px solid rgba(249, 115, 22, 0.6);
+    }
+    .rank-top5 {
+        color: #34D399;
+        font-weight: bold;
+        background-color: rgba(52, 211, 153, 0.15);
+        padding: 2px 6px;
+        border-radius: 4px;
+        border: 1px solid rgba(52, 211, 153, 0.45);
     }
     .rank-normal {
         color: #8b949e;
@@ -409,7 +449,7 @@ def find_col(df, candidates):
     return None
 
 
-# --- 順位カラー整形ヘルパー ---
+# --- 順位カラー整形ヘルパー（1〜5位までハイライト） ---
 def format_rank_badge(rank_val):
     if pd.isnull(rank_val) or rank_val == 99 or rank_val == 0:
         return "<span class='rank-normal'>-位</span>"
@@ -424,6 +464,8 @@ def format_rank_badge(rank_val):
         return f"<span class='rank-2nd'>🥈2位</span>"
     elif r == 3:
         return f"<span class='rank-3rd'>🥉3位</span>"
+    elif r in [4, 5]:
+        return f"<span class='rank-top5'>{r}位</span>"
     else:
         return f"<span class='rank-normal'>{r}位</span>"
 
@@ -438,6 +480,8 @@ def format_fup_rank_badge(rank_val):
         
     if r == 1:
         return f"<span class='rank-1st'>🥇 1位</span>"
+    elif r in [2, 3]:
+        return f"<span class='rank-top5'>{r}位</span>"
     else:
         return f"<span class='rank-normal'>{r}位</span>"
 
@@ -951,8 +995,33 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 df, race_date = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
 
 
-# --- 黄金シナジー該当フラグ付与 ---
+# ==============================================================================
+# ★ 狙い目フラグ（1着狙い・軸連対狙い・紐穴狙い）の自動判定ロジック
+# ==============================================================================
 if not df.empty:
+    # 🥇 1着狙い（単勝 / 3連単アタマ固定）
+    df['target_win'] = (
+        ((df['F_rank'] == 1) & (df['arms_rank'] == 1)) |
+        ((df['Fup'] >= 5) & (df['F_rank'] == 1)) |
+        ((df['F_rank'] == 1) & (df['arms_rank'] <= 3) & (df['S_rank'] <= 3)) |
+        ((df['F指数'] >= 66) & (df['arms_rank'] == 1))
+    )
+    
+    # 🛡️ 軸・連対狙い（ワイド・3連複軸 / 複勝率50%〜60%）
+    df['target_axis'] = (
+        ((df['F_rank'] <= 2) & (df['arms_rank'] <= 3)) |
+        ((df['F_rank'] == 1) & (df['tua_rank'] <= 3)) |
+        ((df['Fup'] >= 4) & (df['F_rank'] <= 3))
+    ) & (~df['target_win'])  # 1着狙いとは重複させない
+    
+    # 💣 紐穴狙い（3連複3列目 / 爆発的回収率）
+    df['target_himo'] = (
+        (df['人気'] >= 6) &
+        ((df['坂路_完全加速'] == True) | (df['is_wood_accel'] == True)) &
+        ((df['arms_rank'] <= 5) | (df['Fup'] >= 4) | (df['tua_rank'] <= 3))
+    )
+
+    # 黄金シナジー該当フラグ
     df['is_syn_iron'] = (
         (df['F_rank'] == 1) &
         (df['arms_rank'] <= 3) &
@@ -997,7 +1066,7 @@ if 'active_venue' not in st.session_state or st.session_state['active_venue'] no
 
 
 # ==============================================================================
-# ★ サイドバー: 競馬場別クッション値 & 馬場状態の入力・固定記憶
+# ★ サイドバー: 競馬場別クッション値 & 馬場状態
 # ==============================================================================
 st.sidebar.markdown("---")
 st.sidebar.markdown("### 芝馬場状態")
@@ -1036,6 +1105,21 @@ st.sidebar.button(band_label, use_container_width=True)
 if st.sidebar.button("🔄 最新データへ強制再読み込み", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
+
+st.sidebar.markdown("---")
+
+
+# ==============================================================================
+# ★ 左側サイドバー: 🎯 狙い目抽出フィルター（新設）
+# ==============================================================================
+st.sidebar.markdown("### 🎯 狙い目抽出")
+win_cnt = int(df['target_win'].sum())
+axis_cnt = int(df['target_axis'].sum())
+himo_cnt = int(df['target_himo'].sum())
+
+filter_target_win = st.sidebar.checkbox(f"🥇 1着狙い (勝率25%超) (該当: {win_cnt}頭)", help="F1位×arms1位、Fup5+×F1位など単勝・頭固定")
+filter_target_axis = st.sidebar.checkbox(f"🛡️ 軸・連対狙い (複勝率55%超) (該当: {axis_cnt}頭)", help="ワイド・3連複1〜2列目の安定軸")
+filter_target_himo = st.sidebar.checkbox(f"💣 紐穴狙い (6人気以下加速) (該当: {himo_cnt}頭)", help="3連複3列目・ワイドの高回収率穴馬")
 
 st.sidebar.markdown("---")
 
@@ -1107,7 +1191,7 @@ st.sidebar.markdown("---")
 # --- サイドバー: 📊 指数黄金パターン抽出 ---
 st.sidebar.markdown("### 📊 指数黄金パターン抽出")
 pat_s1 = st.sidebar.checkbox("⚡ S指数 1位 (スピード軸)")
-pat_f1 = st.sidebar.checkbox("🥇 F指数 1位 (勝率22.1% / 複勝率52.9%)")
+pat_f1 = st.sidebar.checkbox("🥇 F指数 1位 (勝率22.7% / 複勝率53.4%)")
 pat_f66 = st.sidebar.checkbox("🔥 F指数 66以上 (高信頼)")
 pat_f1_arms3 = st.sidebar.checkbox("🎯 F指数1位 ＋ arms3位以内")
 pat_fup_top = st.sidebar.checkbox("🌟 Fup 1位 (最上位評価・軸候補)")
@@ -1150,18 +1234,16 @@ for _, r_row in races_in_v.iterrows():
     n_horses = len(r_horses)
     
     marks = []
-    if (r_horses['is_syn_iron'] == True).any():
-        marks.append("💎")
-    if (r_horses['is_syn_high'] == True).any():
-        marks.append("🔥")
-    if (r_horses['is_syn_fup_sakaro'] == True).any():
-        marks.append("✨")
-    if (r_horses['is_syn_bomb'] == True).any():
+    if (r_horses['target_win'] == True).any():
+        marks.append("🥇")
+    if (r_horses['target_axis'] == True).any():
+        marks.append("🛡️")
+    if (r_horses['target_himo'] == True).any():
         marks.append("💣")
-    if (r_horses['is_gtv_horse'] == True).any():
-        marks.append("🎯")
     if (r_horses['has_stable_pattern'] == True).any():
         marks.append("🏅")
+    if (r_horses['is_gtv_horse'] == True).any():
+        marks.append("🎯")
         
     marks_str = f" {' '.join(marks)}" if marks else ""
     
@@ -1197,6 +1279,16 @@ filtered_df = race_df.copy()
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
 is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filtered_df.empty else False
 
+
+# --- 狙い目フィルタリング ---
+if filter_target_win:
+    filtered_df = filtered_df[filtered_df['target_win'] == True]
+
+if filter_target_axis:
+    filtered_df = filtered_df[filtered_df['target_axis'] == True]
+
+if filter_target_himo:
+    filtered_df = filtered_df[filtered_df['target_himo'] == True]
 
 # --- 厩舎好走パターンフィルタリング ---
 if filter_stable_all:
@@ -1270,7 +1362,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # --- 検索バー ---
-st.markdown("### 📋 出走馬カード（調教最速・馬間順位・ラスト2F加速・血統バイアス完備）")
+st.markdown("### 📋 出走馬カード（狙い目判定・上位5位色分け・厩舎調教完備）")
 
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
 if search_kw:
@@ -1287,14 +1379,14 @@ c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown(f"<div class='metric-box'><div class='metric-label'>表示頭数</div><div class='metric-val'>{len(filtered_df)}頭</div></div>", unsafe_allow_html=True)
 with c2:
-    sakaro_accel_cnt = int((race_df['坂路_完全加速'] == True).sum()) if '坂路_完全加速' in race_df.columns else 0
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>坂路完全加速</div><div class='metric-val'>{sakaro_accel_cnt}頭</div></div>", unsafe_allow_html=True)
+    r_win_cnt = int((race_df['target_win'] == True).sum())
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>🥇 1着狙い</div><div class='metric-val'>{r_win_cnt}頭</div></div>", unsafe_allow_html=True)
 with c3:
-    fup_high_cnt = int((race_df['Fup'] >= 5).sum()) if 'Fup' in race_df.columns else 0
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>Fup2(5点以上)</div><div class='metric-val'>{fup_high_cnt}頭</div></div>", unsafe_allow_html=True)
+    r_axis_cnt = int((race_df['target_axis'] == True).sum())
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>🛡️ 軸・連対狙い</div><div class='metric-val'>{r_axis_cnt}頭</div></div>", unsafe_allow_html=True)
 with c4:
-    wood_accel_cnt = int((race_df['is_wood_accel'] == True).sum()) if 'is_wood_accel' in race_df.columns else 0
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>ウッド加速該当</div><div class='metric-val'>{wood_accel_cnt}頭</div></div>", unsafe_allow_html=True)
+    r_himo_cnt = int((race_df['target_himo'] == True).sum())
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>💣 紐穴狙い</div><div class='metric-val'>{r_himo_cnt}頭</div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
 
@@ -1324,25 +1416,34 @@ else:
         # --- 豪華特注バッジ判定 ---
         badges = []
         
-        # 1. 厩舎黄金パターンバッジ（被らない独自マーク・カラー）
+        # 1. 狙い目バッジ（最優先表示）
+        if row.get('target_win', False):
+            badges.append("<span class='badge-target-win'>🥇 1着狙い (勝率26%超)</span>")
+        elif row.get('target_axis', False):
+            badges.append("<span class='badge-target-axis'>🛡️ 軸・連対狙い (複勝率55%超)</span>")
+            
+        if row.get('target_himo', False):
+            badges.append("<span class='badge-target-himo'>💣 紐穴狙い</span>")
+
+        # 2. 厩舎黄金パターンバッジ
         stable_badges = get_stable_synergy_badges(row)
         badges.extend(stable_badges)
 
-        # 2. GTV馬バッジ
+        # 3. GTV馬バッジ
         if is_gtv:
             if is_dirt_race and pd.notnull(pop_val) and pop_val >= 4:
                 badges.append("<span class='badge-gtv-dirt'>🔥 GTVダート穴 (回収97%)</span>")
             else:
                 badges.append("<span class='badge-gtv-normal'>🎯 GTV該当馬</span>")
 
-        # 3. クッション値 × 種牡馬バイアス（芝レースのみ）
+        # 4. クッション値 × 種牡馬バイアス（芝レースのみ）
         cushion_badge_html = ""
         if is_turf_race and sire_name:
             cushion_badge_html = evaluate_sire_cushion(sire_name, current_band)
             if cushion_badge_html:
                 badges.append(cushion_badge_html)
 
-        # 4. 指数シナジーバッジ
+        # 5. 指数シナジーバッジ
         if row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
         elif row.get('is_syn_high', False):
@@ -1437,7 +1538,7 @@ else:
             
         fup_rank_html = format_fup_rank_badge(fup_rank)
         
-        # S指数・F指数・arms・tua 各順位バッジ生成
+        # S指数・F指数・arms・tua 各順位バッジ生成（1〜5位まで色分け）
         s_badge = format_rank_badge(row.get('S_rank'))
         f_badge = format_rank_badge(row.get('F_rank'))
         arms_badge = format_rank_badge(row.get('arms_rank'))
