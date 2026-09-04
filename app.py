@@ -94,6 +94,29 @@ st.markdown("""
         font-weight: bold;
     }
 
+    /* === ⚠️ 危険騎手（危）専用バッジ === */
+    .badge-danger-jockey-f {
+        background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 50%, #450a0a 100%);
+        color: #fecaca;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 9px;
+        border-radius: 6px;
+        border: 1px solid #ef4444;
+        box-shadow: 0 2px 5px rgba(239, 68, 68, 0.4);
+        letter-spacing: 0.5px;
+    }
+    .badge-danger-jockey-any {
+        background: linear-gradient(135deg, #451a03 0%, #78350f 100%);
+        color: #fed7aa;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 9px;
+        border-radius: 6px;
+        border: 1px solid #f97316;
+        box-shadow: 0 2px 4px rgba(249, 115, 22, 0.4);
+    }
+
     /* === 🎯 狙い目専用バッジ === */
     .badge-target-win {
         background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
@@ -348,7 +371,7 @@ st.markdown("""
         font-size: 11px;
     }
 
-    /* === 順位カラーハイライト（馬券内率の高い1〜5位まで色付け） === */
+    /* === 順位カラーハイライト（馬券内率の高い1〜5位まで色分け） === */
     .rank-1st {
         color: #FFD700;
         font-weight: bold;
@@ -397,6 +420,23 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+
+# --- 騎手別危険着外データマッピング ---
+DANGER_JOCKEYS_F3 = {
+    '斎藤新': 72.2, '小沢大仁': 70.6, '丸山元気': 67.8, '池添謙一': 67.1,
+    '松若風馬': 66.1, '菊沢一樹': 65.2, '田辺裕信': 64.7, '横山琉人': 64.4,
+    '岩田康誠': 64.2, '吉田隼人': 63.6, '菅原明良': 63.3, '富田暁': 62.5,
+    '三浦皇成': 62.1, '浜中俊': 61.3, '鮫島克駿': 60.7
+}
+
+DANGER_JOCKEYS_GENERAL = {
+    '小林脩斗': 98.0, '川端海翼': 93.4, '黛弘人': 93.2, '野中悠太': 92.4,
+    '遠藤汰月': 92.2, '亀田温心': 90.9, '水沼元輝': 90.5, '丸田恭介': 90.3,
+    '河原田菜': 90.0, '古川吉洋': 89.3, '国分優作': 89.1, '永島まな': 88.8,
+    '柴田裕一': 88.8, '木幡初也': 88.7, '原田和真': 87.7, '柴田大知': 87.6,
+    '古川奈穂': 87.3, '中井裕二': 87.3, '石橋脩': 86.7, '嶋田純次': 86.0
+}
 
 
 # --- サイドバー: 4大CSVアップローダー ---
@@ -996,23 +1036,53 @@ df, race_date = load_and_merge_all(up_index, up_gtv, up_sakaro, up_wood)
 
 
 # ==============================================================================
-# ★ 狙い目フラグ（1着狙い・軸連対狙い・紐穴狙い）の自動判定ロジック
+# ★ 危険騎手（危）判定ロジック
+# ==============================================================================
+def get_jockey_danger_badge(row):
+    jk = str(row.get('騎手', '')).strip()
+    f_rank = row.get('F_rank', 99)
+    arms_rank = row.get('arms_rank', 99)
+    tua_rank = row.get('tua_rank', 99)
+    s_rank = row.get('S_rank', 99)
+    fup_rank = row.get('Fup_rank', 99)
+    
+    is_f3 = (f_rank <= 3)
+    is_any3 = (f_rank <= 3) or (arms_rank <= 3) or (tua_rank <= 3) or (s_rank <= 3) or (fup_rank <= 3)
+
+    # 1. 最重要：F指数3位以内での着外率ワースト騎手（60%以上）
+    for danger_jk, rate in DANGER_JOCKEYS_F3.items():
+        if danger_jk in jk and is_f3:
+            return f"<span class='badge-danger-jockey-f'>⚠️危 F上位着外{int(rate)}%</span>"
+            
+    # 2. いずれかの指数3位以内での着外率ワースト騎手（85%以上）
+    for danger_jk, rate in DANGER_JOCKEYS_GENERAL.items():
+        if danger_jk in jk and is_any3:
+            return f"<span class='badge-danger-jockey-any'>⚠️危 指数上位着外{int(rate)}%</span>"
+            
+    return ""
+
+
+# ==============================================================================
+# ★ 狙い目フラグ（1着狙い・軸連対狙い・紐穴狙い・危険騎乗）の自動判定ロジック
 # ==============================================================================
 if not df.empty:
+    # ⚠️ 危険騎手フラグ
+    df['is_danger_jockey'] = df.apply(lambda r: bool(get_jockey_danger_badge(r)), axis=1)
+
     # 🥇 1着狙い（単勝 / 3連単アタマ固定）
     df['target_win'] = (
         ((df['F_rank'] == 1) & (df['arms_rank'] == 1)) |
         ((df['Fup'] >= 5) & (df['F_rank'] == 1)) |
         ((df['F_rank'] == 1) & (df['arms_rank'] <= 3) & (df['S_rank'] <= 3)) |
         ((df['F指数'] >= 66) & (df['arms_rank'] == 1))
-    )
+    ) & (~df['is_danger_jockey']) # 危険騎手は1着狙いから外す
     
     # 🛡️ 軸・連対狙い（ワイド・3連複軸 / 複勝率50%〜60%）
     df['target_axis'] = (
         ((df['F_rank'] <= 2) & (df['arms_rank'] <= 3)) |
         ((df['F_rank'] == 1) & (df['tua_rank'] <= 3)) |
         ((df['Fup'] >= 4) & (df['F_rank'] <= 3))
-    ) & (~df['target_win'])  # 1着狙いとは重複させない
+    ) & (~df['target_win']) & (~df['is_danger_jockey'])
     
     # 💣 紐穴狙い（3連複3列目 / 爆発的回収率）
     df['target_himo'] = (
@@ -1110,14 +1180,18 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
-# ★ 左側サイドバー: 🎯 狙い目抽出フィルター（新設）
+# ★ 左側サイドバー: ⚠️ 危険騎乗馬 ＆ 🎯 狙い目抽出フィルター
 # ==============================================================================
+st.sidebar.markdown("### ⚠️ 危険警告 フィルター")
+danger_jockey_cnt = int(df['is_danger_jockey'].sum())
+filter_danger_jockey = st.sidebar.checkbox(f"⚠️ 危 騎手着外危険馬 (該当: {danger_jockey_cnt}頭)", help="指数上位でも過去着外率が極端に高い騎手騎乗馬")
+
 st.sidebar.markdown("### 🎯 狙い目抽出")
 win_cnt = int(df['target_win'].sum())
 axis_cnt = int(df['target_axis'].sum())
 himo_cnt = int(df['target_himo'].sum())
 
-filter_target_win = st.sidebar.checkbox(f"🥇 1着狙い (勝率25%超) (該当: {win_cnt}頭)", help="F1位×arms1位、Fup5+×F1位など単勝・頭固定")
+filter_target_win = st.sidebar.checkbox(f"🥇 1着狙い (勝率26%超) (該当: {win_cnt}頭)", help="F1位×arms1位、Fup5+×F1位など単勝・頭固定")
 filter_target_axis = st.sidebar.checkbox(f"🛡️ 軸・連対狙い (複勝率55%超) (該当: {axis_cnt}頭)", help="ワイド・3連複1〜2列目の安定軸")
 filter_target_himo = st.sidebar.checkbox(f"💣 紐穴狙い (6人気以下加速) (該当: {himo_cnt}頭)", help="3連複3列目・ワイドの高回収率穴馬")
 
@@ -1242,6 +1316,8 @@ for _, r_row in races_in_v.iterrows():
         marks.append("💣")
     if (r_horses['has_stable_pattern'] == True).any():
         marks.append("🏅")
+    if (r_horses['is_danger_jockey'] == True).any():
+        marks.append("⚠️危")
     if (r_horses['is_gtv_horse'] == True).any():
         marks.append("🎯")
         
@@ -1279,6 +1355,10 @@ filtered_df = race_df.copy()
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
 is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filtered_df.empty else False
 
+
+# --- 危険騎手フィルタリング ---
+if filter_danger_jockey:
+    filtered_df = filtered_df[filtered_df['is_danger_jockey'] == True]
 
 # --- 狙い目フィルタリング ---
 if filter_target_win:
@@ -1362,7 +1442,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # --- 検索バー ---
-st.markdown("### 📋 出走馬カード（狙い目判定・上位5位色分け・厩舎調教完備）")
+st.markdown("### 📋 出走馬カード（狙い目判定・危険警告【危】・上位5位色分け）")
 
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
 if search_kw:
@@ -1385,8 +1465,8 @@ with c3:
     r_axis_cnt = int((race_df['target_axis'] == True).sum())
     st.markdown(f"<div class='metric-box'><div class='metric-label'>🛡️ 軸・連対狙い</div><div class='metric-val'>{r_axis_cnt}頭</div></div>", unsafe_allow_html=True)
 with c4:
-    r_himo_cnt = int((race_df['target_himo'] == True).sum())
-    st.markdown(f"<div class='metric-box'><div class='metric-label'>💣 紐穴狙い</div><div class='metric-val'>{r_himo_cnt}頭</div></div>", unsafe_allow_html=True)
+    r_danger_cnt = int((race_df['is_danger_jockey'] == True).sum())
+    st.markdown(f"<div class='metric-box'><div class='metric-label'>⚠️ 危 騎乗馬</div><div class='metric-val' style='color:#ef4444;'>{r_danger_cnt}頭</div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
 
@@ -1416,7 +1496,12 @@ else:
         # --- 豪華特注バッジ判定 ---
         badges = []
         
-        # 1. 狙い目バッジ（最優先表示）
+        # 1. ⚠️ 危 危険騎手警告バッジ（最優先で目立たせる）
+        danger_badge_html = get_jockey_danger_badge(row)
+        if danger_badge_html:
+            badges.append(danger_badge_html)
+
+        # 2. 🎯 狙い目バッジ
         if row.get('target_win', False):
             badges.append("<span class='badge-target-win'>🥇 1着狙い (勝率26%超)</span>")
         elif row.get('target_axis', False):
@@ -1425,25 +1510,25 @@ else:
         if row.get('target_himo', False):
             badges.append("<span class='badge-target-himo'>💣 紐穴狙い</span>")
 
-        # 2. 厩舎黄金パターンバッジ
+        # 3. 厩舎黄金パターンバッジ
         stable_badges = get_stable_synergy_badges(row)
         badges.extend(stable_badges)
 
-        # 3. GTV馬バッジ
+        # 4. GTV馬バッジ
         if is_gtv:
             if is_dirt_race and pd.notnull(pop_val) and pop_val >= 4:
                 badges.append("<span class='badge-gtv-dirt'>🔥 GTVダート穴 (回収97%)</span>")
             else:
                 badges.append("<span class='badge-gtv-normal'>🎯 GTV該当馬</span>")
 
-        # 4. クッション値 × 種牡馬バイアス（芝レースのみ）
+        # 5. クッション値 × 種牡馬バイアス（芝レースのみ）
         cushion_badge_html = ""
         if is_turf_race and sire_name:
             cushion_badge_html = evaluate_sire_cushion(sire_name, current_band)
             if cushion_badge_html:
                 badges.append(cushion_badge_html)
 
-        # 5. 指数シナジーバッジ
+        # 6. 指数シナジーバッジ
         if row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
         elif row.get('is_syn_high', False):
@@ -1546,6 +1631,6 @@ else:
 
         mark_display = f" {mark_badge_html}" if mark_badge_html else ""
         
-        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / {row.get('騎手', '-')} / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
+        card_html = f"<div class='horse-card'><div class='horse-card-header'><span class='horse-card-title'>{umaban_str} {row['馬名']}{mark_display}</span> {badges_html}</div><ul class='horse-card-list'><li><strong>陣営/血統</strong>: {row.get('調教師', '-')} / <strong>{row.get('騎手', '-')}</strong> / <strong>父: {row.get('種牡馬', '-')}</strong></li><li><strong>坂路調教</strong>: {sakaro_info}</li><li><strong>ウッド調教</strong>: {wood_info}</li><li><strong>能力指数</strong>: S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge})</li><li><strong>Fup</strong>: {fup_val_html} ({fup_rank_html}) | <strong>人気</strong>: {pop_str}</li></ul></div>"
 
         st.markdown(card_html, unsafe_allow_html=True)
