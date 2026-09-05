@@ -705,19 +705,24 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             pop = parts[8]
             mark = parts[9] if n > 9 else ""
 
+            # S指数・Fup・F指数・arms・tuaの正確なインデックスマッピング
             if n >= 20:
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
 
+                # ★ S指数（実数値: 列12, 順位: 列13）
                 s_val = pd.to_numeric(parts[12], errors='coerce')
                 s_rank = pd.to_numeric(parts[13], errors='coerce')
 
+                # F指数（実数値: 列14, 順位: 列15）
                 f_val = pd.to_numeric(parts[14], errors='coerce')
                 f_rank = pd.to_numeric(parts[15], errors='coerce')
 
+                # arms指数（実数値: 列16, 順位: 列17）
                 arms_val = pd.to_numeric(parts[16], errors='coerce')
                 arms_rank = pd.to_numeric(parts[17], errors='coerce')
 
+                # tua指数（実数値: 列18, 順位: 列19）
                 tua_val = pd.to_numeric(parts[18], errors='coerce')
                 tua_rank = pd.to_numeric(parts[19], errors='coerce')
 
@@ -785,7 +790,8 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    detected_date = datetime.date(2026, 9, 5)
+    # ★ 開催日付を 2026年9月6日 に指定
+    detected_date = datetime.date(2026, 9, 6)
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv', 'data/*GTV*.csv', '*GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
 
@@ -996,12 +1002,12 @@ def get_jockey_danger_badge(row):
 
 
 # ==============================================================================
-# ★ 狙い目フラグの自動判定ロジック
+# ★ 狙い目フラグの自動判定ロジック（危険騎手は1着・連対軸から自動除外）
 # ==============================================================================
 if not df.empty:
     df['is_danger_jockey'] = df.apply(lambda r: bool(get_jockey_danger_badge(r)), axis=1)
 
-    # 🥇 1着狙い
+    # 🥇 1着狙い（勝率26%超ゾーン）
     df['target_win'] = (
         ((df['F_rank'] == 1) & (df['arms_rank'] == 1)) |
         ((df['Fup'] >= 5) & (df['F_rank'] == 1)) |
@@ -1009,14 +1015,14 @@ if not df.empty:
         ((df['F指数'] >= 66) & (df['arms_rank'] == 1))
     ) & (~df['is_danger_jockey'])
     
-    # 🛡️ 軸・連対狙い
+    # 🛡️ 軸・連対狙い（複勝率55%超ゾーン）
     df['target_axis'] = (
         ((df['F_rank'] <= 2) & (df['arms_rank'] <= 3)) |
         ((df['F_rank'] == 1) & (df['tua_rank'] <= 3)) |
         ((df['Fup'] >= 4) & (df['F_rank'] <= 3))
     ) & (~df['target_win']) & (~df['is_danger_jockey'])
     
-    # 💣 紐穴狙い
+    # 💣 紐穴狙い（6番人気以下調教加速）
     df['target_himo'] = (
         (df['人気'] >= 6) &
         ((df['坂路_完全加速'] == True) | (df['is_wood_accel'] == True)) &
@@ -1205,7 +1211,7 @@ pat_wood_top3 = st.sidebar.checkbox("⚡ ウッド5F 3位以内")
 
 
 # ==============================================================================
-# ★ 開催日時バッジ表示（2026年9月5日 土曜日）
+# ★ 開催日時バッジ表示（2026年9月6日 日曜日）
 # ==============================================================================
 weekday_kanji = ["月", "火", "水", "木", "金", "土", "日"]
 w_str = weekday_kanji[race_date.weekday()]
@@ -1366,7 +1372,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # ==============================================================================
-# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（レイアウト維持・仕様強化版）
+# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（レイアウト＆構成完全維持）
 # ==============================================================================
 st.markdown("### 📋 出走馬カード（実数値ボーダー・狙い目判定・危険警告【危】・上位5位色分け）")
 
@@ -1379,7 +1385,7 @@ if search_kw:
         filtered_df['種牡馬'].str.contains(search_kw, na=False)
     ]
 
-# レイアウトは変更なし（4列構成）
+# レイアウト変更なし（4列構成）
 st.markdown("##### 🎯 指数ボーダー クイックフィルター")
 qb_col1, qb_col2, qb_col3, qb_col4 = st.columns(4)
 with qb_col1:
@@ -1458,10 +1464,12 @@ else:
         
         badges = []
         
+        # 1. ⚠️ 危 危険騎手警告バッジ
         danger_badge_html = get_jockey_danger_badge(row)
         if danger_badge_html:
             badges.append(danger_badge_html)
 
+        # 2. 🎯 狙い目バッジ
         if row.get('target_win', False):
             badges.append("<span class='badge-target-win'>🥇 1着狙い (勝率26%超)</span>")
         elif row.get('target_axis', False):
@@ -1470,21 +1478,25 @@ else:
         if row.get('target_himo', False):
             badges.append("<span class='badge-target-himo'>💣 紐穴狙い</span>")
 
+        # 3. 厩舎黄金パターンバッジ
         stable_badges = get_stable_synergy_badges(row)
         badges.extend(stable_badges)
 
+        # 4. GTV馬バッジ
         if is_gtv:
             if is_dirt_race and pd.notnull(pop_val) and pop_val >= 4:
                 badges.append("<span class='badge-gtv-dirt'>🔥 GTVダート穴 (回収97%)</span>")
             else:
                 badges.append("<span class='badge-gtv-normal'>🎯 GTV該当馬</span>")
 
+        # 5. クッション値 × 種牡馬バイアス（芝レースのみ）
         cushion_badge_html = ""
         if is_turf_race and sire_name:
             cushion_badge_html = evaluate_sire_cushion(sire_name, current_band)
             if cushion_badge_html:
                 badges.append(cushion_badge_html)
 
+        # 6. 指数シナジーバッジ
         if row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
         elif row.get('is_syn_high', False):
@@ -1520,6 +1532,7 @@ else:
         badges_html = " ".join(badges)
         mark_badge_html = format_mark_badge(mark_val)
 
+        # ウッド調教テキスト
         has_wood = pd.notnull(row.get('wood_1F')) or pd.notnull(row.get('wood_5F')) or pd.notnull(row.get('wood_4F'))
         if has_wood:
             place = str(row.get('wood_place', ''))
@@ -1541,6 +1554,7 @@ else:
         else:
             wood_info = "ウッド計測なし"
 
+        # 坂路調教テキスト
         has_sakaro = pd.notnull(row.get('坂路_4F')) or pd.notnull(row.get('坂路_1F'))
         if has_sakaro:
             s_accel_str = "<span class='badge-accel'>完全加速</span>" if is_s_accel else "<span class='badge-decel'>非加速</span>"
@@ -1560,6 +1574,7 @@ else:
         umaban_str = f"{int(u_no)}番" if u_no != 99 and pd.notnull(u_no) else "番"
         pop_str = f"{int(row['人気'])} 番人気" if pd.notnull(row.get('人気')) else "- 番人気"
         
+        # Fup数値 & 順位
         if pd.notnull(fup_val) and fup_val >= 5:
             fup_val_html = f"<span class='fup-high-val'>{int(fup_val)}点</span>"
         elif pd.notnull(fup_val):
@@ -1569,6 +1584,7 @@ else:
             
         fup_rank_html = format_fup_rank_badge(fup_rank)
         
+        # S指数・F指数・arms・tua 順位バッジ（1〜5位色分け）
         s_badge = format_rank_badge(row.get('S_rank'))
         f_badge = format_rank_badge(row.get('F_rank'))
         arms_badge = format_rank_badge(row.get('arms_rank'))
