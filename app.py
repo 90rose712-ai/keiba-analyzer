@@ -665,7 +665,9 @@ def get_stable_synergy_badges(row):
     return badges
 
 
-# --- データロード＆4CSV統合処理 ---
+# ==============================================================================
+# ★ データロード＆4CSV統合処理 (S指数の読み込みインデックス完全修正版)
+# ==============================================================================
 @st.cache_data
 def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     index_patterns = [
@@ -699,7 +701,7 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
         for line_idx, line in enumerate(lines):
             parts = [p.strip() for p in line.strip().split(',')]
             n = len(parts)
-            if n < 10:
+            if n < 10 or parts[0] in ['場所', 'レースID', 'race_id']:
                 continue
 
             race_id, track, dist, umaban, horse_raw = parts[0], "", "", "", None
@@ -712,48 +714,44 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             arms_val, arms_rank = 0.0, 99
             tua_val, tua_rank = 0.0, 99
 
-            if n >= 24:
-                track, dist, umaban = parts[1], parts[2], parts[3]
-                horse_raw = parts[4]
-                trainer, jockey = parts[6], parts[7]
-                pop = parts[8]
-                mark = parts[9] if n > 9 else ""
-                s_val = pd.to_numeric(parts[10], errors='coerce')
-                s_rank = pd.to_numeric(parts[11], errors='coerce')
+            track, dist, umaban = parts[1], parts[2], parts[3]
+            horse_raw = parts[4]
+            trainer, jockey = parts[6], parts[7]
+            pop = parts[8]
+            mark = parts[9] if n > 9 else ""
+
+            # ★ S指数・Fup・F指数・arms・tua の正確なマッピング
+            if n >= 20:
+                # 列10, 11: Fup
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
-                f_val = pd.to_numeric(parts[13], errors='coerce')
-                f_rank = pd.to_numeric(parts[14], errors='coerce')
+
+                # 列12, 13: S指数 (修正: 正しいインデックスをパース)
+                s_val = pd.to_numeric(parts[12], errors='coerce')
+                s_rank = pd.to_numeric(parts[13], errors='coerce')
+
+                # 列14, 15: F指数
+                f_val = pd.to_numeric(parts[14], errors='coerce')
+                f_rank = pd.to_numeric(parts[15], errors='coerce')
+
+                # 列16, 17: arms指数
                 arms_val = pd.to_numeric(parts[16], errors='coerce')
                 arms_rank = pd.to_numeric(parts[17], errors='coerce')
-                tua_val = pd.to_numeric(parts[19], errors='coerce')
-                tua_rank = pd.to_numeric(parts[20], errors='coerce')
-                finish = parts[22] if n > 22 else ""
-                sire = parts[23] if n > 23 else ""
-            elif n == 23:
-                track, dist, umaban = parts[1], parts[2], parts[3]
-                horse_raw = parts[4]
-                trainer, jockey = parts[6], parts[7]
-                pop = parts[8]
-                mark = parts[9] if n > 9 else ""
-                s_val = pd.to_numeric(parts[10], errors='coerce')
-                s_rank = pd.to_numeric(parts[11], errors='coerce')
-                fup = pd.to_numeric(parts[10], errors='coerce')
-                fup_rank = pd.to_numeric(parts[11], errors='coerce')
-                f_val = pd.to_numeric(parts[12], errors='coerce')
-                f_rank = pd.to_numeric(parts[13], errors='coerce')
-                arms_val = pd.to_numeric(parts[16], errors='coerce')
-                arms_rank = pd.to_numeric(parts[17], errors='coerce')
+
+                # 列18, 19: tua指数
                 tua_val = pd.to_numeric(parts[18], errors='coerce')
                 tua_rank = pd.to_numeric(parts[19], errors='coerce')
-                finish = parts[20]
-                sire = parts[21] if n > 21 else ""
-            else:
-                continue
+
+                # 着順・父名
+                if n >= 22:
+                    finish = parts[-2]
+                    sire = parts[-1]
+                else:
+                    sire = parts[-1]
 
             horse = clean_horse_name(horse_raw)
             if horse:
-                fin_int = fw_map.get(finish, int(finish) if str(finish).isdigit() else np.nan)
+                fin_int = fw_map.get(str(finish), int(finish) if str(finish).isdigit() else np.nan)
                 pop_int = int(pop) if str(pop).isdigit() else np.nan
                 u_int = int(umaban) if str(umaban).isdigit() else 99
 
@@ -810,38 +808,10 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
     # GTV馬 CSV 結合
-    detected_date = None
+    # ★ 日付を2026年9月5日に設定
+    detected_date = datetime.date(2026, 9, 5)
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv', 'data/*GTV*.csv', '*GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
-    
-    source_name = getattr(f_gtv, 'name', '') if f_gtv is not None else ''
-    if not source_name:
-        for pat in gtv_patterns:
-            matched = glob.glob(pat)
-            if matched:
-                source_name = os.path.basename(matched[0])
-                break
-
-    if source_name:
-        d_match = re.search(r'(\d{1,4})[._](\d{1,2})[._](\d{1,2})', source_name)
-        if d_match:
-            y_raw = int(d_match.group(1))
-            y = y_raw + 2000 if y_raw < 100 else y_raw
-            m = int(d_match.group(2))
-            d = int(d_match.group(3))
-            try:
-                detected_date = datetime.date(y, m, d)
-            except Exception:
-                pass
-        else:
-            d_match_short = re.search(r'(\d{1,2})[._](\d{1,2})', source_name)
-            if d_match_short:
-                m = int(d_match_short.group(1))
-                d = int(d_match_short.group(2))
-                try:
-                    detected_date = datetime.date(2026, m, d)
-                except Exception:
-                    pass
 
     if not df_gtv.empty:
         name_col = find_col(df_gtv, ['馬名', '馬 名', '競走馬名'])
@@ -975,7 +945,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             c_w_l2 = find_col(w_df, ['Lap2', 'lap2', 'LAP2', 'L2'])
             c_w_l1 = find_col(w_df, ['Lap1', 'lap1', 'LAP1', 'L1'])
             c_w_plc = find_col(w_df, ['場所', '調教場', '場'])
-            c_w_date = find_col(w_df, ['年月日', '日付', '日付S'])
 
             w_df['wood_6F'] = pd.to_numeric(w_df[c_w_6f], errors='coerce') if c_w_6f else np.nan
             w_df['wood_5F'] = pd.to_numeric(w_df[c_w_5f], errors='coerce') if c_w_5f else np.nan
@@ -986,11 +955,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             w_df['wood_Lap2'] = pd.to_numeric(w_df[c_w_l2], errors='coerce') if c_w_l2 else np.nan
             w_df['wood_Lap1'] = pd.to_numeric(w_df[c_w_l1], errors='coerce') if c_w_l1 else np.nan
             w_df['wood_place'] = w_df[c_w_plc].astype(str) if c_w_plc else ""
-
-            if c_w_date:
-                w_df['調教日'] = pd.to_datetime(w_df[c_w_date].astype(str), format='%Y%m%d', errors='coerce')
-                if detected_date is None and not w_df['調教日'].dropna().empty:
-                    detected_date = w_df['調教日'].dropna().iloc[-1].date()
             
             w_sorted_5f = w_df.dropna(subset=['wood_5F']).sort_values('wood_5F', ascending=True)
             w_best = w_sorted_5f.drop_duplicates('馬名', keep='first').copy()
@@ -1026,9 +990,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['wood_Lap2_rank'] = df_main.groupby('race_uid')['wood_Lap2'].rank(method='min', ascending=True)
     df_main['wood_Lap1_rank'] = df_main.groupby('race_uid')['wood_Lap1'].rank(method='min', ascending=True)
 
-    if detected_date is None:
-        detected_date = datetime.date(2026, 8, 30)
-
     return df_main, detected_date
 
 
@@ -1049,12 +1010,10 @@ def get_jockey_danger_badge(row):
     is_f3 = (f_rank <= 3)
     is_any3 = (f_rank <= 3) or (arms_rank <= 3) or (tua_rank <= 3) or (s_rank <= 3) or (fup_rank <= 3)
 
-    # 1. 最重要：F指数3位以内での着外率ワースト騎手（60%以上）
     for danger_jk, rate in DANGER_JOCKEYS_F3.items():
         if danger_jk in jk and is_f3:
             return f"<span class='badge-danger-jockey-f'>⚠️危 F上位着外{int(rate)}%</span>"
             
-    # 2. いずれかの指数3位以内での着外率ワースト騎手（85%以上）
     for danger_jk, rate in DANGER_JOCKEYS_GENERAL.items():
         if danger_jk in jk and is_any3:
             return f"<span class='badge-danger-jockey-any'>⚠️危 指数上位着外{int(rate)}%</span>"
@@ -1066,7 +1025,6 @@ def get_jockey_danger_badge(row):
 # ★ 狙い目フラグ（1着狙い・軸連対狙い・紐穴狙い・危険騎乗）の自動判定ロジック
 # ==============================================================================
 if not df.empty:
-    # ⚠️ 危険騎手フラグ
     df['is_danger_jockey'] = df.apply(lambda r: bool(get_jockey_danger_badge(r)), axis=1)
 
     # 🥇 1着狙い（単勝 / 3連単アタマ固定）
@@ -1075,7 +1033,7 @@ if not df.empty:
         ((df['Fup'] >= 5) & (df['F_rank'] == 1)) |
         ((df['F_rank'] == 1) & (df['arms_rank'] <= 3) & (df['S_rank'] <= 3)) |
         ((df['F指数'] >= 66) & (df['arms_rank'] == 1))
-    ) & (~df['is_danger_jockey']) # 危険騎手は1着狙いから外す
+    ) & (~df['is_danger_jockey'])
     
     # 🛡️ 軸・連対狙い（ワイド・3連複軸 / 複勝率50%〜60%）
     df['target_axis'] = (
@@ -1119,7 +1077,6 @@ if not df.empty:
             ((df['坂路_1F'] <= 12.4) & (df['坂路_完全加速'] == True))
         )
     )
-    # 厩舎好走パターンの判定フラグ
     df['has_stable_pattern'] = df.apply(lambda r: len(get_stable_synergy_badges(r)) > 0, axis=1)
 
 
@@ -1180,7 +1137,7 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
-# ★ 左側サイドバー: ⚠️ 危険騎乗馬 ＆ 🎯 狙い目抽出フィルター
+# ★ 左側サイドバー: ⚠️ 危険警告 ＆ 🎯 狙い目抽出フィルター
 # ==============================================================================
 st.sidebar.markdown("### ⚠️ 危険警告 フィルター")
 danger_jockey_cnt = int(df['is_danger_jockey'].sum())
@@ -1276,7 +1233,7 @@ pat_wood_top3 = st.sidebar.checkbox("⚡ ウッド5F 3位以内")
 
 
 # ==============================================================================
-# ★ 開催日時バッジ表示
+# ★ 開催日時バッジ表示（2026年9月5日 土曜日）
 # ==============================================================================
 weekday_kanji = ["月", "火", "水", "木", "金", "土", "日"]
 w_str = weekday_kanji[race_date.weekday()]
@@ -1356,11 +1313,10 @@ is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filte
 is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filtered_df.empty else False
 
 
-# --- 危険騎手フィルタリング ---
+# --- フィルター処理 ---
 if filter_danger_jockey:
     filtered_df = filtered_df[filtered_df['is_danger_jockey'] == True]
 
-# --- 狙い目フィルタリング ---
 if filter_target_win:
     filtered_df = filtered_df[filtered_df['target_win'] == True]
 
@@ -1370,18 +1326,15 @@ if filter_target_axis:
 if filter_target_himo:
     filtered_df = filtered_df[filtered_df['target_himo'] == True]
 
-# --- 厩舎好走パターンフィルタリング ---
 if filter_stable_all:
     filtered_df = filtered_df[filtered_df['has_stable_pattern'] == True]
 
-# --- GTV馬フィルタリング処理 ---
 if filter_gtv_all:
     filtered_df = filtered_df[filtered_df['is_gtv_horse'] == True]
 
 if filter_gtv_dirt:
     filtered_df = filtered_df[filtered_df['is_gtv_horse'] & is_dirt_race & (filtered_df['人気'] >= 4)]
 
-# --- 10列目印フィルタリング処理 ---
 if filter_mark_any:
     filtered_df = filtered_df[filtered_df['印'].isin(valid_marks_in_df)]
 
@@ -1394,7 +1347,6 @@ if filter_mark_k:
 if selected_other_marks:
     filtered_df = filtered_df[filtered_df['印'].isin(selected_other_marks)]
 
-# --- シナジー・指数フィルタリング処理 ---
 if syn_iron:
     filtered_df = filtered_df[filtered_df['is_syn_iron'] == True]
 
@@ -1442,7 +1394,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # --- 検索バー ---
-st.markdown("### 📋 出走馬カード（狙い目判定・危険警告【危】・上位5位色分け）")
+st.markdown("### 📋 出走馬カード（S指数正常化・狙い目判定・危険警告【危】・上位5位色分け）")
 
 search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
 if search_kw:
@@ -1496,7 +1448,7 @@ else:
         # --- 豪華特注バッジ判定 ---
         badges = []
         
-        # 1. ⚠️ 危 危険騎手警告バッジ（最優先で目立たせる）
+        # 1. ⚠️ 危 危険騎手警告バッジ
         danger_badge_html = get_jockey_danger_badge(row)
         if danger_badge_html:
             badges.append(danger_badge_html)
@@ -1624,6 +1576,7 @@ else:
         fup_rank_html = format_fup_rank_badge(fup_rank)
         
         # S指数・F指数・arms・tua 各順位バッジ生成（1〜5位まで色分け）
+        # ★ S指数は実数値を正しく表示
         s_badge = format_rank_badge(row.get('S_rank'))
         f_badge = format_rank_badge(row.get('F_rank'))
         arms_badge = format_rank_badge(row.get('arms_rank'))
