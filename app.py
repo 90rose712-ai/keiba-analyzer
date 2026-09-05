@@ -608,7 +608,6 @@ def get_stable_synergy_badges(row):
     
     badges = []
     
-    # 1. 杉山晴紀厩舎
     if '杉山晴' in trainer:
         if pd.notnull(s_1f) and s_1f <= 11.9 and is_s_accel:
             badges.append("<span class='badge-stable-sugiyama'>🏅 杉山・MAX坂路</span>")
@@ -617,14 +616,12 @@ def get_stable_synergy_badges(row):
         if '西村淳' in jockey:
             badges.append("<span class='badge-stable-sugiyama'>🤝 杉山×西村淳</span>")
             
-    # 2. 中内田充正厩舎
     if '中内田' in trainer:
         if '川田' in jockey and f_rank == 1:
             badges.append("<span class='badge-stable-nakauchida'>👑 中内田×川田×F1</span>")
         if pd.notnull(w_1f) and 11.0 <= w_1f <= 11.3:
             badges.append("<span class='badge-stable-nakauchida'>⚔️ 中内田・CW究極</span>")
             
-    # 3. 矢作芳人厩舎
     if '矢作' in trainer:
         if pd.notnull(s_l2) and pd.notnull(s_l1) and 12.0 <= s_l2 <= 12.9 and 12.0 <= s_l1 <= 12.9 and s_l2 > s_l1:
             if pd.notnull(s_4f) and s_4f <= 53.0:
@@ -632,24 +629,20 @@ def get_stable_synergy_badges(row):
             else:
                 badges.append("<span class='badge-stable-yahagi'>🌪️ 矢作・A2加速</span>")
                 
-    # 4. 木村哲也厩舎
     if '木村哲' in trainer or '木村' in trainer:
         if 'ルメール' in jockey and fup_val >= 5:
             badges.append("<span class='badge-stable-kimura'>🎯 木村哲×ルメール</span>")
         if pd.notnull(w_1f) and w_1f <= 11.5:
             badges.append("<span class='badge-stable-kimura'>⚔️ 木村哲・南W勝負</span>")
             
-    # 5. 安田厩舎 (安田隆行 / 安田翔伍)
     if '安田' in trainer:
         if pd.notnull(s_4f) and s_4f <= 51.9:
             badges.append("<span class='badge-stable-general'>⚡ 安田・坂路猛時計</span>")
             
-    # 6. 松永幹夫厩舎
     if '松永幹' in trainer:
         if pd.notnull(s_1f) and s_1f <= 12.0 and is_s_accel:
             badges.append("<span class='badge-stable-general'>🏇 松永幹・坂路加速</span>")
             
-    # 7. 藤原英昭厩舎
     if '藤原英' in trainer or '藤原' in trainer:
         if pd.notnull(w_6f) and w_6f <= 82.0:
             badges.append("<span class='badge-stable-general'>🏛️ 藤原英・CW好時計</span>")
@@ -712,7 +705,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             pop = parts[8]
             mark = parts[9] if n > 9 else ""
 
-            # 指数列の正確なマッピング
             if n >= 20:
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
@@ -1374,7 +1366,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # ==============================================================================
-# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（新設）
+# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（レイアウト維持・仕様強化版）
 # ==============================================================================
 st.markdown("### 📋 出走馬カード（実数値ボーダー・狙い目判定・危険警告【危】・上位5位色分け）")
 
@@ -1387,20 +1379,32 @@ if search_kw:
         filtered_df['種牡馬'].str.contains(search_kw, na=False)
     ]
 
-# ★ 指数実数値ボーダーのクイックトグルボタン
+# レイアウトは変更なし（4列構成）
 st.markdown("##### 🎯 指数ボーダー クイックフィルター")
 qb_col1, qb_col2, qb_col3, qb_col4 = st.columns(4)
 with qb_col1:
-    f_border_50 = st.checkbox("🔥 F指数 50以上 (軸・本線ボーダー)", help="6位以内かつF指数50以上で3着内馬の約76%を網羅")
+    f_border_top6_50 = st.checkbox(
+        "🔥 F 6位内 ＆ 50以上", 
+        help="F指数1〜6位以内かつ実数値50以上（3着内馬の約76%を占める軸・本線ボーダー）"
+    )
 with qb_col2:
-    arms_border_6th = st.checkbox("🚀 arms 6位内 ＆ 100以上", help="6位以内かつarms100以上で複勝率33%超の安定ゾーン")
+    arms_border_6th = st.checkbox(
+        "🚀 arms 6位内 ＆ 100以上", 
+        help="arms指数1〜6位以内かつ実数値100以上（複勝率33%超の安定ゾーン）"
+    )
 with qb_col3:
-    tua_border_6th = st.checkbox("🛡️ tua 6位内 ＆ 190以上", help="6位以内かつtua190以上で複勝率40%弱の堅実軸ゾーン")
+    tua_border_6th = st.checkbox(
+        "🛡️ tua 6位内 ＆ 190以上", 
+        help="tua指数1〜6位以内かつ実数値190以上（複勝率40%弱の堅実軸ゾーン）"
+    )
 with qb_col4:
-    s_border_top2 = st.checkbox("⚡ S指数 1〜2位 (初速・穴馬)", help="ダート短距離等で穴馬の半数以上を占めるスピードゾーン")
+    s_border_top6_30 = st.checkbox(
+        "⚡ S 6位内 ＆ 30以上", 
+        help="S指数1〜6位以内かつ実数値30以上（先行力・スピード裏付けボーダー）"
+    )
 
-# クイックフィルターの適用
-if f_border_50:
+# クイックフィルターの適用処理
+if f_border_top6_50:
     filtered_df = filtered_df[(filtered_df['F_rank'] <= 6) & (filtered_df['F指数'] >= 50)]
 
 if arms_border_6th:
@@ -1409,8 +1413,8 @@ if arms_border_6th:
 if tua_border_6th:
     filtered_df = filtered_df[(filtered_df['tua_rank'] <= 6) & (filtered_df['tua'] >= 190)]
 
-if s_border_top2:
-    filtered_df = filtered_df[filtered_df['S_rank'] <= 2]
+if s_border_top6_30:
+    filtered_df = filtered_df[(filtered_df['S_rank'] <= 6) & (filtered_df['S指数'] >= 30)]
 
 
 # --- 上部サマリーカウンター ---
@@ -1454,12 +1458,10 @@ else:
         
         badges = []
         
-        # 1. ⚠️ 危 危険騎手警告バッジ
         danger_badge_html = get_jockey_danger_badge(row)
         if danger_badge_html:
             badges.append(danger_badge_html)
 
-        # 2. 🎯 狙い目バッジ
         if row.get('target_win', False):
             badges.append("<span class='badge-target-win'>🥇 1着狙い (勝率26%超)</span>")
         elif row.get('target_axis', False):
@@ -1468,25 +1470,21 @@ else:
         if row.get('target_himo', False):
             badges.append("<span class='badge-target-himo'>💣 紐穴狙い</span>")
 
-        # 3. 厩舎黄金パターンバッジ
         stable_badges = get_stable_synergy_badges(row)
         badges.extend(stable_badges)
 
-        # 4. GTV馬バッジ
         if is_gtv:
             if is_dirt_race and pd.notnull(pop_val) and pop_val >= 4:
                 badges.append("<span class='badge-gtv-dirt'>🔥 GTVダート穴 (回収97%)</span>")
             else:
                 badges.append("<span class='badge-gtv-normal'>🎯 GTV該当馬</span>")
 
-        # 5. クッション値 × 種牡馬バイアス（芝レースのみ）
         cushion_badge_html = ""
         if is_turf_race and sire_name:
             cushion_badge_html = evaluate_sire_cushion(sire_name, current_band)
             if cushion_badge_html:
                 badges.append(cushion_badge_html)
 
-        # 6. 指数シナジーバッジ
         if row.get('is_syn_iron', False):
             badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝率61.9%)</span>")
         elif row.get('is_syn_high', False):
@@ -1520,7 +1518,6 @@ else:
             badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
         badges_html = " ".join(badges)
-        
         mark_badge_html = format_mark_badge(mark_val)
 
         has_wood = pd.notnull(row.get('wood_1F')) or pd.notnull(row.get('wood_5F')) or pd.notnull(row.get('wood_4F'))
