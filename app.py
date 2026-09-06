@@ -705,24 +705,19 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
             pop = parts[8]
             mark = parts[9] if n > 9 else ""
 
-            # S指数・Fup・F指数・arms・tuaの正確なインデックスマッピング
             if n >= 20:
                 fup = pd.to_numeric(parts[10], errors='coerce')
                 fup_rank = pd.to_numeric(parts[11], errors='coerce')
 
-                # ★ S指数（実数値: 列12, 順位: 列13）
                 s_val = pd.to_numeric(parts[12], errors='coerce')
                 s_rank = pd.to_numeric(parts[13], errors='coerce')
 
-                # F指数（実数値: 列14, 順位: 列15）
                 f_val = pd.to_numeric(parts[14], errors='coerce')
                 f_rank = pd.to_numeric(parts[15], errors='coerce')
 
-                # arms指数（実数値: 列16, 順位: 列17）
                 arms_val = pd.to_numeric(parts[16], errors='coerce')
                 arms_rank = pd.to_numeric(parts[17], errors='coerce')
 
-                # tua指数（実数値: 列18, 順位: 列19）
                 tua_val = pd.to_numeric(parts[18], errors='coerce')
                 tua_rank = pd.to_numeric(parts[19], errors='coerce')
 
@@ -790,7 +785,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
 
-    # ★ 開催日付を 2026年9月6日 に指定
     detected_date = datetime.date(2026, 9, 6)
     gtv_patterns = ['data/GTV馬*.csv', 'GTV馬*.csv', 'data/GTV*.csv', 'GTV*.csv', 'data/*GTV*.csv', '*GTV*.csv']
     df_gtv = read_csv_flexible(f_gtv, gtv_patterns)
@@ -1029,6 +1023,7 @@ if not df.empty:
         ((df['arms_rank'] <= 5) | (df['Fup'] >= 4) | (df['tua_rank'] <= 3))
     )
 
+    # 👑 黄金シナジー該当フラグ
     df['is_syn_iron'] = (
         (df['F_rank'] == 1) &
         (df['arms_rank'] <= 3) &
@@ -1221,7 +1216,7 @@ st.markdown(f"<div class='date-header-badge'>{formatted_date_str}</div>", unsafe
 
 
 # ==============================================================================
-# ★ レース選択UI
+# ★ レース選択UI（最高信頼度の新カスタムマーク [💎鉄] [🌟高] を追加）
 # ==============================================================================
 st.markdown("### 🎯 レース選択")
 
@@ -1243,6 +1238,13 @@ for _, r_row in races_in_v.iterrows():
     n_horses = len(r_horses)
     
     marks = []
+    # ★ 最高信頼度の新カスタムマーク（他と被らない独自表記）
+    if (r_horses['is_syn_iron'] == True).any():
+        marks.append("💎鉄")
+    if (r_horses['is_syn_high'] == True).any():
+        marks.append("🌟高")
+
+    # 既存マーク
     if (r_horses['target_win'] == True).any():
         marks.append("🥇")
     if (r_horses['target_axis'] == True).any():
@@ -1284,7 +1286,7 @@ selected_race_uid = st.selectbox(
     label_visibility="collapsed"
 )
 
-race_df = df[df['race_uid'] == selected_race_uid].copy().sort_values('馬番')
+race_df = df[df['race_uid'] == selected_race_uid].copy()
 filtered_df = race_df.copy()
 
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
@@ -1372,7 +1374,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # ==============================================================================
-# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（レイアウト＆構成完全維持）
+# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（レイアウト変更なし＆順位順ソート機能）
 # ==============================================================================
 st.markdown("### 📋 出走馬カード（実数値ボーダー・狙い目判定・危険警告【危】・上位5位色分け）")
 
@@ -1385,7 +1387,7 @@ if search_kw:
         filtered_df['種牡馬'].str.contains(search_kw, na=False)
     ]
 
-# レイアウト変更なし（4列構成）
+# レイアウト・項目配置は完全維持
 st.markdown("##### 🎯 指数ボーダー クイックフィルター")
 qb_col1, qb_col2, qb_col3, qb_col4 = st.columns(4)
 with qb_col1:
@@ -1409,7 +1411,7 @@ with qb_col4:
         help="S指数1〜6位以内かつ実数値30以上（先行力・スピード裏付けボーダー）"
     )
 
-# クイックフィルターの適用処理
+# 絞り込み処理
 if f_border_top6_50:
     filtered_df = filtered_df[(filtered_df['F_rank'] <= 6) & (filtered_df['F指数'] >= 50)]
 
@@ -1421,6 +1423,18 @@ if tua_border_6th:
 
 if s_border_top6_30:
     filtered_df = filtered_df[(filtered_df['S_rank'] <= 6) & (filtered_df['S指数'] >= 30)]
+
+# ★ クイックフィルター選択項目の「順位順ソート」処理
+if f_border_top6_50:
+    filtered_df = filtered_df.sort_values(['F_rank', '馬番'], ascending=[True, True])
+elif arms_border_6th:
+    filtered_df = filtered_df.sort_values(['arms_rank', '馬番'], ascending=[True, True])
+elif tua_border_6th:
+    filtered_df = filtered_df.sort_values(['tua_rank', '馬番'], ascending=[True, True])
+elif s_border_top6_30:
+    filtered_df = filtered_df.sort_values(['S_rank', '馬番'], ascending=[True, True])
+else:
+    filtered_df = filtered_df.sort_values('馬番', ascending=True)
 
 
 # --- 上部サマリーカウンター ---
