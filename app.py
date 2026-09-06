@@ -54,6 +54,39 @@ st.markdown("""
         margin-bottom: 12px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.4);
     }
+
+    /* === レース性質（堅調・波乱）判定バナー === */
+    .race-type-banner {
+        padding: 12px 18px;
+        border-radius: 8px;
+        margin-bottom: 16px;
+        font-size: 15px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .race-type-solid {
+        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+        color: #ecfdf5;
+        border: 1px solid #34d399;
+    }
+    .race-type-twin-axis {
+        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
+        color: #eff6ff;
+        border: 1px solid #60a5fa;
+    }
+    .race-type-chaos {
+        background: linear-gradient(135deg, #881337 0%, #be123c 100%);
+        color: #fff1f2;
+        border: 1px solid #fb7185;
+    }
+    .race-type-mix {
+        background: linear-gradient(135deg, #78350f 0%, #b45309 100%);
+        color: #fffbeb;
+        border: 1px solid #fbbf24;
+    }
     
     .horse-card {
         background-color: #161e2e;
@@ -1238,7 +1271,7 @@ for _, r_row in races_in_v.iterrows():
     n_horses = len(r_horses)
     
     marks = []
-    # ★ 最高信頼度の新カスタムマーク（他と被らない独自表記）
+    # 最高信頼度の新カスタムマーク
     if (r_horses['is_syn_iron'] == True).any():
         marks.append("💎鉄")
     if (r_horses['is_syn_high'] == True).any():
@@ -1291,6 +1324,43 @@ filtered_df = race_df.copy()
 
 is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
 is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filtered_df.empty else False
+
+
+# ==============================================================================
+# ★ レース性質（堅調・波乱度）の自動判定バナー（新設）
+# ==============================================================================
+r_high_cnt = int((race_df['is_syn_high'] == True).sum())
+r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
+r_win_cnt = int((race_df['target_win'] == True).sum())
+r_axis_cnt = int((race_df['target_axis'] == True).sum())
+r_bomb_cnt = int((race_df['is_syn_bomb'] == True).sum())
+r_danger_cnt = int((race_df['is_danger_jockey'] == True).sum())
+
+# 判定ロジック
+if r_high_cnt >= 2 or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1):
+    race_banner_class = "race-type-banner race-type-twin-axis"
+    race_banner_title = f"💎 2頭軸・本線レース (高確率/連対軸が複数存在)"
+    race_banner_desc = f"軸馬同士の「ワイド1点」または2頭軸フォーメーションが最有力"
+elif (r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_cnt <= 1:
+    race_banner_class = "race-type-banner race-type-solid"
+    race_banner_title = f"🟢 堅調・軸不動レース (鉄板・高確率軸馬スタンバイ)"
+    race_banner_desc = f"確固たる軸馬から相手を絞った馬連・ワイド本線狙い"
+elif r_bomb_cnt >= 2:
+    race_banner_class = "race-type-banner race-type-chaos"
+    race_banner_title = f"🔴 波乱警戒レース (爆弾穴馬 {r_bomb_cnt}頭 潜伏)"
+    race_banner_desc = f"ヒモ荒れ・高配当警報！3連複3列目総流しやワイド穴流しが有効"
+else:
+    race_banner_class = "race-type-banner race-type-mix"
+    race_banner_title = f"🟡 混戦・軸波乱レース (確固たる軸馬不在)"
+    race_banner_desc = f"上位人気が取りこぼしやすい展開。手広く構えるか見送りを推奨"
+
+st.markdown(
+    f"<div class='{race_banner_class}'>"
+    f"<div><strong>{race_banner_title}</strong><div style='font-size:12.5px;font-weight:normal;opacity:0.9;margin-top:2px;'>{race_banner_desc}</div></div>"
+    f"<div style='font-size:12.5px;text-align:right;'>高確率軸: {r_high_cnt}頭 / 軸連対: {r_axis_cnt}頭 / 💣爆弾: {r_bomb_cnt}頭</div>"
+    f"</div>",
+    unsafe_allow_html=True
+)
 
 
 # --- サイドバー フィルター処理 ---
@@ -1374,7 +1444,7 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # ==============================================================================
-# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（レイアウト変更なし＆順位順ソート機能）
+# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（順位順自動ソート機能）
 # ==============================================================================
 st.markdown("### 📋 出走馬カード（実数値ボーダー・狙い目判定・危険警告【危】・上位5位色分け）")
 
@@ -1442,13 +1512,10 @@ c1, c2, c3, c4 = st.columns(4)
 with c1:
     st.markdown(f"<div class='metric-box'><div class='metric-label'>表示頭数</div><div class='metric-val'>{len(filtered_df)}頭</div></div>", unsafe_allow_html=True)
 with c2:
-    r_win_cnt = int((race_df['target_win'] == True).sum())
     st.markdown(f"<div class='metric-box'><div class='metric-label'>🥇 1着狙い</div><div class='metric-val'>{r_win_cnt}頭</div></div>", unsafe_allow_html=True)
 with c3:
-    r_axis_cnt = int((race_df['target_axis'] == True).sum())
     st.markdown(f"<div class='metric-box'><div class='metric-label'>🛡️ 軸・連対狙い</div><div class='metric-val'>{r_axis_cnt}頭</div></div>", unsafe_allow_html=True)
 with c4:
-    r_danger_cnt = int((race_df['is_danger_jockey'] == True).sum())
     st.markdown(f"<div class='metric-box'><div class='metric-label'>⚠️ 危 騎乗馬</div><div class='metric-val' style='color:#ef4444;'>{r_danger_cnt}頭</div></div>", unsafe_allow_html=True)
 
 st.markdown("<hr style='border-color:#30363d;margin-top:8px;margin-bottom:20px;'>", unsafe_allow_html=True)
