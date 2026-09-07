@@ -87,6 +87,28 @@ st.markdown("""
         color: #fffbeb;
         border: 1px solid #fbbf24;
     }
+
+    /* 厳選勝負 / 見送り ステータスバッジ */
+    .badge-decision-go {
+        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+        color: #ffffff;
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid #6ee7b7;
+        font-weight: bold;
+        margin-left: 8px;
+    }
+    .badge-decision-skip {
+        background: linear-gradient(135deg, #64748b 0%, #475569 100%);
+        color: #f1f5f9;
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        border: 1px solid #94a3b8;
+        font-weight: bold;
+        margin-left: 8px;
+    }
     
     .horse-card {
         background-color: #161e2e;
@@ -1249,7 +1271,7 @@ st.markdown(f"<div class='date-header-badge'>{formatted_date_str}</div>", unsafe
 
 
 # ==============================================================================
-# ★ レース選択UI（最高信頼度の新カスタムマーク [💎鉄] [🌟高] を追加）
+# ★ レース選択UI（⭕勝負 / ⛔見送り 印を自動付与）
 # ==============================================================================
 st.markdown("### 🎯 レース選択")
 
@@ -1270,14 +1292,34 @@ for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
     n_horses = len(r_horses)
     
+    # 判定用カウント
+    r_high_c = int((r_horses['is_syn_high'] == True).sum())
+    r_iron_c = int((r_horses['is_syn_iron'] == True).sum())
+    r_win_c = int((r_horses['target_win'] == True).sum())
+    r_axis_c = int((r_horses['target_axis'] == True).sum())
+    r_bomb_c = int((r_horses['is_syn_bomb'] == True).sum())
+    
+    # 条件1: バナーが「💎 2頭軸・本線」または「🟢 堅調・軸不動」
+    cond1 = (r_high_c >= 2 or (r_win_c >= 1 and r_axis_c >= 1 and r_bomb_c <= 1)) or \
+            ((r_iron_c >= 1 or r_high_c >= 1 or r_win_c >= 1) and r_bomb_c <= 1)
+            
+    # 条件2: 1〜3番人気の中に危険騎手がいない
+    fav3_horses = r_horses[r_horses['人気'] <= 3]
+    cond2 = not bool((fav3_horses['is_danger_jockey'] == True).any()) if not fav3_horses.empty else True
+    
+    # 条件3: F指数1位の実数値が60以上
+    f1_horse = r_horses[r_horses['F_rank'] == 1]
+    cond3 = bool(f1_horse['F指数'].values[0] >= 60) if not f1_horse.empty else False
+    
+    # ⭕勝負 vs ⛔見送り の印
+    is_go_race = cond1 and cond2 and cond3
+    decision_tag = "⭕勝負" if is_go_race else "⛔見送"
+
     marks = []
-    # 最高信頼度の新カスタムマーク
     if (r_horses['is_syn_iron'] == True).any():
         marks.append("💎鉄")
     if (r_horses['is_syn_high'] == True).any():
         marks.append("🌟高")
-
-    # 既存マーク
     if (r_horses['target_win'] == True).any():
         marks.append("🥇")
     if (r_horses['target_axis'] == True).any():
@@ -1301,7 +1343,7 @@ for _, r_row in races_in_v.iterrows():
     
     horse_marks_str = f" [{ ' '.join(race_horse_marks) }]" if race_horse_marks else ""
 
-    lbl = f"{r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]{marks_str}{horse_marks_str}"
+    lbl = f"{decision_tag} {r_row['R番号']}R ({r_row['track']}{r_row['dist']}m / {n_horses}頭) [{r_row['race_id']}]{marks_str}{horse_marks_str}"
     race_options[r_row['race_uid']] = lbl
 
 race_uid_list = list(race_options.keys())
@@ -1327,7 +1369,7 @@ is_dirt_race = bool(filtered_df['track'].str.contains('ダ').any()) if not filte
 
 
 # ==============================================================================
-# ★ レース性質（堅調・波乱度）の自動判定バナー（新設）
+# ★ レース性質 ＆ 【勝負厳選 or 見送り】判定バナー
 # ==============================================================================
 r_high_cnt = int((race_df['is_syn_high'] == True).sum())
 r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
@@ -1336,27 +1378,55 @@ r_axis_cnt = int((race_df['target_axis'] == True).sum())
 r_bomb_cnt = int((race_df['is_syn_bomb'] == True).sum())
 r_danger_cnt = int((race_df['is_danger_jockey'] == True).sum())
 
-# 判定ロジック
+# 波乱度判定
 if r_high_cnt >= 2 or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1):
     race_banner_class = "race-type-banner race-type-twin-axis"
-    race_banner_title = f"💎 2頭軸・本線レース (高確率/連対軸が複数存在)"
-    race_banner_desc = f"軸馬同士の「ワイド1点」または2頭軸フォーメーションが最有力"
+    race_banner_title = "💎 2頭軸・本線レース"
+    race_banner_desc = "軸馬同士の「ワイド1点」または2頭軸フォーメーションが最有力"
+    is_banner_solid = True
 elif (r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_cnt <= 1:
     race_banner_class = "race-type-banner race-type-solid"
-    race_banner_title = f"🟢 堅調・軸不動レース (鉄板・高確率軸馬スタンバイ)"
-    race_banner_desc = f"確固たる軸馬から相手を絞った馬連・ワイド本線狙い"
+    race_banner_title = "🟢 堅調・軸不動レース"
+    race_banner_desc = "確固たる軸馬から相手を絞った馬連・ワイド本線狙い"
+    is_banner_solid = True
 elif r_bomb_cnt >= 2:
     race_banner_class = "race-type-banner race-type-chaos"
     race_banner_title = f"🔴 波乱警戒レース (爆弾穴馬 {r_bomb_cnt}頭 潜伏)"
-    race_banner_desc = f"ヒモ荒れ・高配当警報！3連複3列目総流しやワイド穴流しが有効"
+    race_banner_desc = "ヒモ荒れ・高配当警報！3連複3列目総流しやワイド穴流しが有効"
+    is_banner_solid = False
 else:
     race_banner_class = "race-type-banner race-type-mix"
-    race_banner_title = f"🟡 混戦・軸波乱レース (確固たる軸馬不在)"
-    race_banner_desc = f"上位人気が取りこぼしやすい展開。手広く構えるか見送りを推奨"
+    race_banner_title = "🟡 混戦・軸波乱レース"
+    race_banner_desc = "上位人気が取りこぼしやすい展開。手広く構えるか見送りを推奨"
+    is_banner_solid = False
+
+# 3大条件判定
+cur_fav3 = race_df[race_df['人気'] <= 3]
+has_danger_in_fav3 = bool((cur_fav3['is_danger_jockey'] == True).any()) if not cur_fav3.empty else False
+
+cur_f1 = race_df[race_df['F_rank'] == 1]
+f1_val_cur = float(cur_f1['F指数'].values[0]) if not cur_f1.empty else 0.0
+is_f1_over60 = (f1_val_cur >= 60)
+
+is_selected_race = is_banner_solid and (not has_danger_in_fav3) and is_f1_over60
+
+if is_selected_race:
+    decision_badge_html = "<span class='badge-decision-go'>⭕ 【勝負厳選レース】3大条件クリア</span>"
+else:
+    missing_reasons = []
+    if not is_banner_solid:
+        missing_reasons.append("バナーが混戦/波乱")
+    if has_danger_in_fav3:
+        missing_reasons.append("1〜3人気に危騎手")
+    if not is_f1_over60:
+        missing_reasons.append(f"F1位が{f1_val_cur:.0f}点(<60)")
+    reasons_str = f" ({', '.join(missing_reasons)})" if missing_reasons else ""
+    decision_badge_html = f"<span class='badge-decision-skip'>⛔ 【見送り推奨】{reasons_str}</span>"
 
 st.markdown(
     f"<div class='{race_banner_class}'>"
-    f"<div><strong>{race_banner_title}</strong><div style='font-size:12.5px;font-weight:normal;opacity:0.9;margin-top:2px;'>{race_banner_desc}</div></div>"
+    f"<div><strong>{race_banner_title}</strong> {decision_badge_html}"
+    f"<div style='font-size:12.5px;font-weight:normal;opacity:0.9;margin-top:4px;'>{race_banner_desc}</div></div>"
     f"<div style='font-size:12.5px;text-align:right;'>高確率軸: {r_high_cnt}頭 / 軸連対: {r_axis_cnt}頭 / 💣爆弾: {r_bomb_cnt}頭</div>"
     f"</div>",
     unsafe_allow_html=True
@@ -1444,11 +1514,17 @@ st.markdown("<hr style='border-color:#30363d;margin-top:10px;margin-bottom:15px;
 
 
 # ==============================================================================
-# ★ 検索バー ＆ 指数実数値ボーダーライン クイックフィルター（順位順自動ソート機能）
+# ★ 検索バー ＆ 単勝人気ソート ＆ 指数実数値ボーダークイックフィルター
 # ==============================================================================
-st.markdown("### 📋 出走馬カード（実数値ボーダー・狙い目判定・危険警告【危】・上位5位色分け）")
+st.markdown("### 📋 出走馬カード")
 
-search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...")
+s_col1, s_col2 = st.columns([3, 1])
+with s_col1:
+    search_kw = st.text_input("🔍 馬名・調教師・騎手・父名で自由検索", placeholder="検索キーワードを入力...", label_visibility="collapsed")
+with s_col2:
+    # ★ 単勝人気順ソート切り替えスイッチ
+    sort_option = st.selectbox("並び替え", ["馬番順", "単勝人気順 (1人気→)"], index=0, label_visibility="collapsed")
+
 if search_kw:
     filtered_df = filtered_df[
         filtered_df['馬名'].str.contains(search_kw, na=False) |
@@ -1457,7 +1533,7 @@ if search_kw:
         filtered_df['種牡馬'].str.contains(search_kw, na=False)
     ]
 
-# レイアウト・項目配置は完全維持
+# レイアウト・項目配置は完全維持（4列）
 st.markdown("##### 🎯 指数ボーダー クイックフィルター")
 qb_col1, qb_col2, qb_col3, qb_col4 = st.columns(4)
 with qb_col1:
@@ -1494,7 +1570,7 @@ if tua_border_6th:
 if s_border_top6_30:
     filtered_df = filtered_df[(filtered_df['S_rank'] <= 6) & (filtered_df['S指数'] >= 30)]
 
-# ★ クイックフィルター選択項目の「順位順ソート」処理
+# ★ ソート処理（クイックフィルター選択時は該当指数順位順、通常時は馬番順 or 単勝人気順）
 if f_border_top6_50:
     filtered_df = filtered_df.sort_values(['F_rank', '馬番'], ascending=[True, True])
 elif arms_border_6th:
@@ -1504,7 +1580,10 @@ elif tua_border_6th:
 elif s_border_top6_30:
     filtered_df = filtered_df.sort_values(['S_rank', '馬番'], ascending=[True, True])
 else:
-    filtered_df = filtered_df.sort_values('馬番', ascending=True)
+    if sort_option == "単勝人気順 (1人気→)":
+        filtered_df = filtered_df.sort_values(['人気', '馬番'], ascending=[True, True])
+    else:
+        filtered_df = filtered_df.sort_values('馬番', ascending=True)
 
 
 # --- 上部サマリーカウンター ---
