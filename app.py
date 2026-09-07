@@ -110,7 +110,7 @@ st.markdown("""
     }
 
     /* === 🎯 自動推奨買い目パネル === */
-    .recom-panel {
+    .recom-panel-go {
         background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
         border: 2px solid #10b981;
         border-radius: 10px;
@@ -118,8 +118,16 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
     }
-    .recom-title {
-        font-size: 17px;
+    .recom-panel-skip {
+        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+        border: 2px solid #64748b;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+        box-shadow: 0 4px 12px rgba(100, 116, 139, 0.2);
+    }
+    .recom-title-go {
+        font-size: 16.5px;
         font-weight: bold;
         color: #34d399;
         display: flex;
@@ -127,6 +135,17 @@ st.markdown("""
         gap: 8px;
         margin-bottom: 12px;
         border-bottom: 1px solid #374151;
+        padding-bottom: 6px;
+    }
+    .recom-title-skip {
+        font-size: 16.5px;
+        font-weight: bold;
+        color: #94a3b8;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #334155;
         padding-bottom: 6px;
     }
     .recom-row {
@@ -138,11 +157,13 @@ st.markdown("""
         font-weight: bold;
         color: #fbbf24;
         display: inline-block;
-        width: 140px;
+        width: 155px;
     }
-    .recom-val {
+    .recom-val-num {
         color: #ffffff;
         font-weight: bold;
+        font-size: 16px;
+        letter-spacing: 1px;
     }
     .recom-pts {
         display: inline-block;
@@ -154,6 +175,17 @@ st.markdown("""
         font-weight: bold;
         margin-left: 10px;
         border: 1px solid #059669;
+    }
+    .recom-pts-skip {
+        display: inline-block;
+        background-color: #334155;
+        color: #cbd5e1;
+        padding: 2px 8px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: bold;
+        margin-left: 10px;
+        border: 1px solid #475569;
     }
     
     .horse-card {
@@ -1106,7 +1138,6 @@ def load_and_merge_all(f_index, f_gtv, f_sakaro, f_wood):
     df_main['wood_Lap2_rank'] = df_main.groupby('race_uid')['wood_Lap2'].rank(method='min', ascending=True)
     df_main['wood_Lap1_rank'] = df_main.groupby('race_uid')['wood_Lap1'].rank(method='min', ascending=True)
 
-    # ★ 同馬番騎乗の集計処理
     ub_grp = df_main.groupby(['騎手', '馬番'])['race_id'].apply(list).to_dict()
     df_main['same_ub_count'] = df_main.apply(lambda r: len(ub_grp.get((r['騎手'], r['馬番']), [])), axis=1)
     df_main['same_ub_races'] = df_main.apply(lambda r: ", ".join(ub_grp.get((r['騎手'], r['馬番']), [])), axis=1)
@@ -1197,7 +1228,6 @@ if not df.empty:
     )
     df['has_stable_pattern'] = df.apply(lambda r: len(get_stable_synergy_badges(r)) > 0, axis=1)
 
-    # ★ 🏇 同馬番騎手 × 調教加速 × 指数の4大運用フラグ
     df['is_same_ub_accel'] = df['is_same_ub'] & (df['坂路_完全加速'] | df['is_wood_accel'])
     df['syn_same_ub_wood'] = df['is_same_ub'] & df['is_wood_accel'] & (df['F_rank'] <= 3)
     df['syn_same_ub_iron'] = df['is_same_ub_accel'] & (df['F_rank'] <= 3) & (df['arms_rank'] <= 3)
@@ -1280,7 +1310,7 @@ st.sidebar.markdown("---")
 
 
 # ==============================================================================
-# ★ 左側サイドバー: 🏇 同馬番騎手 × 調教・指数シナジー抽出（新設）
+# ★ 左側サイドバー: 🏇 同馬番騎手 × 調教・指数シナジー抽出
 # ==============================================================================
 st.sidebar.markdown("### 🏇 同馬番騎手 シナジー抽出")
 
@@ -1547,85 +1577,113 @@ st.markdown(
 
 
 # ==============================================================================
-# ★ 推奨レースの「自動算出 推奨買い目」パネル
+# ★ 【新設】自動算出 推奨買い目パネル（馬番のみ・見送りレースも対応）
 # ==============================================================================
 if is_selected_race:
+    # ⭕ 勝負厳選レース用（本線型フォーメーション・約24〜48点）
+    panel_class = "recom-panel-go"
+    title_class = "recom-title-go"
+    pts_class = "recom-pts"
+    panel_title = "🎯 【自動算出】勝負厳選レース 推奨買い目（馬番のみ）"
+    
     c1_cands = race_df[race_df['is_syn_iron'] | race_df['is_syn_high'] | race_df['syn_same_ub_wood'] | race_df['target_win']].sort_values(['F_rank', 'arms_rank'])['馬番'].tolist()
     if len(c1_cands) < 2:
         sup = race_df[(race_df['F_rank'] == 1) | (race_df['F指数'] >= 66)].sort_values('F_rank')['馬番'].tolist()
         for s in sup:
-            if s not in c1_cands:
-                c1_cands.append(s)
-            if len(c1_cands) >= 2:
-                break
+            if s not in c1_cands: c1_cands.append(s)
+            if len(c1_cands) >= 2: break
     if len(c1_cands) < 2:
         sup2 = race_df.sort_values('F_rank')['馬番'].tolist()
         for s in sup2:
-            if s not in c1_cands:
-                c1_cands.append(s)
-            if len(c1_cands) >= 2:
-                break
+            if s not in c1_cands: c1_cands.append(s)
+            if len(c1_cands) >= 2: break
     rec_c1 = c1_cands[:3]
 
     rec_c2_cands = list(rec_c1)
     for h in race_df[race_df['target_axis']].sort_values(['F_rank', 'arms_rank'])['馬番'].tolist():
-        if h not in rec_c2_cands:
-            rec_c2_cands.append(h)
+        if h not in rec_c2_cands: rec_c2_cands.append(h)
     for h in race_df[(race_df['F_rank'] <= 6) & (race_df['F指数'] >= 50)].sort_values('F_rank')['馬番'].tolist():
-        if h not in rec_c2_cands:
-            rec_c2_cands.append(h)
-        if len(rec_c2_cands) >= 5:
-            break
+        if h not in rec_c2_cands: rec_c2_cands.append(h)
+        if len(rec_c2_cands) >= 5: break
     rec_c2 = rec_c2_cands[:5]
 
     rec_c3_cands = list(rec_c2)
     for b in race_df[race_df['is_syn_bomb'] | race_df['syn_same_ub_bomb']].sort_values(['arms', 'F指数'], ascending=False)['馬番'].tolist():
-        if b not in rec_c3_cands:
-            rec_c3_cands.append(b)
+        if b not in rec_c3_cands: rec_c3_cands.append(b)
     for a in race_df[(race_df['arms_rank'] <= 6) & (race_df['arms'] >= 100)].sort_values('arms_rank')['馬番'].tolist():
-        if a not in rec_c3_cands:
-            rec_c3_cands.append(a)
+        if a not in rec_c3_cands: rec_c3_cands.append(a)
     for s in race_df[(race_df['S_rank'] <= 6) & (race_df['S指数'] >= 30)].sort_values('S_rank')['馬番'].tolist():
-        if s not in rec_c3_cands:
-            rec_c3_cands.append(s)
-        if len(rec_c3_cands) >= 8:
-            break
+        if s not in rec_c3_cands: rec_c3_cands.append(s)
+        if len(rec_c3_cands) >= 8: break
     rec_c3 = rec_c3_cands[:8]
 
-    tickets_3tan = 0
-    for h1 in rec_c1:
-        for h2 in rec_c2:
-            if h2 == h1: continue
-            for h3 in rec_c3:
-                if h3 == h1 or h3 == h2: continue
-                tickets_3tan += 1
+else:
+    # ⛔ 見送り推奨レース用（混戦・波乱対応型フォーメーション・約60〜80点）
+    panel_class = "recom-panel-skip"
+    title_class = "recom-title-skip"
+    pts_class = "recom-pts-skip"
+    panel_title = "⚠️ 【参考算出】見送り推奨レース 買い目（混戦・波乱対応型 / 馬番のみ）"
 
-    def get_h_label(u_no):
-        sub = race_df[race_df['馬番'] == u_no]
-        if not sub.empty:
-            return f"{int(u_no)}番 {sub['馬名'].values[0]}"
-        return f"{int(u_no)}番"
+    c1_cands = []
+    for h in race_df.sort_values('F_rank')['馬番'].tolist()[:3]:
+        if h not in c1_cands: c1_cands.append(h)
+    for h in race_df.sort_values('S_rank')['馬番'].tolist()[:1]:
+        if h not in c1_cands: c1_cands.append(h)
+    for h in race_df.sort_values('arms_rank')['馬番'].tolist()[:1]:
+        if h not in c1_cands: c1_cands.append(h)
+    rec_c1 = c1_cands[:4] # 混戦・波乱時は頭を最大4頭に分散
 
-    c1_str = " / ".join([get_h_label(u) for u in rec_c1])
-    c2_str = " / ".join([get_h_label(u) for u in rec_c2])
-    c3_str = " / ".join([get_h_label(u) for u in rec_c3])
+    rec_c2_cands = list(rec_c1)
+    for h in race_df[race_df['target_axis']].sort_values(['F_rank', 'arms_rank'])['馬番'].tolist():
+        if h not in rec_c2_cands: rec_c2_cands.append(h)
+    for h in race_df.sort_values('tua_rank')['馬番'].tolist()[:2]:
+        if h not in rec_c2_cands: rec_c2_cands.append(h)
+    for h in race_df.sort_values('F_rank')['馬番'].tolist()[:5]:
+        if h not in rec_c2_cands: rec_c2_cands.append(h)
+    rec_c2 = rec_c2_cands[:5]
 
-    main_axis_u = rec_c1[0]
-    partners_wide = [u for u in rec_c2 if u != main_axis_u][:3]
-    wide_str = " / ".join([f"{int(main_axis_u)} - {int(u)} ({race_df[race_df['馬番']==u]['馬名'].values[0]})" for u in partners_wide])
+    rec_c3_cands = list(rec_c2)
+    for b in race_df[race_df['is_syn_bomb'] | race_df['syn_same_ub_bomb']].sort_values(['arms', 'F指数'], ascending=False)['馬番'].tolist():
+        if b not in rec_c3_cands: rec_c3_cands.append(b)
+    for a in race_df[(race_df['arms_rank'] <= 6) & (race_df['arms'] >= 100)].sort_values('arms_rank')['馬番'].tolist():
+        if a not in rec_c3_cands: rec_c3_cands.append(a)
+    for s in race_df[(race_df['S_rank'] <= 6) & (race_df['S指数'] >= 30)].sort_values('S_rank')['馬番'].tolist():
+        if s not in rec_c3_cands: rec_c3_cands.append(s)
+    for h in race_df.sort_values('F_rank')['馬番'].tolist()[:7]:
+        if h not in rec_c3_cands: rec_c3_cands.append(h)
+    rec_c3 = rec_c3_cands[:7]
 
-    st.markdown(
-        f"<div class='recom-panel'>"
-        f"<div class='recom-title'>🎯 【自動算出】勝負厳選レース 推奨買い目</div>"
-        f"<div class='recom-row'><span class='recom-label'>🎫 3連単フォーメーション</span> <span class='recom-pts'>計 {tickets_3tan}点</span><br>"
-        f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>1着</strong>: <span class='recom-val'>{c1_str}</span><br>"
-        f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>2着</strong>: <span class='recom-val'>{c2_str}</span><br>"
-        f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>3着</strong>: <span class='recom-val'>{c3_str}</span></div>"
-        f"<div class='recom-row' style='margin-top:10px;'><span class='recom-label'>🛡️ ワイド / 馬連本線</span> <span class='recom-pts'>計 {len(partners_wide)}点</span><br>"
-        f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>流し</strong>: <span class='recom-val'>{wide_str}</span></div>"
-        f"</div>",
-        unsafe_allow_html=True
-    )
+# 3連単 点数計算
+tickets_3tan = 0
+for h1 in rec_c1:
+    for h2 in rec_c2:
+        if h2 == h1: continue
+        for h3 in rec_c3:
+            if h3 == h1 or h3 == h2: continue
+            tickets_3tan += 1
+
+# 馬番のみの文字列構築
+c1_str = ", ".join([str(int(u)) for u in rec_c1])
+c2_str = ", ".join([str(int(u)) for u in rec_c2])
+c3_str = ", ".join([str(int(u)) for u in rec_c3])
+
+# ワイド / 馬連（馬番のみ）
+main_axis_u = rec_c1[0]
+partners_wide = [u for u in rec_c2 if u != main_axis_u][:3]
+wide_str = f"{int(main_axis_u)} - {', '.join([str(int(u)) for u in partners_wide])}"
+
+st.markdown(
+    f"<div class='{panel_class}'>"
+    f"<div class='{title_class}'>{panel_title}</div>"
+    f"<div class='recom-row'><span class='recom-label'>🎫 3連単フォーメーション</span> <span class='{pts_class}'>計 {tickets_3tan}点</span><br>"
+    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>1着</strong>: <span class='recom-val-num'>{c1_str}</span><br>"
+    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>2着</strong>: <span class='recom-val-num'>{c2_str}</span><br>"
+    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>3着</strong>: <span class='recom-val-num'>{c3_str}</span></div>"
+    f"<div class='recom-row' style='margin-top:10px;'><span class='recom-label'>🛡️ ワイド / 馬連本線</span> <span class='{pts_class}'>計 {len(partners_wide)}点</span><br>"
+    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>流し</strong>: <span class='recom-val-num'>{wide_str}</span></div>"
+    f"</div>",
+    unsafe_allow_html=True
+)
 
 
 # --- サイドバー フィルター処理 ---
@@ -1848,7 +1906,7 @@ else:
         if row.get('target_himo', False):
             badges.append("<span class='badge-target-himo'>💣 紐穴狙い</span>")
 
-        # 3. ★ 🏇 同馬番騎手 × 調教・指数シナジー専用バッジ
+        # 3. 🏇 同馬番騎手 × 調教・指数シナジー専用バッジ
         if row.get('syn_same_ub_wood', False):
             badges.append("<span class='badge-same-ub-wood'>👑 同馬番×W加速×F上位 (複勝69%)</span>")
         elif row.get('syn_same_ub_iron', False):
