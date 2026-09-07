@@ -428,7 +428,7 @@ if df.empty:
 
 
 # ==============================================================================
-# ★ 【完全復元】黄金シナジー・絶対軸馬ロジック
+# ★ 黄金シナジー・絶対軸馬ロジック
 # ==============================================================================
 def is_danger_jk(row):
     jk = str(row.get('騎手', '')).strip()
@@ -547,7 +547,6 @@ for _, r_row in races_in_v.iterrows():
     r_axis_c = int((r_horses['target_axis'] == True).sum())
     r_bomb_c = int((r_horses['is_syn_bomb'] == True).sum())
     
-    # 以前の完全勝負条件
     cond1 = (r_high_c >= 2 or (r_win_c >= 1 and r_axis_c >= 1 and r_bomb_c <= 1)) or \
             ((r_iron_c >= 1 or r_high_c >= 1 or r_win_c >= 1) and r_bomb_c <= 1)
             
@@ -579,7 +578,7 @@ filtered_df = race_df.copy()
 
 
 # ==============================================================================
-# ★ レース判定バナー ＆ 自動買い目（馬番のみ・見送りも算出）
+# ★ レース判定バナー ＆ 自動買い目（馬番のみ）
 # ==============================================================================
 r_high_cnt = int((race_df['is_syn_high'] == True).sum())
 r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
@@ -587,7 +586,6 @@ r_win_cnt = int((race_df['target_win'] == True).sum())
 r_axis_cnt = int((race_df['target_axis'] == True).sum())
 r_bomb_cnt = int((race_df['is_syn_bomb'] == True).sum())
 
-# 波乱度判定（以前の完全ロジック）
 if r_high_cnt >= 2 or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1):
     banner_cls = "race-type-twin-axis"
     banner_title = "💎 2頭軸・本線レース"
@@ -670,7 +668,6 @@ else:
         if h not in rec_c3: rec_c3.append(h)
         if len(rec_c3) >= 7: break
 
-# 点数計算
 tickets = sum(1 for h1 in rec_c1 for h2 in rec_c2 if h2 != h1 for h3 in rec_c3 if h3 not in [h1, h2])
 c1_str = ", ".join(str(int(u)) for u in rec_c1)
 c2_str = ", ".join(str(int(u)) for u in rec_c2)
@@ -692,7 +689,7 @@ st.markdown(
     f"<div class='{title_cls}'>{p_title}</div>"
     f"<div class='recom-row'><span class='recom-label'>🎫 3連単フォーメーション</span> <span class='{pts_cls}'>計 {tickets}点</span><br>"
     f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>1着</strong>: <span class='recom-val-num'>{c1_str}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong>2着</strong>: <span class='recom-val-num'>{c2_str}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong>3着</strong>: <span class='recom-val-num'>{c3_str}</span></div>"
-    f"<div class='recom-row'><span class='recom-label'>🛡️ ワイド / 馬連本線</span> <span class='{pts_cls}'>計 {len(w_partners)}点</span><br>"
+    f"<div class='recom-row' style='margin-top:10px;'><span class='recom-label'>🛡️ ワイド / 馬連本線</span> <span class='{pts_cls}'>計 {len(w_partners)}点</span><br>"
     f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>流し</strong>: <span class='recom-val-num'>{wide_str}</span></div>"
     f"</div>",
     unsafe_allow_html=True
@@ -700,7 +697,7 @@ st.markdown(
 
 
 # ==============================================================================
-# ★ 出走馬カード表示 ＆ フィルター適用
+# ★ 出走馬カード表示 ＆ 指数順位ソート切り替え
 # ==============================================================================
 if syn_iron: filtered_df = filtered_df[filtered_df['is_syn_iron']]
 if syn_high: filtered_df = filtered_df[filtered_df['is_syn_high']]
@@ -714,7 +711,7 @@ if filter_same_ub_wood: filtered_df = filtered_df[filtered_df['syn_same_ub_wood'
 if filter_same_ub_bomb: filtered_df = filtered_df[filtered_df['syn_same_ub_bomb']]
 if filter_danger_jockey: filtered_df = filtered_df[filtered_df['is_danger_jockey']]
 
-col_s1, col_s2 = st.columns([3, 1])
+col_s1, col_s2 = st.columns([2.5, 1.5])
 with col_s1:
     kw = st.text_input("🔍 馬名・騎手・調教師で検索", placeholder="検索ワードを入力...", label_visibility="collapsed")
     if kw:
@@ -724,10 +721,35 @@ with col_s1:
             filtered_df['調教師'].str.contains(kw, na=False)
         ]
 with col_s2:
-    sort_opt = st.selectbox("並び順", ["単勝人気順 (1人気→)", "馬番順"], index=0, label_visibility="collapsed")
+    # ★ 指数の順位ソート項目を完全追加
+    sort_opt = st.selectbox(
+        "並び順",
+        [
+            "単勝人気順 (1人気→)",
+            "馬番順",
+            "🔥 F指数 順位 (1位→)",
+            "🚀 arms指数 順位 (1位→)",
+            "⚡ S指数 順位 (1位→)",
+            "🛡️ tua指数 順位 (1位→)",
+            "✨ Fup 順位 (1位→)"
+        ],
+        index=0,
+        label_visibility="collapsed"
+    )
 
+# ソート処理
 if sort_opt == "単勝人気順 (1人気→)":
     filtered_df = filtered_df.sort_values(['人気', '馬番'])
+elif sort_opt == "🔥 F指数 順位 (1位→)":
+    filtered_df = filtered_df.sort_values(['F_rank', '馬番'])
+elif sort_opt == "🚀 arms指数 順位 (1位→)":
+    filtered_df = filtered_df.sort_values(['arms_rank', '馬番'])
+elif sort_opt == "⚡ S指数 順位 (1位→)":
+    filtered_df = filtered_df.sort_values(['S_rank', '馬番'])
+elif sort_opt == "🛡️ tua指数 順位 (1位→)":
+    filtered_df = filtered_df.sort_values(['tua_rank', '馬番'])
+elif sort_opt == "✨ Fup 順位 (1位→)":
+    filtered_df = filtered_df.sort_values(['Fup_rank', '馬番'])
 else:
     filtered_df = filtered_df.sort_values('馬番')
 
@@ -763,6 +785,7 @@ for _, row in filtered_df.iterrows():
     arms_badge = f"<span class='rank-1st'>🥇1位</span>" if row['arms_rank']==1 else f"{int(row['arms_rank'])}位"
     s_badge = f"<span class='rank-1st'>🥇1位</span>" if row['S_rank']==1 else f"{int(row['S_rank'])}位"
     tua_badge = f"<span class='rank-1st'>🥇1位</span>" if row['tua_rank']==1 else f"{int(row['tua_rank'])}位"
+    fup_badge = f"<span class='rank-1st'>🥇1位</span>" if row['Fup_rank']==1 else f"{int(row['Fup_rank'])}位"
     
     w_str = f"W: {row['wood_1F']:.1f}s 加速(+{row['wood_accel']:.1f}s)" if pd.notnull(row.get('wood_1F')) and row.get('is_wood_accel') else ("W: 計測有" if pd.notnull(row.get('wood_1F')) else "W: 計測無")
     s_str = "坂路: 完全加速" if row.get('坂路_完全加速') else ("坂路: 計測有" if pd.notnull(row.get('坂路_4F')) else "坂路: 計測無")
@@ -773,7 +796,7 @@ for _, row in filtered_df.iterrows():
         f"<ul class='horse-card-list'>"
         f"<li><strong>騎手/厩舎</strong>: {row.get('騎手')} / {row.get('調教師')} / <strong>父: {row.get('種牡馬', '-')}</strong></li>"
         f"<li><strong>調教ラップ</strong>: {w_str} | {s_str}</li>"
-        f"<li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge}) | Fup: <strong>{int(row.get('Fup', 0))}点</strong></li>"
+        f"<li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge}) | Fup: <strong>{int(row.get('Fup', 0))}点</strong> ({fup_badge})</li>"
         f"</ul></div>",
         unsafe_allow_html=True
     )
