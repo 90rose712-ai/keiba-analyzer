@@ -210,7 +210,68 @@ st.markdown("""
         font-weight: bold;
     }
 
-    /* 色分けバッジ */
+    /* === 調教加速色分けバッジ === */
+    .badge-accel-on {
+        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid #34d399;
+    }
+    .badge-accel-off {
+        background-color: #374151;
+        color: #9ca3af;
+        font-size: 11.5px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid #4b5563;
+    }
+
+    /* === 指数狙い目数値ハイライト === */
+    .val-f-super {
+        color: #1a1000;
+        background-color: #fcd34d;
+        font-weight: bold;
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid #f59e0b;
+    }
+    .val-f-high {
+        color: #ffffff;
+        background-color: #ea580c;
+        font-weight: bold;
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid #fb923c;
+    }
+    .val-arms-super {
+        color: #083344;
+        background-color: #38bdf8;
+        font-weight: bold;
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid #0284c7;
+    }
+    .val-tua-super {
+        color: #022c22;
+        background-color: #34d399;
+        font-weight: bold;
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid #059669;
+    }
+    .val-s-super {
+        color: #ffffff;
+        background-color: #8b5cf6;
+        font-weight: bold;
+        padding: 1px 6px;
+        border-radius: 4px;
+        border: 1px solid #c4b5fd;
+    }
+
+    /* 色分け同馬番バッジ */
     .badge-jk-ub {
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
         color: #ffffff;
@@ -256,8 +317,6 @@ st.markdown("""
         border-radius: 6px;
         border: 1px solid #fde68a;
     }
-
-    /* Fup6点+ × S/F6位内バッジ */
     .badge-fup6-sf {
         background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
         color: #ffffff;
@@ -268,7 +327,6 @@ st.markdown("""
         border: 1px solid #ffe4e6;
         box-shadow: 0 1px 4px rgba(255, 8, 68, 0.4);
     }
-
     .badge-cushion-fit {
         display: inline-flex;
         align-items: center;
@@ -291,7 +349,6 @@ st.markdown("""
         border-radius: 6px;
         border: 1px solid #f87171;
     }
-
     .badge-synergy {
         display: inline-flex;
         align-items: center;
@@ -526,7 +583,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['race_uid'] = df_main['race_id']
     detected_date = datetime.date(2026, 9, 6)
 
-    # ★ 坂路完全読み込み
+    # 坂路完全読み込み
     sakaro_patterns = ['data/出馬表_坂路*.csv', '出馬表_坂路*.csv', 'data/*坂路*.csv', '*坂路*.csv']
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
     if not df_s_raw.empty:
@@ -558,7 +615,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan; df_main['坂路_完全加速'] = False
 
-    # ★ ウッド完全読み込み（typo修正: c_w_l1 を使用）
+    # ウッド完全読み込み
     wood_patterns = ['data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv', 'data/*ウッド*.csv', '*ウッド*.csv']
     df_w_raw = read_csv_robust(f_wood, wood_patterns)
     if not df_w_raw.empty:
@@ -599,7 +656,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['same_ub_tr_races'] = df_main.apply(lambda r: ", ".join(tr_ub_grp.get((r['調教師'], r['馬番']), [])), axis=1)
     df_main['is_same_ub_tr'] = df_main['same_ub_tr_count'] >= 2
 
-    # 騎手または調教師の同馬番
     df_main['is_same_ub_any'] = df_main['is_same_ub_jk'] | df_main['is_same_ub_tr']
 
     return df_main, detected_date
@@ -983,10 +1039,12 @@ with col_s1:
             filtered_df['種牡馬'].str.contains(kw, na=False)
         ]
 with col_s2:
+    # ★ 加速順ソート機能を追加
     sort_opt = st.selectbox(
         "並び順",
         [
             "単勝人気順 (1人気→)",
+            "🚀 調教加速順 (W加速幅・坂路完全)",
             "馬番順",
             "🔥 F指数 順位 (1位→)",
             "🚀 arms指数 順位 (1位→)",
@@ -999,6 +1057,9 @@ with col_s2:
     )
 
 if sort_opt == "単勝人気順 (1人気→)": filtered_df = filtered_df.sort_values(['人気', '馬番'])
+elif sort_opt == "🚀 調教加速順 (W加速幅・坂路完全)":
+    filtered_df['sort_accel_score'] = filtered_df['wood_accel'].fillna(-99.0) + (filtered_df['坂路_完全加速'].astype(int) * 2.0)
+    filtered_df = filtered_df.sort_values(['sort_accel_score', '人気'], ascending=[False, True])
 elif sort_opt == "🔥 F指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['F_rank', '馬番'])
 elif sort_opt == "🚀 arms指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['arms_rank', '馬番'])
 elif sort_opt == "⚡ S指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['S_rank', '馬番'])
@@ -1062,23 +1123,71 @@ for _, row in filtered_df.iterrows():
     pop_str = f"{int(row['人気'])}人気" if pd.notnull(row['人気']) else "-人気"
     sire_display = row.get('種牡馬') if row.get('種牡馬') else "-"
     
+    # 指数順位バッジ
     f_badge = f"<span class='rank-1st'>🥇1位</span>" if row['F_rank']==1 else f"{int(row['F_rank'])}位"
     arms_badge = f"<span class='rank-1st'>🥇1位</span>" if row['arms_rank']==1 else f"{int(row['arms_rank'])}位"
     s_badge = f"<span class='rank-1st'>🥇1位</span>" if row['S_rank']==1 else f"{int(row['S_rank'])}位"
     tua_badge = f"<span class='rank-1st'>🥇1位</span>" if row['tua_rank']==1 else f"{int(row['tua_rank'])}位"
     fup_badge = f"<span class='rank-1st'>🥇1位</span>" if row['Fup_rank']==1 else f"{int(row['Fup_rank'])}位"
     
-    # 調教文字列の生成
+    # ★ 指数の狙い目数値ハイライト整形
+    f_val_num = float(row.get('F指数', 0.0))
+    if f_val_num >= 72.0:
+        f_val_html = f"<span class='val-f-super'>{f_val_num:.0f}</span>"
+    elif f_val_num >= 66.0:
+        f_val_html = f"<span class='val-f-high'>{f_val_num:.0f}</span>"
+    elif f_val_num >= 50.0:
+        f_val_html = f"<strong>{f_val_num:.0f}</strong>"
+    else:
+        f_val_html = f"{f_val_num:.0f}"
+
+    arms_val_num = float(row.get('arms', 0.0))
+    if arms_val_num >= 120.0:
+        arms_val_html = f"<span class='val-arms-super'>{arms_val_num:.0f}</span>"
+    elif arms_val_num >= 100.0:
+        arms_val_html = f"<strong>{arms_val_num:.0f}</strong>"
+    else:
+        arms_val_html = f"{arms_val_num:.0f}"
+
+    tua_val_num = float(row.get('tua', 0.0))
+    if tua_val_num >= 190.0:
+        tua_val_html = f"<span class='val-tua-super'>{tua_val_num:.0f}</span>"
+    else:
+        tua_val_html = f"{tua_val_num:.0f}"
+
+    s_val_num = float(row.get('S指数', 0.0))
+    if s_val_num >= 30.0:
+        s_val_html = f"<span class='val-s-super'>{s_val_num:.0f}</span>"
+    else:
+        s_val_html = f"{s_val_num:.0f}"
+
+    fup_val_num = int(row.get('Fup', 0))
+    if fup_val_num >= 5:
+        fup_val_html = f"<span class='val-f-super'>{fup_val_num}点</span>"
+    elif fup_val_num == 4:
+        fup_val_html = f"<strong style='color:#f97316;'>{fup_val_num}点</strong>"
+    else:
+        fup_val_html = f"{fup_val_num}点"
+
+    # ★ 調教テキストの生成（加速時に色付きバッジを付与）
     if pd.notnull(row.get('wood_1F')):
         w_5f_txt = f"{row['wood_5F']:.1f}s " if pd.notnull(row.get('wood_5F')) else ""
-        w_acc_txt = f"加速(+{row['wood_accel']:.1f}s)" if row.get('is_wood_accel') else f"減速({row['wood_accel']:.1f}s)" if pd.notnull(row.get('wood_accel')) else ""
-        w_str = f"W: {w_5f_txt}1F {row['wood_1F']:.1f}s {w_acc_txt}".strip()
+        if row.get('is_wood_accel'):
+            w_acc_badge = f"<span class='badge-accel-on'>加速 +{row['wood_accel']:.1f}s</span>"
+        elif pd.notnull(row.get('wood_accel')):
+            w_acc_badge = f"<span class='badge-accel-off'>減速 {row['wood_accel']:.1f}s</span>"
+        else:
+            w_acc_badge = ""
+        w_str = f"W: {w_5f_txt}1F {row['wood_1F']:.1f}s {w_acc_badge}".strip()
     else:
         w_str = "W: 計測無"
 
     if pd.notnull(row.get('坂路_4F')):
-        s_acc_txt = "完全加速" if row.get('坂路_完全加速') else "非加速"
-        s_str = f"坂路: 4F {row['坂路_4F']:.1f}s (1F {row['坂路_1F']:.1f}s) | {s_acc_txt}"
+        if row.get('坂路_完全加速'):
+            s_acc_badge = "<span class='badge-accel-on'>完全加速</span>"
+        else:
+            s_acc_badge = "<span class='badge-accel-off'>非加速</span>"
+        s_str = f"坂路: 4F {row['坂路_4F']:.1f}s (1F {row['坂路_1F']:.1f}s) {s_acc_badge}"
     else:
         s_str = "坂路: 計測無"
 
@@ -1087,8 +1196,8 @@ for _, row in filtered_df.iterrows():
         f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番 {row['馬名']} ({pop_str})</span> {' '.join(badges)}</div>"
         f"<ul class='horse-card-list'>"
         f"<li><strong>騎手/厩舎</strong>: {row.get('騎手')} / {row.get('調教師')} / <strong>父: {sire_display}</strong></li>"
-        f"<li><strong>調教ラップ</strong>: <strong>{w_str}</strong> | <strong>{s_str}</strong></li>"
-        f"<li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge}) | Fup: <strong>{int(row.get('Fup', 0))}点</strong> ({fup_badge})</li>"
+        f"<li><strong>調教ラップ</strong>: {w_str} | {s_str}</li>"
+        f"<li><strong>能力指数</strong>: F: {f_val_html} ({f_badge}) | ARMS: {arms_val_html} ({arms_badge}) | S: {s_val_html} ({s_badge}) | TUA: {tua_val_html} ({tua_badge}) | Fup: {fup_val_html} ({fup_badge})</li>"
         f"</ul></div>",
         unsafe_allow_html=True
     )
