@@ -327,6 +327,18 @@ st.markdown("""
         border: 1px solid #ffe4e6;
         box-shadow: 0 1px 4px rgba(255, 8, 68, 0.4);
     }
+    /* ★ 新設: SF7×加速/同枠バッジ */
+    .badge-sf7-himo {
+        background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #7dd3fc;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
     .badge-cushion-fit {
         display: inline-flex;
         align-items: center;
@@ -464,6 +476,21 @@ def evaluate_sire_cushion(sire_name, band):
     return ""
 
 
+# --- JRA枠番計算関数 ---
+def get_jra_waku(umaban, total_horses):
+    if total_horses <= 8:
+        return umaban
+    base = total_horses // 8
+    rem = total_horses % 8
+    waku_counts = [base + (1 if 8 - i <= rem else 0) for i in range(8)]
+    curr = 1
+    for w_idx, cnt in enumerate(waku_counts, start=1):
+        if curr <= umaban < curr + cnt:
+            return w_idx
+        curr += cnt
+    return 8
+
+
 # --- サイドバー: データ読み込み ---
 st.sidebar.markdown("### 📁 CSVデータ読み込み")
 with st.sidebar.expander("データ更新", expanded=False):
@@ -583,6 +610,10 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['race_uid'] = df_main['race_id']
     detected_date = datetime.date(2026, 9, 6)
 
+    # ★ 枠番の計算
+    df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
+    df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
+
     # 坂路完全読み込み
     sakaro_patterns = ['data/出馬表_坂路*.csv', '出馬表_坂路*.csv', 'data/*坂路*.csv', '*坂路*.csv']
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
@@ -656,7 +687,13 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['same_ub_tr_races'] = df_main.apply(lambda r: ", ".join(tr_ub_grp.get((r['調教師'], r['馬番']), [])), axis=1)
     df_main['is_same_ub_tr'] = df_main['same_ub_tr_count'] >= 2
 
+    # 騎手または調教師の同馬番
     df_main['is_same_ub_any'] = df_main['is_same_ub_jk'] | df_main['is_same_ub_tr']
+
+    # ★ 騎手または調教師の「同枠」集計
+    jk_waku_grp = df_main.groupby(['騎手', '枠番'])['race_id'].transform('count') >= 2
+    tr_waku_grp = df_main.groupby(['調教師', '枠番'])['race_id'].transform('count') >= 2
+    df_main['is_same_waku'] = jk_waku_grp | tr_waku_grp
 
     return df_main, detected_date
 
@@ -746,6 +783,12 @@ df['syn_same_ub_f6'] = df['is_same_ub_any'] & (df['F_rank'] <= 6)
 df['syn_same_ub_s6'] = df['is_same_ub_any'] & (df['S_rank'] <= 6)
 df['syn_same_ub_fs6'] = df['syn_same_ub_f6'] & df['syn_same_ub_s6']
 
+# ★ 【新設】SまたはFが7位以内 × (調教加速 または 同枠/同馬番)（穴・ヒモ激走ファクター）
+df['flag_sf7_himo'] = (
+    ((df['S_rank'] <= 7) | (df['F_rank'] <= 7)) &
+    (df['調教加速'] | df['is_same_waku'] | df['is_same_ub_any'])
+)
+
 
 # ==============================================================================
 # ★ サイドバー: 競馬場別クッション値 & 馬場状態
@@ -788,6 +831,7 @@ st.sidebar.markdown("### 🎯 狙い目抽出")
 filter_fup6_sf = st.sidebar.checkbox(f"🔥 Fup1位(6点+) × S/F6位内 ({int(df['flag_fup6_sf_any'].sum())}頭)", help="勝率25.0%・単回収200%超のアタマ特化")
 filter_target_win = st.sidebar.checkbox(f"🥇 1着狙い (勝率26%超) ({int(df['target_win'].sum())}頭)")
 filter_target_axis = st.sidebar.checkbox(f"🛡️ 軸・連対狙い (複勝率55%超) ({int(df['target_axis'].sum())}頭)")
+filter_sf7_himo = st.sidebar.checkbox(f"🌪️ SF7×加速/同枠 (穴ヒモ) ({int(df['flag_sf7_himo'].sum())}頭)", help="S/F7位内×加速/同枠。他指数低くても激走するヒモ")
 filter_target_himo = st.sidebar.checkbox(f"💣 紐穴狙い ({int(df['target_himo'].sum())}頭)")
 
 st.sidebar.markdown("### 🏇 同馬番（騎手・厩舎）抽出")
@@ -850,6 +894,7 @@ for _, r_row in races_in_v.iterrows():
     if (r_horses['syn_jk_ub_wood'] == True).any(): marks.append("👑騎")
     if (r_horses['syn_tr_ub_arms'] == True).any(): marks.append("🚀厩")
     if (r_horses['syn_same_ub_f6'] == True).any(): marks.append("🎯同")
+    if (r_horses['flag_sf7_himo'] == True).any(): marks.append("🌪️")
     if r_win_c >= 1: marks.append("🥇")
     if r_axis_c >= 1: marks.append("🛡️")
     if r_bomb_c >= 1: marks.append("💣")
@@ -934,10 +979,10 @@ if is_go:
         if h not in rec_c2: rec_c2.append(h)
         if len(rec_c2) >= 5: break
 
-    # 3着候補: 2着候補 + 同馬番×(F6位内 or S6位内) + 爆弾穴馬(騎手/厩舎同馬番穴含む) + arms100+
+    # 3着候補: 2着候補 + ★SF7×加速/同枠 + 同馬番×(F6位内 or S6位内) + 爆弾穴馬 + arms100+
     rec_c3 = list(rec_c2)
     for h in race_df[
-        race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] |
+        race_df['flag_sf7_himo'] | race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] |
         race_df['is_syn_bomb'] | race_df['syn_jk_ub_bomb'] | (race_df['arms'] >= 100)
     ]['馬番'].tolist():
         if h not in rec_c3: rec_c3.append(h)
@@ -972,7 +1017,7 @@ else:
         if len(rec_c2) >= 5: break
 
     rec_c3 = list(rec_c2)
-    for h in race_df[race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] | race_df['is_syn_bomb'] | race_df['syn_jk_ub_bomb']]['馬番'].tolist():
+    for h in race_df[race_df['flag_sf7_himo'] | race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] | race_df['is_syn_bomb'] | race_df['syn_jk_ub_bomb']]['馬番'].tolist():
         if h not in rec_c3: rec_c3.append(h)
     for h in race_df.sort_values('F_rank')['馬番'].tolist()[:7]:
         if h not in rec_c3: rec_c3.append(h)
@@ -1019,6 +1064,7 @@ if syn_bomb: filtered_df = filtered_df[filtered_df['is_syn_bomb']]
 if filter_fup6_sf: filtered_df = filtered_df[filtered_df['flag_fup6_sf_any']]
 if filter_target_win: filtered_df = filtered_df[filtered_df['target_win']]
 if filter_target_axis: filtered_df = filtered_df[filtered_df['target_axis']]
+if filter_sf7_himo: filtered_df = filtered_df[filtered_df['flag_sf7_himo']]
 if filter_target_himo: filtered_df = filtered_df[filtered_df['target_himo']]
 if filter_same_ub_jk: filtered_df = filtered_df[filtered_df['is_same_ub_jk']]
 if filter_same_ub_tr: filtered_df = filtered_df[filtered_df['is_same_ub_tr']]
@@ -1039,7 +1085,6 @@ with col_s1:
             filtered_df['種牡馬'].str.contains(kw, na=False)
         ]
 with col_s2:
-    # ★ 加速順ソート機能を追加
     sort_opt = st.selectbox(
         "並び順",
         [
@@ -1112,6 +1157,10 @@ for _, row in filtered_df.iterrows():
     elif row.get('syn_same_ub_s6'):
         badges.append("<span class='badge-same-ub-s6'>⚡ 同馬番×S6 (先行連対)</span>")
 
+    # ★ 新設: SF7×加速/同枠バッジ
+    if row.get('flag_sf7_himo'):
+        badges.append("<span class='badge-sf7-himo'>🌪️ SF7×加速/同枠</span>")
+
     if row.get('is_syn_bomb') or row.get('syn_jk_ub_bomb'):
         badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
 
@@ -1130,7 +1179,7 @@ for _, row in filtered_df.iterrows():
     tua_badge = f"<span class='rank-1st'>🥇1位</span>" if row['tua_rank']==1 else f"{int(row['tua_rank'])}位"
     fup_badge = f"<span class='rank-1st'>🥇1位</span>" if row['Fup_rank']==1 else f"{int(row['Fup_rank'])}位"
     
-    # ★ 指数の狙い目数値ハイライト整形
+    # 指数の狙い目数値ハイライト整形
     f_val_num = float(row.get('F指数', 0.0))
     if f_val_num >= 72.0:
         f_val_html = f"<span class='val-f-super'>{f_val_num:.0f}</span>"
@@ -1169,7 +1218,7 @@ for _, row in filtered_df.iterrows():
     else:
         fup_val_html = f"{fup_val_num}点"
 
-    # ★ 調教テキストの生成（加速時に色付きバッジを付与）
+    # 調教テキストの生成（加速時に色付きバッジを付与）
     if pd.notnull(row.get('wood_1F')):
         w_5f_txt = f"{row['wood_5F']:.1f}s " if pd.notnull(row.get('wood_5F')) else ""
         if row.get('is_wood_accel'):
@@ -1196,7 +1245,7 @@ for _, row in filtered_df.iterrows():
         f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番 {row['馬名']} ({pop_str})</span> {' '.join(badges)}</div>"
         f"<ul class='horse-card-list'>"
         f"<li><strong>騎手/厩舎</strong>: {row.get('騎手')} / {row.get('調教師')} / <strong>父: {sire_display}</strong></li>"
-        f"<li><strong>調教ラップ</strong>: {w_str} | {s_str}</li>"
+        f"<li><strong>調教ラップ</strong>: <strong>{w_str}</strong> | <strong>{s_str}</strong></li>"
         f"<li><strong>能力指数</strong>: F: {f_val_html} ({f_badge}) | ARMS: {arms_val_html} ({arms_badge}) | S: {s_val_html} ({s_badge}) | TUA: {tua_val_html} ({tua_badge}) | Fup: {fup_val_html} ({fup_badge})</li>"
         f"</ul></div>",
         unsafe_allow_html=True
