@@ -526,7 +526,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['race_uid'] = df_main['race_id']
     detected_date = datetime.date(2026, 9, 6)
 
-    # ★ 坂路完全読み込み（直下＆dataフォルダ両対応・表記揺れ完全吸収）
+    # ★ 坂路完全読み込み
     sakaro_patterns = ['data/出馬表_坂路*.csv', '出馬表_坂路*.csv', 'data/*坂路*.csv', '*坂路*.csv']
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
     if not df_s_raw.empty:
@@ -558,7 +558,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan; df_main['坂路_完全加速'] = False
 
-    # ★ ウッド完全読み込み（直下＆dataフォルダ両対応・表記揺れ完全吸収）
+    # ★ ウッド完全読み込み（typo修正: c_w_l1 を使用）
     wood_patterns = ['data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv', 'data/*ウッド*.csv', '*ウッド*.csv']
     df_w_raw = read_csv_robust(f_wood, wood_patterns)
     if not df_w_raw.empty:
@@ -573,7 +573,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_w_raw['wood_5F'] = pd.to_numeric(df_w_raw[c_w_5f], errors='coerce') if c_w_5f else np.nan
         df_w_raw['wood_1F'] = pd.to_numeric(df_w_raw[c_w_1f], errors='coerce') if c_w_1f else np.nan
         df_w_raw['wood_Lap2'] = pd.to_numeric(df_w_raw[c_w_l2], errors='coerce') if c_w_l2 else np.nan
-        df_w_raw['wood_Lap1'] = pd.to_numeric(df_w_raw[c_w_l1], errors='coerce') if c_l1 else np.nan
+        df_w_raw['wood_Lap1'] = pd.to_numeric(df_w_raw[c_w_l1], errors='coerce') if c_w_l1 else np.nan
 
         df_w_best = df_w_raw.dropna(subset=['wood_1F']).sort_values('wood_1F').drop_duplicates('clean_name', keep='first').copy()
         df_w_best['wood_accel'] = df_w_best['wood_Lap2'] - df_w_best['wood_Lap1']
@@ -599,6 +599,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['same_ub_tr_races'] = df_main.apply(lambda r: ", ".join(tr_ub_grp.get((r['調教師'], r['馬番']), [])), axis=1)
     df_main['is_same_ub_tr'] = df_main['same_ub_tr_count'] >= 2
 
+    # 騎手または調教師の同馬番
     df_main['is_same_ub_any'] = df_main['is_same_ub_jk'] | df_main['is_same_ub_tr']
 
     return df_main, detected_date
@@ -625,7 +626,7 @@ def is_danger_jk(row):
 df['is_danger_jockey'] = df.apply(is_danger_jk, axis=1)
 df['調教加速'] = df['坂路_完全加速'] | df['is_wood_accel']
 
-# ★ 【新設】Fup 1位(6点以上) × S/F6位以内（勝率25.0%・単回収200%超）
+# Fup 1位(6点以上) × S/F6位以内（勝率25.0%・単回収200%超）
 df['flag_fup6_s6'] = (df['Fup'] >= 6) & (df['Fup_rank'] == 1) & (df['S_rank'] <= 6)
 df['flag_fup6_f6'] = (df['Fup'] >= 6) & (df['Fup_rank'] == 1) & (df['F_rank'] <= 6)
 df['flag_fup6_sf_any'] = df['flag_fup6_s6'] | df['flag_fup6_f6']
@@ -684,7 +685,7 @@ df['syn_jk_ub_bomb'] = df['is_same_ub_jk'] & df['調教加速'] & (df['Fup'] >= 
 # 🏛️ 調教師同馬番 × シナジー（複勝率70%）
 df['syn_tr_ub_arms'] = df['is_same_ub_tr'] & (df['arms_rank'] <= 3)
 
-# 同馬番 × S・F指数6位以内（馬券内率34〜42%ゾーン）
+# 同馬番 × S・F指数6位以内
 df['syn_same_ub_f6'] = df['is_same_ub_any'] & (df['F_rank'] <= 6)
 df['syn_same_ub_s6'] = df['is_same_ub_any'] & (df['S_rank'] <= 6)
 df['syn_same_ub_fs6'] = df['syn_same_ub_f6'] & df['syn_same_ub_s6']
@@ -853,6 +854,7 @@ if is_go:
     pts_cls = "recom-pts"
     p_title = "🎯 【勝負推奨】3連単＆ワイド買い目（全ファクター網羅 / 馬番のみ）"
     
+    # 1着候補: 鉄板・高確率・騎手同馬番W加速・厩舎同馬番arms上位・Fup6+×S/F6・1着狙い
     c1_cands = race_df[
         race_df['is_syn_iron'] | race_df['is_syn_high'] | 
         race_df['syn_jk_ub_wood'] | race_df['syn_tr_ub_arms'] | 
@@ -866,6 +868,7 @@ if is_go:
             if len(c1_cands) >= 2: break
     rec_c1 = c1_cands[:3]
 
+    # 2着候補: 1着候補 + 軸連対 + tua上位 + S1位 + 同馬番×(F3位内 or S3位内) + クッション適性馬
     rec_c2 = list(rec_c1)
     for h in race_df[
         race_df['target_axis'] | (race_df['tua_rank'] <= 2) | (race_df['S_rank'] == 1) |
@@ -875,6 +878,7 @@ if is_go:
         if h not in rec_c2: rec_c2.append(h)
         if len(rec_c2) >= 5: break
 
+    # 3着候補: 2着候補 + 同馬番×(F6位内 or S6位内) + 爆弾穴馬(騎手/厩舎同馬番穴含む) + arms100+
     rec_c3 = list(rec_c2)
     for h in race_df[
         race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] |
@@ -1009,7 +1013,7 @@ for _, row in filtered_df.iterrows():
     if row.get('is_danger_jockey'):
         badges.append("<span class='badge-danger-jockey'>⚠️ 危険騎手【危】</span>")
 
-    # ★ Fup6+ × S/F6位内バッジ
+    # Fup6+ × S/F6位内バッジ
     if row.get('flag_fup6_s6'):
         badges.append("<span class='badge-fup6-sf'>🔥 Fup6+×S6 (勝率25%/回収200%)</span>")
     elif row.get('flag_fup6_f6'):
@@ -1064,7 +1068,7 @@ for _, row in filtered_df.iterrows():
     tua_badge = f"<span class='rank-1st'>🥇1位</span>" if row['tua_rank']==1 else f"{int(row['tua_rank'])}位"
     fup_badge = f"<span class='rank-1st'>🥇1位</span>" if row['Fup_rank']==1 else f"{int(row['Fup_rank'])}位"
     
-    # ★ 調教テキストの生成（実数値を確実に表示）
+    # 調教文字列の生成
     if pd.notnull(row.get('wood_1F')):
         w_5f_txt = f"{row['wood_5F']:.1f}s " if pd.notnull(row.get('wood_5F')) else ""
         w_acc_txt = f"加速(+{row['wood_accel']:.1f}s)" if row.get('is_wood_accel') else f"減速({row['wood_accel']:.1f}s)" if pd.notnull(row.get('wood_accel')) else ""
