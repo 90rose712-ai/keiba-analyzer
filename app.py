@@ -210,7 +210,6 @@ st.markdown("""
         font-weight: bold;
     }
 
-    /* === 調教加速色分けバッジ === */
     .badge-accel-on {
         background: linear-gradient(135deg, #059669 0%, #10b981 100%);
         color: #ffffff;
@@ -229,7 +228,6 @@ st.markdown("""
         border: 1px solid #4b5563;
     }
 
-    /* === 指数狙い目数値ハイライト === */
     .val-f-super {
         color: #1a1000;
         background-color: #fcd34d;
@@ -271,7 +269,6 @@ st.markdown("""
         border: 1px solid #c4b5fd;
     }
 
-    /* 色分け同馬番バッジ */
     .badge-jk-ub {
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
         color: #ffffff;
@@ -327,7 +324,6 @@ st.markdown("""
         border: 1px solid #ffe4e6;
         box-shadow: 0 1px 4px rgba(255, 8, 68, 0.4);
     }
-    /* ★ 新設: SF7×加速/同枠バッジ */
     .badge-sf7-himo {
         background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
         color: #ffffff;
@@ -423,6 +419,26 @@ st.markdown("""
     .rank-1st { color: #FFD700; font-weight: bold; }
     .rank-2nd { color: #E2E8F0; font-weight: bold; }
     .rank-3rd { color: #F97316; font-weight: bold; }
+
+    /* ★ リアルタイムオッズ・馬体重バッジ */
+    .badge-rt-odds {
+        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid #38bdf8;
+    }
+    .badge-rt-weight {
+        background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+        color: #f8fafc;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 7px;
+        border-radius: 4px;
+        border: 1px solid #94a3b8;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -610,7 +626,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['race_uid'] = df_main['race_id']
     detected_date = datetime.date(2026, 9, 6)
 
-    # ★ 枠番の計算
+    # 枠番の計算
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
 
@@ -690,7 +706,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     # 騎手または調教師の同馬番
     df_main['is_same_ub_any'] = df_main['is_same_ub_jk'] | df_main['is_same_ub_tr']
 
-    # ★ 騎手または調教師の「同枠」集計
+    # 騎手または調教師の同枠集計
     jk_waku_grp = df_main.groupby(['騎手', '枠番'])['race_id'].transform('count') >= 2
     tr_waku_grp = df_main.groupby(['調教師', '枠番'])['race_id'].transform('count') >= 2
     df_main['is_same_waku'] = jk_waku_grp | tr_waku_grp
@@ -703,6 +719,45 @@ df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
 if df.empty:
     st.warning("⚠️ CSVデータが読み込まれていません。サイドバーからファイルを指定してください。")
     st.stop()
+
+
+# ==============================================================================
+# ★ 【新設】JV-Link リアルタイムオッズ・発表馬体重 連携UI & セッション管理
+# ==============================================================================
+st.sidebar.markdown("---")
+st.sidebar.markdown("### ⚡ JV-Link リアルタイム連携")
+with st.sidebar.expander("オッズ・馬体重の速報取得", expanded=True):
+    # デフォルトは2026年9月6日中山11R等の16桁ID
+    default_rid = "2026090606040111"
+    target_race_id = st.text_input("レースID (16桁)", value=default_rid, help="年4+場2+回2+日2+R2+区分")
+    
+    if st.button("🔄 リアルタイムオッズ・馬体重を取得", use_container_width=True):
+        try:
+            from jv_realtime import get_jv_realtime_data
+            with st.spinner("JV-Linkから速報データを受信中..."):
+                df_odds_rt, df_weight_rt = get_jv_realtime_data(target_race_id)
+                st.session_state["realtime_odds"] = df_odds_rt
+                st.session_state["realtime_weight"] = df_weight_rt
+                st.success(f"取得完了: オッズ {len(df_odds_rt)}頭 / 馬体重 {len(df_weight_rt)}頭")
+        except Exception as e:
+            st.error(f"取得失敗: {e}")
+
+# リアルタイムデータの自動反映（マージ）
+if "realtime_odds" in st.session_state and not st.session_state["realtime_odds"].empty:
+    df_rt_o = st.session_state["realtime_odds"].copy()
+    df_rt_o['馬番'] = df_rt_o['馬番'].astype(int)
+    # 重複列があれば除外してからマージ
+    cols_to_use = [c for c in df_rt_o.columns if c == '馬番' or c not in df.columns]
+    df = pd.merge(df, df_rt_o[cols_to_use], on='馬番', how='left')
+    # 人気順位をリアルタイム人気でオーバーライド
+    if 'リアル単勝人気' in df.columns:
+        df['人気'] = df['リアル単勝人気'].combine_first(df['人気'])
+
+if "realtime_weight" in st.session_state and not st.session_state["realtime_weight"].empty:
+    df_rt_w = st.session_state["realtime_weight"].copy()
+    df_rt_w['馬番'] = df_rt_w['馬番'].astype(int)
+    cols_to_use = [c for c in df_rt_w.columns if c == '馬番' or c not in df.columns]
+    df = pd.merge(df, df_rt_w[cols_to_use], on='馬番', how='left')
 
 
 # ==============================================================================
@@ -783,7 +838,7 @@ df['syn_same_ub_f6'] = df['is_same_ub_any'] & (df['F_rank'] <= 6)
 df['syn_same_ub_s6'] = df['is_same_ub_any'] & (df['S_rank'] <= 6)
 df['syn_same_ub_fs6'] = df['syn_same_ub_f6'] & df['syn_same_ub_s6']
 
-# ★ 【新設】SまたはFが7位以内 × (調教加速 または 同枠/同馬番)（穴・ヒモ激走ファクター）
+# SまたはFが7位以内 × (調教加速 または 同枠/同馬番)（穴・ヒモ激走ファクター）
 df['flag_sf7_himo'] = (
     ((df['S_rank'] <= 7) | (df['F_rank'] <= 7)) &
     (df['調教加速'] | df['is_same_waku'] | df['is_same_ub_any'])
@@ -1157,7 +1212,7 @@ for _, row in filtered_df.iterrows():
     elif row.get('syn_same_ub_s6'):
         badges.append("<span class='badge-same-ub-s6'>⚡ 同馬番×S6 (先行連対)</span>")
 
-    # ★ 新設: SF7×加速/同枠バッジ
+    # SF7×加速/同枠バッジ
     if row.get('flag_sf7_himo'):
         badges.append("<span class='badge-sf7-himo'>🌪️ SF7×加速/同枠</span>")
 
@@ -1167,6 +1222,12 @@ for _, row in filtered_df.iterrows():
     # クッション値 × 種牡馬バッジ
     if row.get('cushion_badge'):
         badges.append(row['cushion_badge'])
+
+    # ★ リアルタイムオッズ・馬体重バッジ
+    if pd.notnull(row.get('リアル単勝オッズ')):
+        badges.append(f"<span class='badge-rt-odds'>単 {row['リアル単勝オッズ']:.1f}倍 ({int(row['人気'])}人気)</span>")
+    if pd.notnull(row.get('馬体重表示')):
+        badges.append(f"<span class='badge-rt-weight'>体重 {row['馬体重表示']}</span>")
 
     u_no = int(row['馬番']) if pd.notnull(row['馬番']) else 99
     pop_str = f"{int(row['人気'])}人気" if pd.notnull(row['人気']) else "-人気"
