@@ -210,7 +210,7 @@ st.markdown("""
         font-weight: bold;
     }
 
-    /* === 色分け同馬番バッジ === */
+    /* === 色分けバッジ === */
     .badge-jk-ub {
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
         color: #ffffff;
@@ -255,6 +255,18 @@ st.markdown("""
         padding: 2px 8px;
         border-radius: 6px;
         border: 1px solid #fde68a;
+    }
+
+    /* Fup6点+ × S/F6位内バッジ */
+    .badge-fup6-sf {
+        background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 11.5px;
+        padding: 2px 8px;
+        border-radius: 6px;
+        border: 1px solid #ffe4e6;
+        box-shadow: 0 1px 4px rgba(255, 8, 68, 0.4);
     }
 
     .badge-cushion-fit {
@@ -476,44 +488,62 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['race_uid'] = df_main['race_id']
     detected_date = datetime.date(2026, 9, 6)
 
-    # 坂路読み込み
+    # ★ 坂路完全修正（列名から直接堅牢にパース）
     sakaro_src = f_sakaro or (glob.glob('出馬表_坂路*.csv') or [None])[0]
     if sakaro_src:
-        s_lines = open(sakaro_src, 'r', encoding='shift-jis', errors='ignore').readlines() if isinstance(sakaro_src, str) else sakaro_src.read().decode('shift-jis', errors='ignore').splitlines()
-        s_records = []
-        for line in s_lines:
-            parts = [p.strip() for p in line.strip().split(',')]
-            if len(parts) < 4 or '馬名' in parts: continue
-            h_name = next((clean_horse_name(p) for p in parts if re.match(r'^[\u30A0-\u30FF\* \$]{2,}$', p)), None)
-            nums = [pd.to_numeric(p, errors='coerce') for p in parts if pd.to_numeric(p, errors='coerce') and 10.0 <= pd.to_numeric(p, errors='coerce') <= 120.0]
-            if h_name and len(nums) >= 8:
-                s_records.append({'馬名': h_name, '坂路_4F': nums[0], '坂路_1F': nums[3], '坂路_Lap4': nums[4], '坂路_Lap3': nums[5], '坂路_Lap2': nums[6], '坂路_Lap1': nums[7]})
-        if s_records:
-            df_s = pd.DataFrame(s_records).drop_duplicates('馬名')
-            df_s['坂路_完全加速'] = (df_s['坂路_Lap4'] > df_s['坂路_Lap3']) & (df_s['坂路_Lap3'] > df_s['坂路_Lap2']) & (df_s['坂路_Lap2'] > df_s['坂路_Lap1'])
-            df_main = pd.merge(df_main, df_s[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']], on='馬名', how='left')
+        try:
+            df_s_raw = pd.read_csv(sakaro_src, encoding='shift-jis')
+            c_s_name = next((c for c in ['馬名', '競走馬名'] if c in df_s_raw.columns), None)
+            if c_s_name:
+                df_s_raw['馬名'] = df_s_raw[c_s_name].apply(clean_horse_name)
+                df_s_raw['坂路_4F'] = pd.to_numeric(df_s_raw['Time1' if 'Time1' in df_s_raw.columns else '4F'], errors='coerce')
+                df_s_raw['坂路_1F'] = pd.to_numeric(df_s_raw['Time4' if 'Time4' in df_s_raw.columns else '1F'], errors='coerce')
+                df_s_raw['坂路_Lap4'] = pd.to_numeric(df_s_raw['Lap4'], errors='coerce') if 'Lap4' in df_s_raw.columns else np.nan
+                df_s_raw['坂路_Lap3'] = pd.to_numeric(df_s_raw['Lap3'], errors='coerce') if 'Lap3' in df_s_raw.columns else np.nan
+                df_s_raw['坂路_Lap2'] = pd.to_numeric(df_s_raw['Lap2'], errors='coerce') if 'Lap2' in df_s_raw.columns else np.nan
+                df_s_raw['坂路_Lap1'] = pd.to_numeric(df_s_raw['Lap1'], errors='coerce') if 'Lap1' in df_s_raw.columns else np.nan
 
-    if '坂路_完全加速' not in df_main.columns:
+                df_s_best = df_s_raw.dropna(subset=['坂路_4F']).sort_values('坂路_4F').drop_duplicates('馬名', keep='first').copy()
+                df_s_best['坂路_完全加速'] = (
+                    (df_s_best['坂路_Lap4'] > df_s_best['坂路_Lap3']) &
+                    (df_s_best['坂路_Lap3'] > df_s_best['坂路_Lap2']) &
+                    (df_s_best['坂路_Lap2'] > df_s_best['坂路_Lap1'])
+                )
+                df_main = pd.merge(df_main, df_s_best[['馬名', '坂路_4F', '坂路_1F', '坂路_完全加速']], on='馬名', how='left')
+        except Exception:
+            pass
+
+    if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan; df_main['坂路_完全加速'] = False
 
-    # ウッド読み込み
+    # ★ ウッド完全修正（列名から直接堅牢にパース）
     wood_src = f_wood or (glob.glob('出馬表_ウッド*.csv') or [None])[0]
     if wood_src:
         try:
             w_df = pd.read_csv(wood_src, encoding='shift-jis')
-            c_name = next((c for c in ['馬名', '競走馬名'] if c in w_df.columns), w_df.columns[1])
-            w_df['馬名'] = w_df[c_name].apply(clean_horse_name)
-            c_1f = next((c for c in w_df.columns if '1F' in c.upper()), None)
-            c_l2 = next((c for c in w_df.columns if 'LAP2' in c.upper()), None)
-            c_l1 = next((c for c in w_df.columns if 'LAP1' in c.upper()), None)
-            w_df['wood_1F'] = pd.to_numeric(w_df[c_1f], errors='coerce')
-            w_df['wood_accel'] = pd.to_numeric(w_df[c_l2], errors='coerce') - pd.to_numeric(w_df[c_l1], errors='coerce')
-            w_df['is_wood_accel'] = (w_df['wood_accel'] > 0) & (w_df['wood_accel'].notna())
-            df_main = pd.merge(df_main, w_df[['馬名', 'wood_1F', 'wood_accel', 'is_wood_accel']].drop_duplicates('馬名'), on='馬名', how='left')
-        except Exception: pass
+            c_w_name = next((c for c in ['馬名', '競走馬名'] if c in w_df.columns), None)
+            if c_w_name:
+                w_df['馬名'] = w_df[c_w_name].apply(clean_horse_name)
+                c_5f = next((c for c in w_df.columns if '5F' in c.upper()), None)
+                c_1f = next((c for c in w_df.columns if '1F' in c.upper()), None)
+                c_l2 = next((c for c in w_df.columns if 'LAP2' in c.upper()), None)
+                c_l1 = next((c for c in w_df.columns if 'LAP1' in c.upper()), None)
 
-    if 'is_wood_accel' not in df_main.columns:
-        df_main['wood_1F'] = np.nan; df_main['wood_accel'] = np.nan; df_main['is_wood_accel'] = False
+                w_df['wood_5F'] = pd.to_numeric(w_df[c_5f], errors='coerce') if c_5f else np.nan
+                w_df['wood_1F'] = pd.to_numeric(w_df[c_1f], errors='coerce') if c_1f else np.nan
+                w_df['wood_Lap2'] = pd.to_numeric(w_df[c_l2], errors='coerce') if c_l2 else np.nan
+                w_df['wood_Lap1'] = pd.to_numeric(w_df[c_l1], errors='coerce') if c_l1 else np.nan
+
+                w_df_best = w_df.dropna(subset=['wood_1F']).sort_values('wood_1F').drop_duplicates('馬名', keep='first').copy()
+                w_df_best['wood_accel'] = w_df_best['wood_Lap2'] - w_df_best['wood_Lap1']
+                w_df_best['is_wood_accel'] = (w_df_best['wood_accel'] > 0) & (w_df_best['wood_accel'].notna())
+
+                df_main = pd.merge(df_main, w_df_best[['馬名', 'wood_5F', 'wood_1F', 'wood_accel', 'is_wood_accel']], on='馬名', how='left')
+        except Exception:
+            pass
+
+    if 'wood_1F' not in df_main.columns:
+        df_main['wood_5F'] = np.nan; df_main['wood_1F'] = np.nan; df_main['wood_accel'] = np.nan; df_main['is_wood_accel'] = False
 
     df_main['坂路_完全加速'] = df_main['坂路_完全加速'].fillna(False).astype(bool)
     df_main['is_wood_accel'] = df_main['is_wood_accel'].fillna(False).astype(bool)
@@ -557,12 +587,18 @@ def is_danger_jk(row):
 df['is_danger_jockey'] = df.apply(is_danger_jk, axis=1)
 df['調教加速'] = df['坂路_完全加速'] | df['is_wood_accel']
 
+# ★ 【新設】Fup 1位(6点以上) × S/F6位以内（勝率25.0%・単回収200%超）
+df['flag_fup6_s6'] = (df['Fup'] >= 6) & (df['Fup_rank'] == 1) & (df['S_rank'] <= 6)
+df['flag_fup6_f6'] = (df['Fup'] >= 6) & (df['Fup_rank'] == 1) & (df['F_rank'] <= 6)
+df['flag_fup6_sf_any'] = df['flag_fup6_s6'] | df['flag_fup6_f6']
+
 # 🥇 1着狙い（勝率26%超）
 df['target_win'] = (
     ((df['F_rank'] == 1) & (df['arms_rank'] == 1)) |
     ((df['Fup'] >= 5) & (df['F_rank'] == 1)) |
     ((df['F_rank'] == 1) & (df['arms_rank'] <= 3) & (df['S_rank'] <= 3)) |
-    ((df['F指数'] >= 66) & (df['arms_rank'] == 1))
+    ((df['F指数'] >= 66) & (df['arms_rank'] == 1)) |
+    df['flag_fup6_sf_any']
 ) & (~df['is_danger_jockey'])
 
 # 🛡️ 軸・連対狙い（複勝率55%超）
@@ -610,7 +646,7 @@ df['syn_jk_ub_bomb'] = df['is_same_ub_jk'] & df['調教加速'] & (df['Fup'] >= 
 # 🏛️ 調教師同馬番 × シナジー（複勝率70%）
 df['syn_tr_ub_arms'] = df['is_same_ub_tr'] & (df['arms_rank'] <= 3)
 
-# ★ 【新設】同馬番 × S・F指数6位以内（馬券内率34〜42%ゾーン）
+# 同馬番 × S・F指数6位以内（馬券内率34〜42%ゾーン）
 df['syn_same_ub_f6'] = df['is_same_ub_any'] & (df['F_rank'] <= 6)
 df['syn_same_ub_s6'] = df['is_same_ub_any'] & (df['S_rank'] <= 6)
 df['syn_same_ub_fs6'] = df['syn_same_ub_f6'] & df['syn_same_ub_s6']
@@ -654,6 +690,7 @@ syn_f1_rap = st.sidebar.checkbox(f"🔥 SSS級・F1位×究極ラップ ({int(df
 syn_bomb = st.sidebar.checkbox(f"💣 爆弾穴馬 ({int(df['is_syn_bomb'].sum())}頭)", help="6人気以下×Fup4点以上×調教加速")
 
 st.sidebar.markdown("### 🎯 狙い目抽出")
+filter_fup6_sf = st.sidebar.checkbox(f"🔥 Fup1位(6点+) × S/F6位内 ({int(df['flag_fup6_sf_any'].sum())}頭)", help="勝率25.0%・単回収200%超のアタマ特化")
 filter_target_win = st.sidebar.checkbox(f"🥇 1着狙い (勝率26%超) ({int(df['target_win'].sum())}頭)")
 filter_target_axis = st.sidebar.checkbox(f"🛡️ 軸・連対狙い (複勝率55%超) ({int(df['target_axis'].sum())}頭)")
 filter_target_himo = st.sidebar.checkbox(f"💣 紐穴狙い ({int(df['target_himo'].sum())}頭)")
@@ -714,6 +751,7 @@ for _, r_row in races_in_v.iterrows():
     marks = []
     if r_iron_c >= 1: marks.append("💎鉄")
     if r_high_c >= 1: marks.append("🌟高")
+    if (r_horses['flag_fup6_sf_any'] == True).any(): marks.append("🔥頭")
     if (r_horses['syn_jk_ub_wood'] == True).any(): marks.append("👑騎")
     if (r_horses['syn_tr_ub_arms'] == True).any(): marks.append("🚀厩")
     if (r_horses['syn_same_ub_f6'] == True).any(): marks.append("🎯同")
@@ -733,7 +771,7 @@ is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filte
 
 
 # ==============================================================================
-# ★ レース判定バナー ＆ 【同馬番×F/S6位内を完全網羅】推奨買い目
+# ★ レース判定バナー ＆ 全ファクター網羅の推奨買い目
 # ==============================================================================
 r_high_cnt = int((race_df['is_syn_high'] == True).sum())
 r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
@@ -767,7 +805,6 @@ is_f1_ok = (f1_val_cur >= 60)
 
 is_go = is_solid and (not danger_in_fav3) and is_f1_ok
 
-# クッション値適性
 race_df['cushion_badge_raw'] = race_df['種牡馬'].apply(lambda s: evaluate_sire_cushion(s, current_band) if is_turf_race else "")
 race_df['is_cushion_fit'] = race_df['cushion_badge_raw'].str.contains('クッション適|軟馬場適')
 
@@ -778,11 +815,11 @@ if is_go:
     pts_cls = "recom-pts"
     p_title = "🎯 【勝負推奨】3連単＆ワイド買い目（全ファクター網羅 / 馬番のみ）"
     
-    # 1着候補: 鉄板・高確率・騎手同馬番W加速・厩舎同馬番arms上位・1着狙い
+    # 1着候補: 鉄板・高確率・騎手同馬番W加速・厩舎同馬番arms上位・Fup6+×S/F6・1着狙い
     c1_cands = race_df[
         race_df['is_syn_iron'] | race_df['is_syn_high'] | 
         race_df['syn_jk_ub_wood'] | race_df['syn_tr_ub_arms'] | 
-        race_df['target_win']
+        race_df['flag_fup6_sf_any'] | race_df['target_win']
     ].sort_values('F_rank')['馬番'].tolist()
     
     if len(c1_cands) < 2:
@@ -802,7 +839,7 @@ if is_go:
         if h not in rec_c2: rec_c2.append(h)
         if len(rec_c2) >= 5: break
 
-    # 3着候補: 2着候補 + ★同馬番×(F6位内 or S6位内) + 爆弾穴馬(騎手/厩舎同馬番穴含む) + arms100+
+    # 3着候補: 2着候補 + 同馬番×(F6位内 or S6位内) + 爆弾穴馬(騎手/厩舎同馬番穴含む) + arms100+
     rec_c3 = list(rec_c2)
     for h in race_df[
         race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] |
@@ -821,13 +858,12 @@ else:
     pts_cls = "recom-pts-skip"
     p_title = "⚠️ 【参考算出】波乱・混戦対応型 買い目（全ファクター網羅 / 馬番のみ）"
 
-    # 混戦・波乱用: 頭を広げて高配当を捕獲
     c1_cands = []
     for h in race_df.sort_values('F_rank')['馬番'].tolist()[:3]:
         if h not in c1_cands: c1_cands.append(h)
-    for h in race_df.sort_values('arms_rank')['馬番'].tolist()[:1]:
+    for h in race_df[race_df['flag_fup6_sf_any']]['馬番'].tolist():
         if h not in c1_cands: c1_cands.append(h)
-    for h in race_df[race_df['syn_jk_ub_wood'] | race_df['syn_tr_ub_arms']]['馬番'].tolist()[:1]:
+    for h in race_df.sort_values('arms_rank')['馬番'].tolist()[:1]:
         if h not in c1_cands: c1_cands.append(h)
     rec_c1 = c1_cands[:4]
 
@@ -885,6 +921,7 @@ if syn_high: filtered_df = filtered_df[filtered_df['is_syn_high']]
 if syn_fup_sakaro: filtered_df = filtered_df[filtered_df['is_syn_fup_sakaro']]
 if syn_f1_rap: filtered_df = filtered_df[filtered_df['is_syn_f1_rap']]
 if syn_bomb: filtered_df = filtered_df[filtered_df['is_syn_bomb']]
+if filter_fup6_sf: filtered_df = filtered_df[filtered_df['flag_fup6_sf_any']]
 if filter_target_win: filtered_df = filtered_df[filtered_df['target_win']]
 if filter_target_axis: filtered_df = filtered_df[filtered_df['target_axis']]
 if filter_target_himo: filtered_df = filtered_df[filtered_df['target_himo']]
@@ -936,6 +973,13 @@ for _, row in filtered_df.iterrows():
     badges = []
     if row.get('is_danger_jockey'):
         badges.append("<span class='badge-danger-jockey'>⚠️ 危険騎手【危】</span>")
+
+    # ★ Fup6+ × S/F6位内バッジ
+    if row.get('flag_fup6_s6'):
+        badges.append("<span class='badge-fup6-sf'>🔥 Fup6+×S6 (勝率25%/回収200%)</span>")
+    elif row.get('flag_fup6_f6'):
+        badges.append("<span class='badge-fup6-sf'>🔥 Fup6+×F6 (勝率25%)</span>")
+
     if row.get('target_win'):
         badges.append("<span class='badge-target-win'>🥇 1着狙い (勝率26%超)</span>")
     elif row.get('target_axis'):
@@ -960,7 +1004,7 @@ for _, row in filtered_df.iterrows():
     elif row.get('is_same_ub_tr'):
         badges.append(f"<span class='badge-tr-ub'>🏛️ 厩舎同馬番{row['same_ub_tr_count']}回目 ({row['same_ub_tr_races']})</span>")
 
-    # ★ 【新設】同馬番 × F/S6位以内 バッジ
+    # 同馬番 × F/S6位以内 バッジ
     if row.get('syn_same_ub_fs6'):
         badges.append("<span class='badge-same-ub-fs6'>👑 同馬番×FS6 (複勝42%)</span>")
     elif row.get('syn_same_ub_f6'):
@@ -985,15 +1029,26 @@ for _, row in filtered_df.iterrows():
     tua_badge = f"<span class='rank-1st'>🥇1位</span>" if row['tua_rank']==1 else f"{int(row['tua_rank'])}位"
     fup_badge = f"<span class='rank-1st'>🥇1位</span>" if row['Fup_rank']==1 else f"{int(row['Fup_rank'])}位"
     
-    w_str = f"W: {row['wood_1F']:.1f}s 加速(+{row['wood_accel']:.1f}s)" if pd.notnull(row.get('wood_1F')) and row.get('is_wood_accel') else ("W: 計測有" if pd.notnull(row.get('wood_1F')) else "W: 計測無")
-    s_str = "坂路: 完全加速" if row.get('坂路_完全加速') else ("坂路: 計測有" if pd.notnull(row.get('坂路_4F')) else "坂路: 計測無")
+    # 調教文字列の生成（正確に実数値を表示）
+    if pd.notnull(row.get('wood_1F')):
+        w_5f_txt = f"{row['wood_5F']:.1f}s " if pd.notnull(row.get('wood_5F')) else ""
+        w_acc_txt = f"加速(+{row['wood_accel']:.1f}s)" if row.get('is_wood_accel') else f"減速({row['wood_accel']:.1f}s)" if pd.notnull(row.get('wood_accel')) else ""
+        w_str = f"W: {w_5f_txt}1F {row['wood_1F']:.1f}s {w_acc_txt}".strip()
+    else:
+        w_str = "W: 計測無"
+
+    if pd.notnull(row.get('坂路_4F')):
+        s_acc_txt = "完全加速" if row.get('坂路_完全加速') else "非加速"
+        s_str = f"坂路: 4F {row['坂路_4F']:.1f}s (1F {row['坂路_1F']:.1f}s) | {s_acc_txt}"
+    else:
+        s_str = "坂路: 計測無"
 
     st.markdown(
         f"<div class='horse-card'>"
         f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番 {row['馬名']} ({pop_str})</span> {' '.join(badges)}</div>"
         f"<ul class='horse-card-list'>"
         f"<li><strong>騎手/厩舎</strong>: {row.get('騎手')} / {row.get('調教師')} / <strong>父: {sire_display}</strong></li>"
-        f"<li><strong>調教ラップ</strong>: {w_str} | {s_str}</li>"
+        f"<li><strong>調教ラップ</strong>: <strong>{w_str}</strong> | <strong>{s_str}</strong></li>"
         f"<li><strong>能力指数</strong>: F: <strong>{row.get('F指数', 0.0)}</strong> ({f_badge}) | ARMS: <strong>{row.get('arms', 0.0)}</strong> ({arms_badge}) | S: <strong>{row.get('S指数', 0.0)}</strong> ({s_badge}) | TUA: <strong>{row.get('tua', 0.0)}</strong> ({tua_badge}) | Fup: <strong>{int(row.get('Fup', 0))}点</strong> ({fup_badge})</li>"
         f"</ul></div>",
         unsafe_allow_html=True
