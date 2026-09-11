@@ -327,7 +327,6 @@ st.markdown("""
         border: 1px solid #ffe4e6;
         box-shadow: 0 1px 4px rgba(255, 8, 68, 0.4);
     }
-    /* ★ 新設: SF7×加速/同枠バッジ */
     .badge-sf7-himo {
         background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
         color: #ffffff;
@@ -426,11 +425,9 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-
 # --- 危険騎手リスト ---
 DANGER_JOCKEYS_F3 = ['斎藤新', '小沢大仁', '丸山元気', '池添謙一', '松若風馬', '菊沢一樹', '田辺裕信', '横山琉人', '岩田康誠', '吉田隼人', '菅原明良', '富田暁', '三浦皇成', '浜中俊', '鮫島克駿']
 DANGER_JOCKEYS_GENERAL = ['小林脩斗', '川端海翼', '黛弘人', '野中悠太', '遠藤汰月', '亀田温心', '水沼元輝', '丸田恭介', '河原田菜', '古川吉洋', '国分優作', '永島まな', '柴田裕一', '木幡初也', '原田和真', '柴田大知', '古川奈穂', '中井裕二', '石橋脩', '嶋田純次']
-
 
 # --- クッション値と種牡馬の適性マッピング ---
 def get_cushion_band(venue, c_val):
@@ -445,7 +442,6 @@ def get_cushion_band(venue, c_val):
         elif c_val >= 9.5: return "standard_high"
         elif c_val >= 9.0: return "standard"
         else: return "low"
-
 
 def evaluate_sire_cushion(sire_name, band):
     if not sire_name or pd.isnull(sire_name): return ""
@@ -475,7 +471,6 @@ def evaluate_sire_cushion(sire_name, band):
             
     return ""
 
-
 # --- JRA枠番計算関数 ---
 def get_jra_waku(umaban, total_horses):
     if total_horses <= 8:
@@ -490,7 +485,6 @@ def get_jra_waku(umaban, total_horses):
         curr += cnt
     return 8
 
-
 # --- サイドバー: データ読み込み ---
 st.sidebar.markdown("### 📁 CSVデータ読み込み")
 with st.sidebar.expander("データ更新", expanded=False):
@@ -498,24 +492,24 @@ with st.sidebar.expander("データ更新", expanded=False):
     up_sakaro = st.file_uploader("坂路調教 CSV", type=['csv'], key='up_sakaro')
     up_wood = st.file_uploader("ウッド調教 CSV", type=['csv'], key='up_wood')
 
-
 def clean_horse_name(name):
     if pd.isnull(name): return ""
     return str(name).strip().replace('*', '').replace('$', '').replace(' ', '').replace(' ', '')
 
-
+# --- 改善版: CSV読み込み・最新ファイル自動検出 ---
 def read_csv_robust(file_obj, candidate_patterns):
     src = file_obj
     if src is None:
+        matched = []
         for pat in candidate_patterns:
-            matches = glob.glob(pat)
-            if matches:
-                src = matches[0]
-                break
+            matched.extend(glob.glob(pat))
+        if matched:
+            # 最新の更新日時のファイルを優先取得
+            src = max(matched, key=os.path.getmtime)
     if src is None:
         return pd.DataFrame()
 
-    encodings = ['shift-jis', 'cp932', 'utf-8-sig', 'utf-8']
+    encodings = ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']
     for enc in encodings:
         try:
             if hasattr(src, 'seek'):
@@ -527,7 +521,6 @@ def read_csv_robust(file_obj, candidate_patterns):
             continue
     return pd.DataFrame()
 
-
 def find_col_regex(df, patterns):
     for pat in patterns:
         for col in df.columns:
@@ -535,24 +528,32 @@ def find_col_regex(df, patterns):
                 return col
     return None
 
-
-@st.cache_data
+# キャッシュデコレータを廃止し、最新のアップロード・ファイルを都度反映
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = ['data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv']
     index_src = f_index
     if index_src is None:
+        matched = []
         for pat in index_patterns:
-            matches = glob.glob(pat)
-            if matches: index_src = matches[0]; break
+            matched.extend(glob.glob(pat))
+        if matched:
+            index_src = max(matched, key=os.path.getmtime)
 
     records = []
     if index_src is not None:
-        if isinstance(index_src, str):
-            lines = open(index_src, 'r', encoding='shift-jis', errors='ignore').readlines()
-        else:
-            try: index_src.seek(0)
-            except Exception: pass
-            lines = index_src.read().decode('shift-jis', errors='ignore').splitlines()
+        lines = []
+        for enc in ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']:
+            try:
+                if isinstance(index_src, str):
+                    with open(index_src, 'r', encoding=enc, errors='ignore') as f:
+                        lines = f.readlines()
+                else:
+                    index_src.seek(0)
+                    lines = index_src.read().decode(enc, errors='ignore').splitlines()
+                if lines:
+                    break
+            except Exception:
+                continue
 
         fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
                   '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
@@ -610,15 +611,15 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['race_uid'] = df_main['race_id']
     detected_date = datetime.date(2026, 9, 6)
 
-    # ★ 枠番の計算
+    # 枠番の計算
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
 
-    # 坂路完全読み込み
+    # 坂路調教CSV読み込み
     sakaro_patterns = ['data/出馬表_坂路*.csv', '出馬表_坂路*.csv', 'data/*坂路*.csv', '*坂路*.csv']
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
     if not df_s_raw.empty:
-        c_s_name = find_col_regex(df_s_raw, ['^馬名$', '^競走馬名$']) or df_s_raw.columns[4] if len(df_s_raw.columns) > 4 else df_s_raw.columns[1]
+        c_s_name = find_col_regex(df_s_raw, ['^馬名$', '^競走馬名$']) or (df_s_raw.columns[4] if len(df_s_raw.columns) > 4 else df_s_raw.columns[1])
         df_s_raw['clean_name'] = df_s_raw[c_s_name].apply(clean_horse_name)
 
         c_s_4f = find_col_regex(df_s_raw, ['^time1$', '^4f$', '^４ｆ$', '^4Ｆ$'])
@@ -639,18 +640,20 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_s_best['坂路_完全加速'] = (
             (df_s_best['坂路_Lap4'] > df_s_best['坂路_Lap3']) &
             (df_s_best['坂路_Lap3'] > df_s_best['坂路_Lap2']) &
-            (df_s_best['坂路_Lap2'] > df_s_best['坂路_Lap1'])
+            (df_s_best['坂路_Lap2'] > df_s_best['坂路_Lap1']) &
+            (df_s_best['坂路_4F'] <= 56.0) &
+            (df_s_best['坂路_Lap1'] <= 13.0)
         )
         df_main = pd.merge(df_main, df_s_best[['clean_name', '坂路_4F', '坂路_1F', '坂路_完全加速']], left_on='馬名', right_on='clean_name', how='left')
 
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan; df_main['坂路_完全加速'] = False
 
-    # ウッド完全読み込み
+    # ウッド調教CSV読み込み
     wood_patterns = ['data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv', 'data/*ウッド*.csv', '*ウッド*.csv']
     df_w_raw = read_csv_robust(f_wood, wood_patterns)
     if not df_w_raw.empty:
-        c_w_name = find_col_regex(df_w_raw, ['^馬名$', '^競走馬名$']) or df_w_raw.columns[4] if len(df_w_raw.columns) > 4 else df_w_raw.columns[1]
+        c_w_name = find_col_regex(df_w_raw, ['^馬名$', '^競走馬名$']) or (df_w_raw.columns[4] if len(df_w_raw.columns) > 4 else df_w_raw.columns[1])
         df_w_raw['clean_name'] = df_w_raw[c_w_name].apply(clean_horse_name)
 
         c_w_5f = find_col_regex(df_w_raw, ['^5f$', '^５ｆ$', '^5Ｆ$'])
@@ -690,14 +693,14 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     # 騎手または調教師の同馬番
     df_main['is_same_ub_any'] = df_main['is_same_ub_jk'] | df_main['is_same_ub_tr']
 
-    # ★ 騎手または調教師の「同枠」集計
+    # 騎手または調教師の「同枠」集計
     jk_waku_grp = df_main.groupby(['騎手', '枠番'])['race_id'].transform('count') >= 2
     tr_waku_grp = df_main.groupby(['調教師', '枠番'])['race_id'].transform('count') >= 2
     df_main['is_same_waku'] = jk_waku_grp | tr_waku_grp
 
     return df_main, detected_date
 
-
+# データロード
 df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
 
 if df.empty:
@@ -783,7 +786,7 @@ df['syn_same_ub_f6'] = df['is_same_ub_any'] & (df['F_rank'] <= 6)
 df['syn_same_ub_s6'] = df['is_same_ub_any'] & (df['S_rank'] <= 6)
 df['syn_same_ub_fs6'] = df['syn_same_ub_f6'] & df['syn_same_ub_s6']
 
-# ★ 【新設】SまたはFが7位以内 × (調教加速 または 同枠/同馬番)（穴・ヒモ激走ファクター）
+# ★ SまたはFが7位以内 × (調教加速 または 同枠/同馬番)（穴・ヒモ激走ファクター）
 df['flag_sf7_himo'] = (
     ((df['S_rank'] <= 7) | (df['F_rank'] <= 7)) &
     (df['調教加速'] | df['is_same_waku'] | df['is_same_ub_any'])
@@ -848,7 +851,7 @@ st.sidebar.markdown("### ⚠️ 危険警告")
 filter_danger_jockey = st.sidebar.checkbox(f"⚠️ 危険騎手【危】のみ表示 ({int(df['is_danger_jockey'].sum())}頭)")
 
 if st.sidebar.button("🔄 最新データ再読み込み", use_container_width=True):
-    st.cache_data.clear()
+    st.session_state.clear()
     st.rerun()
 
 
@@ -1157,7 +1160,7 @@ for _, row in filtered_df.iterrows():
     elif row.get('syn_same_ub_s6'):
         badges.append("<span class='badge-same-ub-s6'>⚡ 同馬番×S6 (先行連対)</span>")
 
-    # ★ 新設: SF7×加速/同枠バッジ
+    # SF7×加速/同枠バッジ
     if row.get('flag_sf7_himo'):
         badges.append("<span class='badge-sf7-himo'>🌪️ SF7×加速/同枠</span>")
 
@@ -1218,7 +1221,7 @@ for _, row in filtered_df.iterrows():
     else:
         fup_val_html = f"{fup_val_num}点"
 
-    # 調教テキストの生成（加速時に色付きバッジを付与）
+    # 調教テキストの生成
     if pd.notnull(row.get('wood_1F')):
         w_5f_txt = f"{row['wood_5F']:.1f}s " if pd.notnull(row.get('wood_5F')) else ""
         if row.get('is_wood_accel'):
