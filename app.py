@@ -1,1313 +1,613 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
 import os
 import glob
-import re
-import datetime
+import numpy as np
+import pandas as pd
+import streamlit as st
 
-# --- ページ基本設定 ---
+# ==========================================
+# ページ基本設定
+# ==========================================
 st.set_page_config(
-    page_title="Streamlit - 競馬予想10 完全統合版",
+    page_title="競馬予想10 クッション値Vr",
+    page_icon="🏇",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# --- CSSスタイル ---
-st.markdown("""
-<style>
-    .metric-container {
-        display: flex;
-        justify-content: space-around;
-        background-color: #161b22;
-        padding: 14px;
-        border-radius: 10px;
-        margin-bottom: 18px;
-        border: 1px solid #30363d;
-    }
-    .metric-box {
-        text-align: center;
-    }
-    .metric-label {
-        font-size: 13px;
-        color: #8b949e;
-        margin-bottom: 2px;
-    }
-    .metric-val {
-        font-size: 26px;
-        font-weight: bold;
-        color: #f0f6fc;
-    }
-    
-    .date-header-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-        border: 1px solid #3b82f6;
-        padding: 6px 16px;
-        border-radius: 20px;
-        color: #60a5fa;
-        font-size: 14.5px;
-        font-weight: bold;
-        margin-bottom: 12px;
-    }
-
-    .race-type-banner {
-        padding: 12px 18px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        font-size: 15px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .race-type-solid {
-        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
-        color: #ecfdf5;
-        border: 1px solid #34d399;
-    }
-    .race-type-twin-axis {
-        background: linear-gradient(135deg, #1e3a8a 0%, #1d4ed8 100%);
-        color: #eff6ff;
-        border: 1px solid #60a5fa;
-    }
-    .race-type-chaos {
-        background: linear-gradient(135deg, #881337 0%, #be123c 100%);
-        color: #fff1f2;
-        border: 1px solid #fb7185;
-    }
-    .race-type-mix {
-        background: linear-gradient(135deg, #78350f 0%, #b45309 100%);
-        color: #fffbeb;
-        border: 1px solid #fbbf24;
-    }
-
-    .badge-decision-go {
-        background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-        color: #ffffff;
-        font-size: 13px;
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-weight: bold;
-        margin-left: 8px;
-    }
-    .badge-decision-skip {
-        background: linear-gradient(135deg, #64748b 0%, #475569 100%);
-        color: #f1f5f9;
-        font-size: 13px;
-        padding: 3px 10px;
-        border-radius: 6px;
-        font-weight: bold;
-        margin-left: 8px;
-    }
-
-    .recom-panel-go {
-        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
-        border: 2px solid #10b981;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 20px;
-    }
-    .recom-panel-skip {
-        background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-        border: 2px solid #64748b;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 20px;
-    }
-    .recom-title-go {
-        font-size: 16px;
-        font-weight: bold;
-        color: #34d399;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #374151;
-        padding-bottom: 5px;
-    }
-    .recom-title-skip {
-        font-size: 16px;
-        font-weight: bold;
-        color: #94a3b8;
-        margin-bottom: 10px;
-        border-bottom: 1px solid #334155;
-        padding-bottom: 5px;
-    }
-    .recom-row {
-        margin-bottom: 8px;
-        font-size: 14.5px;
-        color: #f3f4f6;
-    }
-    .recom-label {
-        font-weight: bold;
-        color: #fbbf24;
-        display: inline-block;
-        width: 155px;
-    }
-    .recom-val-num {
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 16px;
-        letter-spacing: 1px;
-    }
-    .recom-pts {
-        display: inline-block;
-        background-color: #064e3b;
-        color: #a7f3d0;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: bold;
-        margin-left: 10px;
-    }
-    .recom-pts-skip {
-        display: inline-block;
-        background-color: #334155;
-        color: #cbd5e1;
-        padding: 2px 8px;
-        border-radius: 4px;
-        font-size: 12px;
-        font-weight: bold;
-        margin-left: 10px;
-    }
-    
-    .horse-card {
-        background-color: #161e2e;
-        border-left: 5px solid #238636;
-        padding: 14px 18px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        border-top: 1px solid #30363d;
-        border-right: 1px solid #30363d;
-        border-bottom: 1px solid #30363d;
-    }
-    .horse-card-header {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-    .horse-card-title {
-        font-size: 18px;
-        font-weight: bold;
-        color: #ffffff;
-    }
-    .horse-card-list {
-        list-style-type: none;
-        padding-left: 0;
-        margin: 0;
-    }
-    .horse-card-list li {
-        font-size: 13.5px;
-        color: #c9d1d9;
-        margin-bottom: 5px;
-        line-height: 1.6;
-    }
-    .horse-card-list li::before {
-        content: "• ";
-        color: #58a6ff;
-        font-weight: bold;
-    }
-
-    .badge-accel-on {
-        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 7px;
-        border-radius: 4px;
-        border: 1px solid #34d399;
-    }
-    .badge-accel-off {
-        background-color: #374151;
-        color: #9ca3af;
-        font-size: 11.5px;
-        padding: 2px 7px;
-        border-radius: 4px;
-        border: 1px solid #4b5563;
-    }
-
-    .val-f-super {
-        color: #1a1000;
-        background-color: #fcd34d;
-        font-weight: bold;
-        padding: 1px 6px;
-        border-radius: 4px;
-        border: 1px solid #f59e0b;
-    }
-    .val-f-high {
-        color: #ffffff;
-        background-color: #ea580c;
-        font-weight: bold;
-        padding: 1px 6px;
-        border-radius: 4px;
-        border: 1px solid #fb923c;
-    }
-    .val-arms-super {
-        color: #083344;
-        background-color: #38bdf8;
-        font-weight: bold;
-        padding: 1px 6px;
-        border-radius: 4px;
-        border: 1px solid #0284c7;
-    }
-    .val-tua-super {
-        color: #022c22;
-        background-color: #34d399;
-        font-weight: bold;
-        padding: 1px 6px;
-        border-radius: 4px;
-        border: 1px solid #059669;
-    }
-    .val-s-super {
-        color: #ffffff;
-        background-color: #8b5cf6;
-        font-weight: bold;
-        padding: 1px 6px;
-        border-radius: 4px;
-        border: 1px solid #c4b5fd;
-    }
-
-    .badge-jk-ub {
-        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #fcd34d;
-    }
-    .badge-tr-ub {
-        background: linear-gradient(135deg, #059669 0%, #047857 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #6ee7b7;
-    }
-    .badge-same-ub-f6 {
-        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #7dd3fc;
-    }
-    .badge-same-ub-s6 {
-        background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #c4b5fd;
-    }
-    .badge-same-ub-fs6 {
-        background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #fde68a;
-    }
-    .badge-fup6-sf {
-        background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #ffe4e6;
-        box-shadow: 0 1px 4px rgba(255, 8, 68, 0.4);
-    }
-    .badge-sf7-himo {
-        background: linear-gradient(135deg, #0ea5e9 0%, #0369a1 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #7dd3fc;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.3);
-    }
-
-    .badge-cushion-fit {
-        display: inline-flex;
-        align-items: center;
-        background: linear-gradient(135deg, #059669 0%, #10b981 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #34d399;
-    }
-    .badge-cushion-danger {
-        display: inline-flex;
-        align-items: center;
-        background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 11.5px;
-        padding: 2px 8px;
-        border-radius: 6px;
-        border: 1px solid #f87171;
-    }
-    .badge-synergy {
-        display: inline-flex;
-        align-items: center;
-        padding: 2px 8px;
-        border-radius: 6px;
-        font-weight: bold;
-        font-size: 11.5px;
-        letter-spacing: 0.3px;
-    }
-    .badge-iron {
-        background: linear-gradient(135deg, #FFE259 0%, #FFA751 100%);
-        color: #1a1000;
-        border: 1px solid #FFF275;
-    }
-    .badge-high {
-        background: linear-gradient(135deg, #FF416C 0%, #FF4B2B 100%);
-        color: #ffffff;
-        border: 1px solid #FF8E72;
-    }
-    .badge-sakaro-fup {
-        background: linear-gradient(135deg, #8A2387 0%, #E94057 50%, #F27121 100%);
-        color: #ffffff;
-        border: 1px solid #FFA07A;
-    }
-    .badge-f1-rap {
-        background: linear-gradient(135deg, #FF0844 0%, #FFB199 100%);
-        color: #ffffff;
-        border: 1px solid #FFD1C4;
-    }
-    .badge-bomb {
-        background: linear-gradient(135deg, #EB3349 0%, #F45C43 100%);
-        color: #ffffff;
-        border: 1px solid #FFA07A;
-    }
-    .badge-target-win {
-        background: linear-gradient(135deg, #e11d48 0%, #be123c 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 9px;
-        border-radius: 6px;
-    }
-    .badge-target-axis {
-        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 9px;
-        border-radius: 6px;
-    }
-    .badge-danger-jockey {
-        background: linear-gradient(135deg, #7f1d1d 0%, #991b1b 100%);
-        color: #fecaca;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 9px;
-        border-radius: 6px;
-        border: 1px solid #ef4444;
-    }
-    .rank-1st { color: #FFD700; font-weight: bold; }
-    .rank-2nd { color: #E2E8F0; font-weight: bold; }
-    .rank-3rd { color: #F97316; font-weight: bold; }
-
-    /* ★ リアルタイムオッズ・馬体重バッジ */
-    .badge-rt-odds {
-        background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 7px;
-        border-radius: 4px;
-        border: 1px solid #38bdf8;
-    }
-    .badge-rt-weight {
-        background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
-        color: #f8fafc;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 7px;
-        border-radius: 4px;
-        border: 1px solid #94a3b8;
-    }
-</style>
-""", unsafe_allow_html=True)
+st.title("🏇 競馬予想10 クッション値Vr【完全自動解析システム】")
+st.caption(
+    "F指数・Fup2・各種指数・坂路完全加速・当日のクッション値×種牡馬バイアス・イージーモード（歪み判定）完全連動"
+)
 
 
-# --- 危険騎手リスト ---
-DANGER_JOCKEYS_F3 = ['斎藤新', '小沢大仁', '丸山元気', '池添謙一', '松若風馬', '菊沢一樹', '田辺裕信', '横山琉人', '岩田康誠', '吉田隼人', '菅原明良', '富田暁', '三浦皇成', '浜中俊', '鮫島克駿']
-DANGER_JOCKEYS_GENERAL = ['小林脩斗', '川端海翼', '黛弘人', '野中悠太', '遠藤汰月', '亀田温心', '水沼元輝', '丸田恭介', '河原田菜', '古川吉洋', '国分優作', '永島まな', '柴田裕一', '木幡初也', '原田和真', '柴田大知', '古川奈穂', '中井裕二', '石橋脩', '嶋田純次']
-
-
-# --- クッション値と種牡馬の適性マッピング ---
-def get_cushion_band(venue, c_val):
-    if c_val is None: return "standard"
-    if venue in ['札幌', '函館']:
-        if c_val >= 8.5: return "high"
-        elif c_val >= 7.6: return "standard_high"
-        elif c_val >= 7.0: return "standard"
-        else: return "low"
-    else:
-        if c_val >= 10.0: return "high"
-        elif c_val >= 9.5: return "standard_high"
-        elif c_val >= 9.0: return "standard"
-        else: return "low"
-
-
-def evaluate_sire_cushion(sire_name, band):
-    if not sire_name or pd.isnull(sire_name): return ""
-    sire = str(sire_name).strip()
-    
-    high_fit_sires = ['ロードカナロア', 'エピファネイア', 'キズナ', 'モーリス', 'ディープインパクト', 'ドゥラメンテ', 'イスラボニータ', 'ダイワメジャー', 'スワーヴリチャード', 'ブリックスアンドモルタル']
-    high_danger_sires = ['ハービンジャー', 'オルフェーヴル', 'ルーラーシップ', 'ドレフォン', 'ゴールドシップ', 'リアルスティール']
-
-    low_fit_sires = ['ハービンジャー', 'オルフェーヴル', 'ルーラーシップ', 'ゴールドシップ', 'キタサンブラック', 'バゴ', 'スクリーンヒーロー', 'サトノダイヤモンド']
-    low_danger_sires = ['ロードカナロア', 'エピファネイア', 'モーリス', 'イスラボニータ']
-
-    std_high_fit_sires = ['エピファネイア', 'キズナ', 'ドゥラメンテ', 'モーリス', 'ロードカナロア', 'ハーツクライ']
-
-    if band == "high":
-        if any(h in sire for h in high_fit_sires):
-            return "<span class='badge-cushion-fit'>🟢 クッション適 (硬)</span>"
-        elif any(d in sire for d in high_danger_sires):
-            return "<span class='badge-cushion-danger'>🔴 危険血統 (硬)</span>"
-    elif band == "low":
-        if any(l in sire for l in low_fit_sires):
-            return "<span class='badge-cushion-fit'>🟢 軟馬場適</span>"
-        elif any(d in sire for d in low_danger_sires):
-            return "<span class='badge-cushion-danger'>🔴 危険血統 (軟)</span>"
-    elif band == "standard_high":
-        if any(sh in sire for sh in std_high_fit_sires):
-            return "<span class='badge-cushion-fit'>🟢 クッション適</span>"
-            
-    return ""
-
-
-# --- JRA枠番計算関数 ---
-def get_jra_waku(umaban, total_horses):
-    if total_horses <= 8:
-        return umaban
-    base = total_horses // 8
-    rem = total_horses % 8
-    waku_counts = [base + (1 if 8 - i <= rem else 0) for i in range(8)]
-    curr = 1
-    for w_idx, cnt in enumerate(waku_counts, start=1):
-        if curr <= umaban < curr + cnt:
-            return w_idx
-        curr += cnt
-    return 8
-
-
-# --- サイドバー: データ読み込み ---
-st.sidebar.markdown("### 📁 CSVデータ読み込み")
-with st.sidebar.expander("データ更新", expanded=False):
-    up_index = st.file_uploader("出馬表・指数 CSV", type=['csv'], key='up_index')
-    up_sakaro = st.file_uploader("坂路調教 CSV", type=['csv'], key='up_sakaro')
-    up_wood = st.file_uploader("ウッド調教 CSV", type=['csv'], key='up_wood')
-
-
-def clean_horse_name(name):
-    if pd.isnull(name): return ""
-    return str(name).strip().replace('*', '').replace('$', '').replace(' ', '').replace(' ', '')
-
-
-def read_csv_robust(file_obj, candidate_patterns):
-    src = file_obj
-    if src is None:
-        for pat in candidate_patterns:
-            matches = glob.glob(pat)
-            if matches:
-                src = matches[0]
-                break
-    if src is None:
-        return pd.DataFrame()
-
-    encodings = ['shift-jis', 'cp932', 'utf-8-sig', 'utf-8']
-    for enc in encodings:
-        try:
-            if hasattr(src, 'seek'):
-                src.seek(0)
-            df = pd.read_csv(src, encoding=enc)
-            if not df.empty:
-                return df
-        except Exception:
-            continue
-    return pd.DataFrame()
-
-
-def find_col_regex(df, patterns):
-    for pat in patterns:
-        for col in df.columns:
-            if re.search(pat, str(col), re.IGNORECASE):
-                return col
-    return None
+# ==========================================
+# データロード（更新タイムスタンプ連動・キャッシュ事故完全防止）
+# ==========================================
+def get_file_mtime(path):
+  return os.path.getmtime(path) if os.path.exists(path) else 0
 
 
 @st.cache_data
-def load_and_merge_all(f_index, f_sakaro, f_wood):
-    index_patterns = ['data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv']
-    index_src = f_index
-    if index_src is None:
-        for pat in index_patterns:
-            matches = glob.glob(pat)
-            if matches: index_src = matches[0]; break
+def load_all_data(mtime_shisu, mtime_hanro, mtime_wood):
+  """TARGET Frontier JV出力のShift-JIS(CP932)形式CSVを確実に読み込み、
 
-    records = []
-    if index_src is not None:
-        if isinstance(index_src, str):
-            lines = open(index_src, 'r', encoding='shift-jis', errors='ignore').readlines()
+  馬名・調教師・騎手・種牡馬の前後空白をクレンジングする
+  """
+  p_shisu = "data/出馬表_指数.csv"
+  p_hanro = "data/出馬表_坂路.csv"
+  p_wood = "data/出馬表_ウッド.csv"
+
+  if not os.path.exists(p_shisu):
+    # ルート直下にある場合のフォールバック
+    p_shisu = "出馬表_指数.csv"
+    p_hanro = "出馬表_坂路.csv"
+    p_wood = "出馬表_ウッド.csv"
+
+  # 1. 指数CSV (全24項目マッピング)
+  df_s = pd.read_csv(p_shisu, encoding="cp932", header=None)
+  col_names = [
+      "場所R",
+      "芝ダ",
+      "距離",
+      "馬番",
+      "馬名",
+      "所属",
+      "調教師",
+      "騎手",
+      "人気順位",
+      "印GTV",
+      "Fup2数値",
+      "Fup2順位",
+      "S指数",
+      "S指数順位",
+      "F指数",
+      "F指数順位",
+      "ARMS2指数",
+      "ARMS2順位",
+      "TUA指数",
+      "TUA順位",
+      "結果着順",
+      "種牡馬",
+  ]
+  # 予備列対応
+  while len(col_names) < df_s.shape[1]:
+    col_names.append(f"col_{len(col_names)}")
+  df_s.columns = col_names[: df_s.shape[1]]
+
+  # クレンジング
+  str_cols = ["場所R", "芝ダ", "馬名", "所属", "調教師", "騎手", "種牡馬"]
+  for c in str_cols:
+    if c in df_s.columns:
+      df_s[c] = df_s[c].astype(str).str.strip()
+
+  num_cols = [
+      "距離",
+      "馬番",
+      "人気順位",
+      "Fup2数値",
+      "Fup2順位",
+      "S指数",
+      "S指数順位",
+      "F指数",
+      "F指数順位",
+      "ARMS2指数",
+      "ARMS2順位",
+      "TUA指数",
+      "TUA順位",
+  ]
+  for c in num_cols:
+    if c in df_s.columns:
+      df_s[c] = pd.to_numeric(df_s[c], errors="coerce").fillna(0)
+
+  # 2. 坂路調教CSV
+  df_h = pd.read_csv(p_hanro, encoding="cp932")
+  df_h["馬名"] = df_h["馬名"].astype(str).str.strip()
+  for c in ["Time1", "Time2", "Time3", "Time4", "Lap4", "Lap3", "Lap2", "Lap1"]:
+    if c in df_h.columns:
+      df_h[c] = pd.to_numeric(df_h[c], errors="coerce")
+
+  # 3. ウッド調教CSV
+  df_w = pd.read_csv(p_wood, encoding="cp932")
+  df_w["馬名"] = df_w["馬名"].astype(str).str.strip()
+  for c in [
+      "6F",
+      "5F",
+      "4F",
+      "3F",
+      "2F",
+      "1F",
+      "Lap6",
+      "Lap5",
+      "Lap4",
+      "Lap3",
+      "Lap2",
+      "Lap1",
+  ]:
+    if c in df_w.columns:
+      df_w[c] = pd.to_numeric(df_w[c], errors="coerce")
+
+  return df_s, df_h, df_w
+
+
+# ファイル更新日時の取得（ファイル差し替えで即時検知）
+shisu_path = (
+    "data/出馬表_指数.csv"
+    if os.path.exists("data/出馬表_指数.csv")
+    else "出馬表_指数.csv"
+)
+hanro_path = (
+    "data/出馬表_坂路.csv"
+    if os.path.exists("data/出馬表_坂路.csv")
+    else "出馬表_坂路.csv"
+)
+wood_path = (
+    "data/出馬表_ウッド.csv"
+    if os.path.exists("data/出馬表_ウッド.csv")
+    else "出馬表_ウッド.csv"
+)
+
+if not os.path.exists(shisu_path):
+  st.error(
+      "CSVファイルが見つかりません。`data/`フォルダ内にCSVを配置してください。"
+  )
+  st.stop()
+
+mt_s = get_file_mtime(shisu_path)
+mt_h = get_file_mtime(hanro_path)
+mt_w = get_file_mtime(wood_path)
+
+df_shisu, df_hanro, df_wood = load_all_data(mt_s, mt_h, mt_w)
+
+# ==========================================
+# クッション値データブック マスター辞書 (PDF準拠)
+# ==========================================
+SIRE_CV_MASTER = {
+    # 形式: (コース名, クッション区分): {"type": "最重要"|"狙い目"|"回収妙味"|"危険", "sire": [...], "desc": "..."}
+    "超高帯_特注種牡馬": [
+        "エピファネイア",
+        "キタサンブラック",
+        "イスラボニータ",
+        "ロードカナロア",
+    ],
+    "超高帯_危険種牡馬": [
+        "キングカメハメハ",
+        "ビッグアーサー",
+        "レイデオロ",
+        "スワーヴリチャード",
+        "サートゥルナーリア",
+        "ゴールドシップ",
+    ],
+}
+
+
+def get_cv_band(place, cv_val):
+  """全国5区分および札幌・函館の場内相対区分判定"""
+  if place in ["札幌", "札"]:
+    if cv_val <= 7.3:
+      return "≤8.5低(場内低)"
+    elif cv_val >= 7.7:
+      return "≤8.5低(場内高)"
+    else:
+      return "≤8.5低(場内中)"
+  elif place in ["函館", "函"]:
+    if cv_val <= 7.2:
+      return "≤8.5低(場内低)"
+    elif cv_val >= 7.5:
+      return "≤8.5低(場内高)"
+    else:
+      return "≤8.5低(場内中)"
+  else:
+    if cv_val <= 8.5:
+      return "≤8.5低"
+    elif 8.6 <= cv_val <= 9.4:
+      return "8.6-9.4 やや低"
+    elif 9.5 <= cv_val <= 9.9:
+      return "9.5-9.9 標準高"
+    elif 10.0 <= cv_val <= 10.4:
+      return "10.0-10.4 高"
+    else:
+      return "≥10.5 超高"
+
+
+# ==========================================
+# サイドバー：レース選択・環境設定
+# ==========================================
+st.sidebar.header("⚙️ 設定パネル")
+races_list = list(df_shisu["場所R"].unique())
+selected_race = st.sidebar.selectbox("対象レースを選択", races_list)
+
+# 選択レースの基本情報
+df_race = df_shisu[df_shisu["場所R"] == selected_race].copy()
+race_track = df_race["芝ダ"].iloc[0]
+race_dist = int(df_race["距離"].iloc[0])
+place_code = (
+    selected_race[:1] if not selected_race[:2].isalpha() else selected_race[:2]
+)
+
+place_name_map = {
+    "札": "札幌",
+    "函": "函館",
+    "福": "福島",
+    "新": "新潟",
+    "東": "東京",
+    "中": "中山",
+    "名": "中京",
+    "京": "京都",
+    "阪": "阪神",
+    "小": "小倉",
+}
+course_place = place_name_map.get(place_code, "東京")
+
+# クッション値入力
+st.sidebar.subheader("🌱 馬場・クッション値設定")
+cv_default = (
+    7.5
+    if course_place in ["札幌", "函館"]
+    else (10.0 if course_place == "京都" else 9.5)
+)
+cv_input = st.sidebar.number_input(
+    f"{course_place} 芝クッション値",
+    min_value=5.0,
+    max_value=13.0,
+    value=cv_default,
+    step=0.1,
+)
+cv_band = get_cv_band(course_place, cv_input)
+st.sidebar.info(f"判定区分: **{cv_band}**")
+
+# 強制リロードボタン
+if st.sidebar.button("🔄 データを強制再読込"):
+  st.cache_data.clear()
+  st.rerun()
+
+# ==========================================
+# 解析エンジンの実行
+# ==========================================
+# 坂路・ウッドの最新追い切りとマージ
+hanro_latest = (
+    df_hanro.sort_values("年月日", ascending=False)
+    .groupby("馬名")
+    .first()
+    .reset_index()
+)
+wood_latest = (
+    df_wood.sort_values("年月日", ascending=False)
+    .groupby("馬名")
+    .first()
+    .reset_index()
+)
+
+df_eval = pd.merge(df_race, hanro_latest, on="馬名", how="left", suffixes=("", "_坂路"))
+df_eval = pd.merge(
+    df_eval, wood_latest, on="馬名", how="left", suffixes=("", "_ウッド")
+)
+
+
+# 調教完全加速・実質負荷判定
+def judge_training(row):
+  t1 = row.get("Time1", np.nan)
+  l4 = row.get("Lap4", np.nan)
+  l3 = row.get("Lap3", np.nan)
+  l2 = row.get("Lap2", np.nan)
+  l1 = row.get("Lap1", np.nan)
+
+  # 実質負荷基準: 4F <= 56.0 かつ 1F <= 13.0
+  if pd.notna(t1) and pd.notna(l1) and t1 <= 56.0 and l1 <= 13.0:
+    if pd.notna(l4) and pd.notna(l3) and pd.notna(l2):
+      if l4 > l3 > l2 > l1:
+        if l1 <= 11.9:
+          return "坂路完全加速(A3終い11秒台🔥)"
+        elif l1 <= 12.4:
+          return "坂路完全加速(A2究極ラップ🔥)"
         else:
-            try: index_src.seek(0)
-            except Exception: pass
-            lines = index_src.read().decode('shift-jis', errors='ignore').splitlines()
-
-        fw_map = {'１': 1, '２': 2, '３': 3, '４': 4, '５': 5, '６': 6, '７': 7, '８': 8, '９': 9, '10': 10,
-                  '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18}
-
-        for line in lines:
-            parts = [p.strip() for p in line.strip().split(',')]
-            n = len(parts)
-            if n < 10 or parts[0] in ['場所', 'レースID', 'race_id']: continue
-
-            race_id, track, dist, umaban, horse_raw = parts[0], parts[1], parts[2], parts[3], parts[4]
-            trainer, jockey, pop = parts[6], parts[7], parts[8]
-            mark = parts[9] if n > 9 else ""
-            fup = pd.to_numeric(parts[10], errors='coerce') if n > 10 else 0
-            fup_rank = pd.to_numeric(parts[11], errors='coerce') if n > 11 else 99
-            s_val = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0.0
-            s_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
-            f_val = pd.to_numeric(parts[14], errors='coerce') if n > 14 else 0.0
-            f_rank = pd.to_numeric(parts[15], errors='coerce') if n > 15 else 99
-            arms_val = pd.to_numeric(parts[16], errors='coerce') if n > 16 else 0.0
-            arms_rank = pd.to_numeric(parts[17], errors='coerce') if n > 17 else 99
-            tua_val = pd.to_numeric(parts[18], errors='coerce') if n > 18 else 0.0
-            tua_rank = pd.to_numeric(parts[19], errors='coerce') if n > 19 else 99
-
-            non_empty_parts = [p for p in parts if p != '']
-            sire = non_empty_parts[-1] if len(non_empty_parts) > 0 else ""
-            finish = non_empty_parts[-2] if len(non_empty_parts) > 1 else None
-
-            horse = clean_horse_name(horse_raw)
-            if horse:
-                fin_int = fw_map.get(str(finish), int(finish) if str(finish).isdigit() else np.nan)
-                pop_int = int(pop) if str(pop).isdigit() else np.nan
-                u_int = int(umaban) if str(umaban).isdigit() else 99
-
-                records.append({
-                    'race_id': race_id, 'track': track, 'dist': dist, '馬番': u_int,
-                    '馬名': horse, '印': mark, '調教師': clean_horse_name(trainer), '騎手': clean_horse_name(jockey),
-                    '種牡馬': str(sire).strip(), '人気': pop_int, '着順': fin_int,
-                    'Fup': fup if not np.isnan(fup) else 0, 'Fup_rank': int(fup_rank) if not np.isnan(fup_rank) else 99,
-                    'S指数': s_val if not np.isnan(s_val) else 0.0, 'S_rank': int(s_rank) if not np.isnan(s_rank) else 99,
-                    'F指数': f_val if not np.isnan(f_val) else 0.0, 'F_rank': int(f_rank) if not np.isnan(f_rank) else 99,
-                    'arms': arms_val if not np.isnan(arms_val) else 0.0, 'arms_rank': int(arms_rank) if not np.isnan(arms_rank) else 99,
-                    'tua': tua_val if not np.isnan(tua_val) else 0.0, 'tua_rank': int(tua_rank) if not np.isnan(tua_rank) else 99
-                })
-
-    df_main = pd.DataFrame(records)
-    if df_main.empty: return pd.DataFrame(), None
-
-    venue_dict = {'東': '東京', '中': '中山', '京': '京都', '阪': '阪神', '名': '中京', '小': '小倉', '新': '新潟', '福': '福島', '函': '函館', '札': '札幌'}
-    def parse_race(rid):
-        match = re.match(r'([^\d]+)(\d+)', str(rid))
-        if match: return venue_dict.get(match.group(1), match.group(1)), int(match.group(2))
-        return "その他", 99
-
-    df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
-    df_main['race_uid'] = df_main['race_id']
-    detected_date = datetime.date(2026, 9, 6)
-
-    # 枠番の計算
-    df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
-    df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
-
-    # 坂路完全読み込み
-    sakaro_patterns = ['data/出馬表_坂路*.csv', '出馬表_坂路*.csv', 'data/*坂路*.csv', '*坂路*.csv']
-    df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
-    if not df_s_raw.empty:
-        c_s_name = find_col_regex(df_s_raw, ['^馬名$', '^競走馬名$']) or df_s_raw.columns[4] if len(df_s_raw.columns) > 4 else df_s_raw.columns[1]
-        df_s_raw['clean_name'] = df_s_raw[c_s_name].apply(clean_horse_name)
-
-        c_s_4f = find_col_regex(df_s_raw, ['^time1$', '^4f$', '^４ｆ$', '^4Ｆ$'])
-        c_s_1f = find_col_regex(df_s_raw, ['^time4$', '^1f$', '^１ｆ$', '^1Ｆ$'])
-        c_s_l4 = find_col_regex(df_s_raw, ['^lap4$', '^ｌａｐ４$'])
-        c_s_l3 = find_col_regex(df_s_raw, ['^lap3$', '^ｌａｐ３$'])
-        c_s_l2 = find_col_regex(df_s_raw, ['^lap2$', '^ｌａｐ２$'])
-        c_s_l1 = find_col_regex(df_s_raw, ['^lap1$', '^ｌａｐ１$'])
-
-        df_s_raw['坂路_4F'] = pd.to_numeric(df_s_raw[c_s_4f], errors='coerce') if c_s_4f else np.nan
-        df_s_raw['坂路_1F'] = pd.to_numeric(df_s_raw[c_s_1f], errors='coerce') if c_s_1f else np.nan
-        df_s_raw['坂路_Lap4'] = pd.to_numeric(df_s_raw[c_s_l4], errors='coerce') if c_s_l4 else np.nan
-        df_s_raw['坂路_Lap3'] = pd.to_numeric(df_s_raw[c_s_l3], errors='coerce') if c_s_l3 else np.nan
-        df_s_raw['坂路_Lap2'] = pd.to_numeric(df_s_raw[c_s_l2], errors='coerce') if c_s_l2 else np.nan
-        df_s_raw['坂路_Lap1'] = pd.to_numeric(df_s_raw[c_s_l1], errors='coerce') if c_s_l1 else np.nan
-
-        df_s_best = df_s_raw.dropna(subset=['坂路_4F']).sort_values('坂路_4F').drop_duplicates('clean_name', keep='first').copy()
-        df_s_best['坂路_完全加速'] = (
-            (df_s_best['坂路_Lap4'] > df_s_best['坂路_Lap3']) &
-            (df_s_best['坂路_Lap3'] > df_s_best['坂路_Lap2']) &
-            (df_s_best['坂路_Lap2'] > df_s_best['坂路_Lap1'])
-        )
-        df_main = pd.merge(df_main, df_s_best[['clean_name', '坂路_4F', '坂路_1F', '坂路_完全加速']], left_on='馬名', right_on='clean_name', how='left')
-
-    if '坂路_4F' not in df_main.columns:
-        df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan; df_main['坂路_完全加速'] = False
-
-    # ウッド完全読み込み
-    wood_patterns = ['data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv', 'data/*ウッド*.csv', '*ウッド*.csv']
-    df_w_raw = read_csv_robust(f_wood, wood_patterns)
-    if not df_w_raw.empty:
-        c_w_name = find_col_regex(df_w_raw, ['^馬名$', '^競走馬名$']) or df_w_raw.columns[4] if len(df_w_raw.columns) > 4 else df_w_raw.columns[1]
-        df_w_raw['clean_name'] = df_w_raw[c_w_name].apply(clean_horse_name)
-
-        c_w_5f = find_col_regex(df_w_raw, ['^5f$', '^５ｆ$', '^5Ｆ$'])
-        c_w_1f = find_col_regex(df_w_raw, ['^1f$', '^１ｆ$', '^1Ｆ$'])
-        c_w_l2 = find_col_regex(df_w_raw, ['^lap2$', '^ｌａｐ２$'])
-        c_w_l1 = find_col_regex(df_w_raw, ['^lap1$', '^ｌａｐ１$'])
-
-        df_w_raw['wood_5F'] = pd.to_numeric(df_w_raw[c_w_5f], errors='coerce') if c_w_5f else np.nan
-        df_w_raw['wood_1F'] = pd.to_numeric(df_w_raw[c_w_1f], errors='coerce') if c_w_1f else np.nan
-        df_w_raw['wood_Lap2'] = pd.to_numeric(df_w_raw[c_w_l2], errors='coerce') if c_w_l2 else np.nan
-        df_w_raw['wood_Lap1'] = pd.to_numeric(df_w_raw[c_w_l1], errors='coerce') if c_w_l1 else np.nan
-
-        df_w_best = df_w_raw.dropna(subset=['wood_1F']).sort_values('wood_1F').drop_duplicates('clean_name', keep='first').copy()
-        df_w_best['wood_accel'] = df_w_best['wood_Lap2'] - df_w_best['wood_Lap1']
-        df_w_best['is_wood_accel'] = (df_w_best['wood_accel'] > 0) & (df_w_best['wood_accel'].notna())
-
-        df_main = pd.merge(df_main, df_w_best[['clean_name', 'wood_5F', 'wood_1F', 'wood_accel', 'is_wood_accel']], left_on='馬名', right_on='clean_name', how='left')
-
-    if 'wood_1F' not in df_main.columns:
-        df_main['wood_5F'] = np.nan; df_main['wood_1F'] = np.nan; df_main['wood_accel'] = np.nan; df_main['is_wood_accel'] = False
-
-    df_main['坂路_完全加速'] = df_main['坂路_完全加速'].fillna(False).astype(bool)
-    df_main['is_wood_accel'] = df_main['is_wood_accel'].fillna(False).astype(bool)
-
-    # 騎手の同馬番集計
-    jk_ub_grp = df_main.groupby(['騎手', '馬番'])['race_id'].apply(list).to_dict()
-    df_main['same_ub_jk_count'] = df_main.apply(lambda r: len(jk_ub_grp.get((r['騎手'], r['馬番']), [])), axis=1)
-    df_main['same_ub_jk_races'] = df_main.apply(lambda r: ", ".join(jk_ub_grp.get((r['騎手'], r['馬番']), [])), axis=1)
-    df_main['is_same_ub_jk'] = df_main['same_ub_jk_count'] >= 2
-
-    # 調教師の同馬番集計
-    tr_ub_grp = df_main.groupby(['調教師', '馬番'])['race_id'].apply(list).to_dict()
-    df_main['same_ub_tr_count'] = df_main.apply(lambda r: len(tr_ub_grp.get((r['調教師'], r['馬番']), [])), axis=1)
-    df_main['same_ub_tr_races'] = df_main.apply(lambda r: ", ".join(tr_ub_grp.get((r['調教師'], r['馬番']), [])), axis=1)
-    df_main['is_same_ub_tr'] = df_main['same_ub_tr_count'] >= 2
-
-    # 騎手または調教師の同馬番
-    df_main['is_same_ub_any'] = df_main['is_same_ub_jk'] | df_main['is_same_ub_tr']
-
-    # 騎手または調教師の同枠集計
-    jk_waku_grp = df_main.groupby(['騎手', '枠番'])['race_id'].transform('count') >= 2
-    tr_waku_grp = df_main.groupby(['調教師', '枠番'])['race_id'].transform('count') >= 2
-    df_main['is_same_waku'] = jk_waku_grp | tr_waku_grp
-
-    return df_main, detected_date
+          return "坂路完全加速(A1)"
+      elif l2 > l1:
+        return "坂路終い加速"
+    return "坂路実質負荷(減速/平坦)"
+  elif pd.notna(t1):
+    return "坂路軽め/非負荷"
+  return "坂路調教なし/コース追い"
 
 
-df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
-
-if df.empty:
-    st.warning("⚠️ CSVデータが読み込まれていません。サイドバーからファイルを指定してください。")
-    st.stop()
+df_eval["調教判定"] = df_eval.apply(judge_training, axis=1)
 
 
-# ==============================================================================
-# ★ 【新設】JV-Link リアルタイムオッズ・発表馬体重 連携UI & セッション管理
-# ==============================================================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### ⚡ JV-Link リアルタイム連携")
-with st.sidebar.expander("オッズ・馬体重の速報取得", expanded=True):
-    # デフォルトは2026年9月6日中山11R等の16桁ID
-    default_rid = "2026090606040111"
-    target_race_id = st.text_input("レースID (16桁)", value=default_rid, help="年4+場2+回2+日2+R2+区分")
-    
-    if st.button("🔄 リアルタイムオッズ・馬体重を取得", use_container_width=True):
-        try:
-            from jv_realtime import get_jv_realtime_data
-            with st.spinner("JV-Linkから速報データを受信中..."):
-                df_odds_rt, df_weight_rt = get_jv_realtime_data(target_race_id)
-                st.session_state["realtime_odds"] = df_odds_rt
-                st.session_state["realtime_weight"] = df_weight_rt
-                st.success(f"取得完了: オッズ {len(df_odds_rt)}頭 / 馬体重 {len(df_weight_rt)}頭")
-        except Exception as e:
-            st.error(f"取得失敗: {e}")
+# クッション値×種牡馬判定ロジック
+def judge_sire_cv(row):
+  sire = str(row.get("種牡馬", "")).strip()
+  if race_track != "芝":
+    return "ダート（対象外）"
 
-# リアルタイムデータの自動反映（マージ）
-if "realtime_odds" in st.session_state and not st.session_state["realtime_odds"].empty:
-    df_rt_o = st.session_state["realtime_odds"].copy()
-    df_rt_o['馬番'] = df_rt_o['馬番'].astype(int)
-    # 重複列があれば除外してからマージ
-    cols_to_use = [c for c in df_rt_o.columns if c == '馬番' or c not in df.columns]
-    df = pd.merge(df, df_rt_o[cols_to_use], on='馬番', how='left')
-    # 人気順位をリアルタイム人気でオーバーライド
-    if 'リアル単勝人気' in df.columns:
-        df['人気'] = df['リアル単勝人気'].combine_first(df['人気'])
+  # PDF『クッション値データブック』特注ルールの直結照合
+  if course_place == "札幌" and race_dist == 2000 and "オルフェーヴル" in sire:
+    return "最重要(オルフェーヴル×札幌2000/勝15.8%/単136/複145)"
+  if course_place == "小倉" and race_dist == 1200 and "ビッグアーサー" in sire:
+    return "最重要(ビッグアーサー×小倉1200/勝12.2%/複30.9%)"
+  if course_place == "福島" and race_dist == 1200 and "ビッグアーサー" in sire:
+    return "最重要(ビッグアーサー×福島1200/勝13.2%/複33.1%)"
+  if course_place == "東京" and race_dist == 1600 and "エピファネイア" in sire:
+    return "最重要(エピファネイア×東京1600/勝13.3%/複39.8%)"
+  if course_place == "東京" and race_dist == 1400 and "モーリス" in sire:
+    return "最重要(モーリス×東京1400/勝10.1%/複29.0%)"
+  if course_place == "阪神" and race_dist == 1800 and "キズナ" in sire:
+    return "最重要(キズナ×阪神1800/勝19.6%/複41.1%/単421)"
+  if (
+      course_place == "中山"
+      and race_dist == 1600
+      and "シルバーステート" in sire
+      and "9.5-9.9" in cv_band
+  ):
+    return "最重要(シルバーステート×中山1600/勝17.1%/複43.9%/単225)"
+  if (
+      course_place == "京都"
+      and race_dist == 2000
+      and "キタサンブラック" in sire
+      and "超高" in cv_band
+  ):
+    return "最重要(キタサンブラック×京都2000超高/勝21.1%/複50.0%)"
 
-if "realtime_weight" in st.session_state and not st.session_state["realtime_weight"].empty:
-    df_rt_w = st.session_state["realtime_weight"].copy()
-    df_rt_w['馬番'] = df_rt_w['馬番'].astype(int)
-    cols_to_use = [c for c in df_rt_w.columns if c == '馬番' or c not in df.columns]
-    df = pd.merge(df, df_rt_w[cols_to_use], on='馬番', how='left')
+  # 危険種牡馬の消込
+  if (
+      course_place == "中山"
+      and race_dist == 2000
+      and "ダノンバラード" in sire
+      and "9.5-9.9" in cv_band
+  ):
+    return "危険(ダノンバラード×中山2000標準高/複率0.0%)"
+  if (
+      course_place == "東京"
+      and race_dist == 2000
+      and "ルーラーシップ" in sire
+      and "9.5-9.9" in cv_band
+  ):
+    return "危険(ルーラーシップ×東京2000標準高/複率9.1%)"
+  if (
+      course_place == "小倉"
+      and race_dist == 1200
+      and "ジャスタウェイ" in sire
+      and "8.6-9.4" in cv_band
+  ):
+    return "危険(ジャスタウェイ×小倉1200やや低/複率2.9%)"
+  if (
+      course_place == "東京"
+      and race_dist == 1400
+      and "シルバーステート" in sire
+      and "8.6-9.4" in cv_band
+  ):
+    return "危険(シルバーステート×東京1400やや低/複率4.7%)"
+  if (
+      course_place == "東京"
+      and race_dist == 1600
+      and "ゴールドシップ" in sire
+      and "8.6-9.4" in cv_band
+  ):
+    return "危険(ゴールドシップ×東京1600やや低/複率4.5%)"
+
+  # 一般帯判定
+  if "超高" in cv_band:
+    if any(s in sire for s in SIRE_CV_MASTER["超高帯_特注種牡馬"]):
+      return "特注(超高クッション適性血統)"
+    if any(s in sire for s in SIRE_CV_MASTER["超高帯_危険種牡馬"]):
+      return "危険(超高クッション割引血統)"
+
+  return "中立/平均"
 
 
-# ==============================================================================
-# ★ 全ファクター統合・判定ロジック
-# ==============================================================================
-def is_danger_jk(row):
-    jk = str(row.get('騎手', '')).strip()
-    is_f3 = (row.get('F_rank', 99) <= 3)
-    is_any3 = (row.get('F_rank', 99) <= 3) or (row.get('arms_rank', 99) <= 3) or (row.get('tua_rank', 99) <= 3) or (row.get('S_rank', 99) <= 3)
-    if is_f3 and any(d in jk for d in DANGER_JOCKEYS_F3): return True
-    if is_any3 and any(d in jk for d in DANGER_JOCKEYS_GENERAL): return True
-    return False
+df_eval["血統CV適性"] = df_eval.apply(judge_sire_cv, axis=1)
 
-df['is_danger_jockey'] = df.apply(is_danger_jk, axis=1)
-df['調教加速'] = df['坂路_完全加速'] | df['is_wood_accel']
 
-# Fup 1位(6点以上) × S/F6位以内（勝率25.0%・単回収200%超）
-df['flag_fup6_s6'] = (df['Fup'] >= 6) & (df['Fup_rank'] == 1) & (df['S_rank'] <= 6)
-df['flag_fup6_f6'] = (df['Fup'] >= 6) & (df['Fup_rank'] == 1) & (df['F_rank'] <= 6)
-df['flag_fup6_sf_any'] = df['flag_fup6_s6'] | df['flag_fup6_f6']
+# SSS級・四冠・イージーモード判定
+def evaluate_horse(row):
+  f_val = row.get("F指数", 0)
+  f_rnk = row.get("F指数順位", 99)
+  fup_val = row.get("Fup2数値", 0)
+  arms_val = row.get("ARMS2指数", 0)
+  arms_rnk = row.get("ARMS2順位", 99)
+  tua_val = row.get("TUA指数", 0)
+  tua_rnk = row.get("TUA順位", 99)
+  tr_str = row.get("調教判定", "")
+  cv_str = row.get("血統CV適性", "")
+  ninki = row.get("人気順位", 99)
+  tm = str(row.get("調教師", ""))
+  jk = str(row.get("騎手", ""))
 
-# 🥇 1着狙い（勝率26%超）
-df['target_win'] = (
-    ((df['F_rank'] == 1) & (df['arms_rank'] == 1)) |
-    ((df['Fup'] >= 5) & (df['F_rank'] == 1)) |
-    ((df['F_rank'] == 1) & (df['arms_rank'] <= 3) & (df['S_rank'] <= 3)) |
-    ((df['F指数'] >= 66) & (df['arms_rank'] == 1)) |
-    df['flag_fup6_sf_any']
-) & (~df['is_danger_jockey'])
+  score = 0
+  tags = []
 
-# 🛡️ 軸・連対狙い（複勝率55%超）
-df['target_axis'] = (
-    ((df['F_rank'] <= 2) & (df['arms_rank'] <= 3)) |
-    ((df['F_rank'] == 1) & (df['tua_rank'] <= 3)) |
-    ((df['Fup'] >= 4) & (df['F_rank'] <= 3))
-) & (~df['target_win']) & (~df['is_danger_jockey'])
+  # SSS級・絶対神域
+  if f_val >= 70 and arms_val >= 120 and tua_val >= 200:
+    tags.append("👑SSS級絶対神域")
+    score += 50
 
-# 💣 紐穴狙い
-df['target_himo'] = (
-    (df['人気'] >= 6) & df['調教加速'] & (
-        (df['arms_rank'] <= 5) | (df['Fup'] >= 4) | (df['tua_rank'] <= 3)
-    )
+  # Fup2 評価
+  if fup_val == 7:
+    tags.append("🔥Fup2確変(7点)")
+    score += 25
+  elif fup_val in [4, 5, 6]:
+    tags.append(f"優位(Fup2:{int(fup_val)}点)")
+    score += 15
+  elif fup_val == 1 and ninki <= 3:
+    if f_val < 72:
+      tags.append("⚠️ダミーの罠(Fup2:1点消去)")
+      score -= 30
+
+  # 究極連系
+  if f_rnk == 1 and arms_rnk <= 3 and tua_rnk <= 3:
+    tags.append("🎯究極連系(F1位+ARMS3位内+TUA3位内)")
+    score += 30
+
+  # 調教加点
+  if "A3" in tr_str or "A2" in tr_str:
+    score += 20
+    if f_rnk == 1:
+      tags.append("🔥究極ラップ(F1位×坂路完全加速)")
+      score += 25
+  elif "完全加速" in tr_str:
+    score += 10
+
+  # 陣営コンビ特注
+  if "木村哲也" in tm and "ルメール" in jk:
+    if fup_val >= 5:
+      tags.append("✨キムテツ×ルメール勝負(Fup5+)")
+      score += 20
+    elif fup_val <= 4:
+      tags.append("⚠️キムテツ×ルメール危険(Fup4以下)")
+      score -= 20
+  if "中内田" in tm and "川田" in jk and f_rnk == 1:
+    tags.append("✨中内田×川田×F1位(鉄板軸)")
+    score += 25
+  if ("斉藤崇史" in tm or "中舘" in tm) and f_rnk == 1:
+    tags.append("✨特注厩舎×F1位")
+    score += 20
+
+  # クッション値加減点
+  if "最重要" in cv_str:
+    score += 30
+    tags.append("🌟CV最重要適性")
+  elif "危険" in cv_str:
+    score -= 35
+    tags.append("⚠️CV危険コース該当")
+
+  # 谷の形
+  if ninki <= 3 and f_rnk >= 8:
+    tags.append("⚠️谷の形(過剰人気)")
+    score -= 25
+
+  return pd.Series([score, " / ".join(tags)])
+
+
+df_eval[["総合スコア", "判定タグ"]] = df_eval.apply(evaluate_horse, axis=1)
+df_eval = df_eval.sort_values(
+    ["総合スコア", "F指数"], ascending=[False, False]
+).reset_index(drop=True)
+
+# 悪条件頭数（イージーモード歪み判定）
+bad_count = 0
+for idx, r in df_eval.iterrows():
+  # ダミー消し・谷の形・CV危険・減速等
+  if any(
+      x in r["判定タグ"]
+      for x in ["ダミー", "危険", "谷の形", "坂路実質負荷(減速/平坦)"]
+  ):
+    bad_count += 1
+
+is_distorted = 7 <= bad_count <= 14
+
+# ==========================================
+# 画面出力部
+# ==========================================
+st.markdown(f"## 🏁 【{selected_race}】 {race_track}{race_dist}m 出馬解析")
+
+# 概要メトリクス
+m1, m2, m3, m4 = st.columns(4)
+m1.metric(
+    "レース波乱度",
+    "ボーナスレース"
+    if (df_eval["F指数順位"].iloc[0] == 1 and df_eval["総合スコア"].iloc[0] >= 60)
+    else ("混戦・歪み波乱" if is_distorted else "堅調"),
+)
+m2.metric(
+    "イージーモード歪み",
+    f"{'歪みレースあり🔥' if is_distorted else '標準構成'} ({bad_count}頭該当)",
+)
+m3.metric("本日の芝CV値", f"{cv_input} ({cv_band})")
+m4.metric(
+    "連軸筆頭(◎)",
+    f"{int(df_eval['馬番'].iloc[0])}番 {df_eval['馬名'].iloc[0]}",
 )
 
-# 💎 鉄板軸馬（複勝率61.9%）
-df['is_syn_iron'] = (
-    (df['F_rank'] == 1) & (df['arms_rank'] <= 3) & (df['wood_1F'] <= 11.5) & df['is_wood_accel']
+st.markdown("---")
+
+# 出馬表一覧テーブル
+st.subheader("📋 【全出走馬 能力マトリクス・調教・適性一覧】")
+disp_cols = [
+    "馬番",
+    "馬名",
+    "人気順位",
+    "Fup2数値",
+    "F指数",
+    "F指数順位",
+    "ARMS2指数",
+    "ARMS2順位",
+    "TUA指数",
+    "TUA順位",
+    "調教判定",
+    "血統CV適性",
+    "判定タグ",
+    "総合スコア",
+]
+st.dataframe(
+    df_eval[disp_cols].style.background_gradient(
+        subset=["総合スコア", "F指数"], cmap="Blues"
+    ),
+    use_container_width=True,
+    hide_index=True,
 )
 
-# 🔥 高確率軸馬（複勝率55%超）
-df['is_syn_high'] = (
-    ((df['F_rank'] == 1) | (df['F指数'] >= 66)) & (df['wood_1F'] <= 11.5) & df['is_wood_accel']
-)
+# 厳選ピックアップ
+col_l, col_r = st.columns(2)
 
-# ✨ Fup2(5〜7点) × 坂路完全加速
-df['is_syn_fup_sakaro'] = (df['Fup'] >= 5) & df['坂路_完全加速']
+with col_l:
+  st.subheader("🎯 推奨馬ピックアップ")
+  top_horse = df_eval.iloc[0]
+  st.success(
+      f"**◎ 連軸筆頭**: **{int(top_horse['馬番'])}番 {top_horse['馬名']}**\n\n"
+      f"- **選定理由**: F指数 {top_horse['F指数']} (順位:{int(top_horse['F指数順位'])}位) / Fup2: {int(top_horse['Fup2数値'])}点 / ARMS2:{int(top_horse['ARMS2指数'])} / TUA:{int(top_horse['TUA指数'])}\n"
+      f"- **調教**: {top_horse['調教判定']}\n"
+      f"- **血統CV**: {top_horse['血統CV適性']}\n"
+      f"- **評価根拠**: {top_horse['判定タグ']}"
+  )
 
-# 💣 爆弾穴馬（単勝回収率2,100%超）
-df['is_syn_bomb'] = (df['人気'] >= 6) & (df['Fup'] >= 4) & df['調教加速']
-
-# 🔥 SSS級・F1位 × 究極ラップ
-df['is_syn_f1_rap'] = (
-    (df['F_rank'] == 1) & (
-        ((df['wood_1F'] <= 12.4) & df['is_wood_accel']) |
-        ((df['坂路_1F'] <= 12.4) & df['坂路_完全加速'])
-    )
-)
-
-# 🏇 騎手同馬番 × シナジー
-df['syn_jk_ub_wood'] = df['is_same_ub_jk'] & df['is_wood_accel'] & (df['F_rank'] <= 3)
-df['syn_jk_ub_bomb'] = df['is_same_ub_jk'] & df['調教加速'] & (df['Fup'] >= 4) & (df['人気'] >= 6)
-
-# 🏛️ 調教師同馬番 × シナジー（複勝率70%）
-df['syn_tr_ub_arms'] = df['is_same_ub_tr'] & (df['arms_rank'] <= 3)
-
-# 同馬番 × S・F指数6位以内
-df['syn_same_ub_f6'] = df['is_same_ub_any'] & (df['F_rank'] <= 6)
-df['syn_same_ub_s6'] = df['is_same_ub_any'] & (df['S_rank'] <= 6)
-df['syn_same_ub_fs6'] = df['syn_same_ub_f6'] & df['syn_same_ub_s6']
-
-# SまたはFが7位以内 × (調教加速 または 同枠/同馬番)（穴・ヒモ激走ファクター）
-df['flag_sf7_himo'] = (
-    ((df['S_rank'] <= 7) | (df['F_rank'] <= 7)) &
-    (df['調教加速'] | df['is_same_waku'] | df['is_same_ub_any'])
-)
-
-
-# ==============================================================================
-# ★ サイドバー: 競馬場別クッション値 & 馬場状態
-# ==============================================================================
-st.sidebar.markdown("### 芝馬場状態")
-turf_condition = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重", "不良"], index=0, label_visibility="collapsed")
-
-venue_sort_order = ['東京', '中山', '京都', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌']
-existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()]
-if 'active_venue' not in st.session_state or st.session_state['active_venue'] not in existing_venues:
-    st.session_state['active_venue'] = existing_venues[0]
-
-default_cushions = {'札幌': 7.5, '函館': 7.4, '中京': 9.5, '新潟': 9.4, '東京': 9.6, '中山': 9.8, '京都': 9.5, '阪神': 9.6, '小倉': 9.3, '福島': 9.2}
-
-st.sidebar.markdown(f"### 芝クッション値 ({st.session_state['active_venue']})")
-cushion_state_key = f"cushion_val_{st.session_state['active_venue']}"
-if cushion_state_key not in st.session_state:
-    st.session_state[cushion_state_key] = default_cushions.get(st.session_state['active_venue'], 9.5)
-
-current_cushion_val = st.sidebar.number_input(
-    f"芝クッション値 ({st.session_state['active_venue']})",
-    min_value=6.0, max_value=13.0, value=float(st.session_state[cushion_state_key]), step=0.1,
-    key=cushion_state_key, label_visibility="collapsed"
-)
-current_band = get_cushion_band(st.session_state['active_venue'], current_cushion_val)
-
-
-# ==============================================================================
-# ★ 左側サイドバー: 黄金シナジー＆厳選フィルター
-# ==============================================================================
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 👑 黄金シナジー・絶対軸馬")
-syn_iron = st.sidebar.checkbox(f"💎 鉄板軸馬 ({int(df['is_syn_iron'].sum())}頭)", help="複勝率 61.9% / 連対率 46.3%")
-syn_high = st.sidebar.checkbox(f"🔥 高確率軸馬 ({int(df['is_syn_high'].sum())}頭)", help="複勝率 55%超ゾーン")
-syn_fup_sakaro = st.sidebar.checkbox(f"✨ Fup坂路完全 ({int(df['is_syn_fup_sakaro'].sum())}頭)", help="Fup5点以上×坂路完全加速")
-syn_f1_rap = st.sidebar.checkbox(f"🔥 SSS級・F1位×究極ラップ ({int(df['is_syn_f1_rap'].sum())}頭)")
-syn_bomb = st.sidebar.checkbox(f"💣 爆弾穴馬 ({int(df['is_syn_bomb'].sum())}頭)", help="6人気以下×Fup4点以上×調教加速")
-
-st.sidebar.markdown("### 🎯 狙い目抽出")
-filter_fup6_sf = st.sidebar.checkbox(f"🔥 Fup1位(6点+) × S/F6位内 ({int(df['flag_fup6_sf_any'].sum())}頭)", help="勝率25.0%・単回収200%超のアタマ特化")
-filter_target_win = st.sidebar.checkbox(f"🥇 1着狙い (勝率26%超) ({int(df['target_win'].sum())}頭)")
-filter_target_axis = st.sidebar.checkbox(f"🛡️ 軸・連対狙い (複勝率55%超) ({int(df['target_axis'].sum())}頭)")
-filter_sf7_himo = st.sidebar.checkbox(f"🌪️ SF7×加速/同枠 (穴ヒモ) ({int(df['flag_sf7_himo'].sum())}頭)", help="S/F7位内×加速/同枠。他指数低くても激走するヒモ")
-filter_target_himo = st.sidebar.checkbox(f"💣 紐穴狙い ({int(df['target_himo'].sum())}頭)")
-
-st.sidebar.markdown("### 🏇 同馬番（騎手・厩舎）抽出")
-filter_same_ub_jk = st.sidebar.checkbox(f"🏇 騎手同馬番 ({int(df['is_same_ub_jk'].sum())}頭)")
-filter_same_ub_tr = st.sidebar.checkbox(f"🏛️ 厩舎同馬番 ({int(df['is_same_ub_tr'].sum())}頭)")
-filter_same_ub_f6 = st.sidebar.checkbox(f"🎯 同馬番×F6位内 ({int(df['syn_same_ub_f6'].sum())}頭)", help="複勝率38.0%の相手・ヒモ本線")
-filter_same_ub_s6 = st.sidebar.checkbox(f"⚡ 同馬番×S6位内 ({int(df['syn_same_ub_s6'].sum())}頭)", help="先行・スピード持続型")
-
-st.sidebar.markdown("### 🧬 クッション値×血統適性")
-filter_cushion_fit = st.sidebar.checkbox("🟢 クッション値・適性馬のみ")
-filter_cushion_danger = st.sidebar.checkbox("🔴 クッション値・危険血統のみ")
-
-st.sidebar.markdown("### ⚠️ 危険警告")
-filter_danger_jockey = st.sidebar.checkbox(f"⚠️ 危険騎手【危】のみ表示 ({int(df['is_danger_jockey'].sum())}頭)")
-
-if st.sidebar.button("🔄 最新データ再読み込み", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
-
-
-# ==============================================================================
-# ★ レース選択UI
-# ==============================================================================
-weekday_kanji = ["月", "火", "水", "木", "金", "土", "日"]
-w_str = weekday_kanji[race_date.weekday()]
-st.markdown(f"<div class='date-header-badge'>📅 開催日時: {race_date.year}年{race_date.month}月{race_date.day}日 ({w_str})</div>", unsafe_allow_html=True)
-
-chosen_venue = st.radio("開催場選択", options=existing_venues, horizontal=True, label_visibility="collapsed")
-st.session_state['active_venue'] = chosen_venue
-
-v_df = df[df['競馬場名'] == chosen_venue]
-races_in_v = v_df[['race_uid', 'race_id', 'R番号', 'track', 'dist']].drop_duplicates('race_uid').sort_values('R番号')
-
-race_options = {}
-for _, r_row in races_in_v.iterrows():
-    r_horses = df[df['race_uid'] == r_row['race_uid']]
-    
-    r_high_c = int((r_horses['is_syn_high'] == True).sum())
-    r_iron_c = int((r_horses['is_syn_iron'] == True).sum())
-    r_win_c = int((r_horses['target_win'] == True).sum())
-    r_axis_c = int((r_horses['target_axis'] == True).sum())
-    r_bomb_c = int((r_horses['is_syn_bomb'] == True).sum())
-    
-    cond1 = (r_high_c >= 2 or (r_win_c >= 1 and r_axis_c >= 1 and r_bomb_c <= 1)) or \
-            ((r_iron_c >= 1 or r_high_c >= 1 or r_win_c >= 1) and r_bomb_c <= 1)
-            
-    fav3 = r_horses[r_horses['人気'] <= 3]
-    cond2 = not bool((fav3['is_danger_jockey'] == True).any()) if not fav3.empty else True
-    
-    f1_h = r_horses[r_horses['F_rank'] == 1]
-    f1_val = f1_h['F指数'].values[0] if not f1_h.empty else 0
-    cond3 = (f1_val >= 60)
-    
-    tag = "⭕勝負" if (cond1 and cond2 and cond3) else "⛔見送"
-
-    marks = []
-    if r_iron_c >= 1: marks.append("💎鉄")
-    if r_high_c >= 1: marks.append("🌟高")
-    if (r_horses['flag_fup6_sf_any'] == True).any(): marks.append("🔥頭")
-    if (r_horses['syn_jk_ub_wood'] == True).any(): marks.append("👑騎")
-    if (r_horses['syn_tr_ub_arms'] == True).any(): marks.append("🚀厩")
-    if (r_horses['syn_same_ub_f6'] == True).any(): marks.append("🎯同")
-    if (r_horses['flag_sf7_himo'] == True).any(): marks.append("🌪️")
-    if r_win_c >= 1: marks.append("🥇")
-    if r_axis_c >= 1: marks.append("🛡️")
-    if r_bomb_c >= 1: marks.append("💣")
-    if (r_horses['is_danger_jockey'] == True).any(): marks.append("⚠️危")
-
-    lbl = f"{tag} {r_row['R番号']}R ({r_row['track']}{r_row['dist']}m) [{' '.join(marks)}]"
-    race_options[r_row['race_uid']] = lbl
-
-selected_race_uid = st.selectbox("レース選択", options=list(race_options.keys()), format_func=lambda x: race_options[x], label_visibility="collapsed")
-
-race_df = df[df['race_uid'] == selected_race_uid].copy()
-filtered_df = race_df.copy()
-is_turf_race = bool(filtered_df['track'].str.contains('芝').any()) if not filtered_df.empty else False
-
-
-# ==============================================================================
-# ★ レース判定バナー ＆ 全ファクター網羅の推奨買い目
-# ==============================================================================
-r_high_cnt = int((race_df['is_syn_high'] == True).sum())
-r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
-r_win_cnt = int((race_df['target_win'] == True).sum())
-r_axis_cnt = int((race_df['target_axis'] == True).sum())
-r_bomb_cnt = int((race_df['is_syn_bomb'] == True).sum())
-
-if r_high_cnt >= 2 or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1):
-    banner_cls = "race-type-twin-axis"
-    banner_title = "💎 2頭軸・本線レース"
-    is_solid = True
-elif (r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_cnt <= 1:
-    banner_cls = "race-type-solid"
-    banner_title = "🟢 堅調・軸不動レース"
-    is_solid = True
-elif r_bomb_cnt >= 2:
-    banner_cls = "race-type-chaos"
-    banner_title = f"🔴 波乱警戒レース (爆弾穴馬 {r_bomb_cnt}頭 潜伏)"
-    is_solid = False
-else:
-    banner_cls = "race-type-mix"
-    banner_title = "🟡 混戦・軸波乱レース"
-    is_solid = False
-
-fav3_cur = race_df[race_df['人気'] <= 3]
-danger_in_fav3 = bool((fav3_cur['is_danger_jockey'] == True).any()) if not fav3_cur.empty else False
-
-f1_cur = race_df[race_df['F_rank'] == 1]
-f1_val_cur = float(f1_cur['F指数'].values[0]) if not f1_cur.empty else 0.0
-is_f1_ok = (f1_val_cur >= 60)
-
-is_go = is_solid and (not danger_in_fav3) and is_f1_ok
-
-race_df['cushion_badge_raw'] = race_df['種牡馬'].apply(lambda s: evaluate_sire_cushion(s, current_band) if is_turf_race else "")
-race_df['is_cushion_fit'] = race_df['cushion_badge_raw'].str.contains('クッション適|軟馬場適')
-
-if is_go:
-    dec_badge = "<span class='badge-decision-go'>⭕ 【勝負厳選レース】3大条件クリア</span>"
-    panel_cls = "recom-panel-go"
-    title_cls = "recom-title-go"
-    pts_cls = "recom-pts"
-    p_title = "🎯 【勝負推奨】3連単＆ワイド買い目（全ファクター網羅 / 馬番のみ）"
-    
-    # 1着候補: 鉄板・高確率・騎手同馬番W加速・厩舎同馬番arms上位・Fup6+×S/F6・1着狙い
-    c1_cands = race_df[
-        race_df['is_syn_iron'] | race_df['is_syn_high'] | 
-        race_df['syn_jk_ub_wood'] | race_df['syn_tr_ub_arms'] | 
-        race_df['flag_fup6_sf_any'] | race_df['target_win']
-    ].sort_values('F_rank')['馬番'].tolist()
-    
-    if len(c1_cands) < 2:
-        sup = race_df[(race_df['F_rank'] == 1) | (race_df['F指数'] >= 66)].sort_values('F_rank')['馬番'].tolist()
-        for s in sup:
-            if s not in c1_cands: c1_cands.append(s)
-            if len(c1_cands) >= 2: break
-    rec_c1 = c1_cands[:3]
-
-    # 2着候補: 1着候補 + 軸連対 + tua上位 + S1位 + 同馬番×(F3位内 or S3位内) + クッション適性馬
-    rec_c2 = list(rec_c1)
-    for h in race_df[
-        race_df['target_axis'] | (race_df['tua_rank'] <= 2) | (race_df['S_rank'] == 1) |
-        (race_df['is_same_ub_any'] & ((race_df['F_rank'] <= 3) | (race_df['S_rank'] <= 3))) |
-        (race_df['is_cushion_fit'] & (race_df['F_rank'] <= 4))
-    ]['馬番'].tolist():
-        if h not in rec_c2: rec_c2.append(h)
-        if len(rec_c2) >= 5: break
-
-    # 3着候補: 2着候補 + ★SF7×加速/同枠 + 同馬番×(F6位内 or S6位内) + 爆弾穴馬 + arms100+
-    rec_c3 = list(rec_c2)
-    for h in race_df[
-        race_df['flag_sf7_himo'] | race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] |
-        race_df['is_syn_bomb'] | race_df['syn_jk_ub_bomb'] | (race_df['arms'] >= 100)
-    ]['馬番'].tolist():
-        if h not in rec_c3: rec_c3.append(h)
-        if len(rec_c3) >= 8: break
-else:
-    reasons = []
-    if not is_solid: reasons.append("混戦/波乱")
-    if danger_in_fav3: reasons.append("1〜3人気に危騎手")
-    if not is_f1_ok: reasons.append(f"F1位が{f1_val_cur:.0f}点")
-    dec_badge = f"<span class='badge-decision-skip'>⛔ 【見送り推奨】({', '.join(reasons)})</span>"
-    panel_cls = "recom-panel-skip"
-    title_cls = "recom-title-skip"
-    pts_cls = "recom-pts-skip"
-    p_title = "⚠️ 【参考算出】波乱・混戦対応型 買い目（全ファクター網羅 / 馬番のみ）"
-
-    c1_cands = []
-    for h in race_df.sort_values('F_rank')['馬番'].tolist()[:3]:
-        if h not in c1_cands: c1_cands.append(h)
-    for h in race_df[race_df['flag_fup6_sf_any']]['馬番'].tolist():
-        if h not in c1_cands: c1_cands.append(h)
-    for h in race_df.sort_values('arms_rank')['馬番'].tolist()[:1]:
-        if h not in c1_cands: c1_cands.append(h)
-    rec_c1 = c1_cands[:4]
-
-    rec_c2 = list(rec_c1)
-    for h in race_df.sort_values('tua_rank')['馬番'].tolist()[:2]:
-        if h not in rec_c2: rec_c2.append(h)
-    for h in race_df[race_df['is_same_ub_any'] & (race_df['F_rank'] <= 4)]['馬番'].tolist():
-        if h not in rec_c2: rec_c2.append(h)
-    for h in race_df.sort_values('F_rank')['馬番'].tolist()[:5]:
-        if h not in rec_c2: rec_c2.append(h)
-        if len(rec_c2) >= 5: break
-
-    rec_c3 = list(rec_c2)
-    for h in race_df[race_df['flag_sf7_himo'] | race_df['syn_same_ub_f6'] | race_df['syn_same_ub_s6'] | race_df['is_syn_bomb'] | race_df['syn_jk_ub_bomb']]['馬番'].tolist():
-        if h not in rec_c3: rec_c3.append(h)
-    for h in race_df.sort_values('F_rank')['馬番'].tolist()[:7]:
-        if h not in rec_c3: rec_c3.append(h)
-        if len(rec_c3) >= 7: break
-
-tickets = sum(1 for h1 in rec_c1 for h2 in rec_c2 if h2 != h1 for h3 in rec_c3 if h3 not in [h1, h2])
-c1_str = ", ".join(str(int(u)) for u in rec_c1)
-c2_str = ", ".join(str(int(u)) for u in rec_c2)
-c3_str = ", ".join(str(int(u)) for u in rec_c3)
-main_u = rec_c1[0]
-w_partners = [str(int(u)) for u in rec_c2 if u != main_u][:3]
-wide_str = f"{int(main_u)} - {', '.join(w_partners)}"
-
-st.markdown(
-    f"<div class='race-type-banner {banner_cls}'>"
-    f"<div><strong>{banner_title}</strong> {dec_badge}</div>"
-    f"<div>高確率軸: {r_high_cnt}頭 / 軸連対: {r_axis_cnt}頭 / 💣爆弾: {r_bomb_cnt}頭</div>"
-    f"</div>",
-    unsafe_allow_html=True
-)
-
-st.markdown(
-    f"<div class='{panel_cls}'>"
-    f"<div class='{title_cls}'>{p_title}</div>"
-    f"<div class='recom-row'><span class='recom-label'>🎫 3連単フォーメーション</span> <span class='{pts_cls}'>計 {tickets}点</span><br>"
-    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>1着</strong>: <span class='recom-val-num'>{c1_str}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong>2着</strong>: <span class='recom-val-num'>{c2_str}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong>3着</strong>: <span class='recom-val-num'>{c3_str}</span></div>"
-    f"<div class='recom-row' style='margin-top:10px;'><span class='recom-label'>🛡️ ワイド / 馬連本線</span> <span class='{pts_cls}'>計 {len(w_partners)}点</span><br>"
-    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>流し</strong>: <span class='recom-val-num'>{wide_str}</span></div>"
-    f"</div>",
-    unsafe_allow_html=True
-)
-
-
-# ==============================================================================
-# ★ 出走馬カード表示 ＆ フィルター適用
-# ==============================================================================
-filtered_df['cushion_badge'] = filtered_df['種牡馬'].apply(lambda s: evaluate_sire_cushion(s, current_band) if is_turf_race else "")
-
-if syn_iron: filtered_df = filtered_df[filtered_df['is_syn_iron']]
-if syn_high: filtered_df = filtered_df[filtered_df['is_syn_high']]
-if syn_fup_sakaro: filtered_df = filtered_df[filtered_df['is_syn_fup_sakaro']]
-if syn_f1_rap: filtered_df = filtered_df[filtered_df['is_syn_f1_rap']]
-if syn_bomb: filtered_df = filtered_df[filtered_df['is_syn_bomb']]
-if filter_fup6_sf: filtered_df = filtered_df[filtered_df['flag_fup6_sf_any']]
-if filter_target_win: filtered_df = filtered_df[filtered_df['target_win']]
-if filter_target_axis: filtered_df = filtered_df[filtered_df['target_axis']]
-if filter_sf7_himo: filtered_df = filtered_df[filtered_df['flag_sf7_himo']]
-if filter_target_himo: filtered_df = filtered_df[filtered_df['target_himo']]
-if filter_same_ub_jk: filtered_df = filtered_df[filtered_df['is_same_ub_jk']]
-if filter_same_ub_tr: filtered_df = filtered_df[filtered_df['is_same_ub_tr']]
-if filter_same_ub_f6: filtered_df = filtered_df[filtered_df['syn_same_ub_f6']]
-if filter_same_ub_s6: filtered_df = filtered_df[filtered_df['syn_same_ub_s6']]
-if filter_danger_jockey: filtered_df = filtered_df[filtered_df['is_danger_jockey']]
-if filter_cushion_fit: filtered_df = filtered_df[filtered_df['cushion_badge'].str.contains('クッション適|軟馬場適')]
-if filter_cushion_danger: filtered_df = filtered_df[filtered_df['cushion_badge'].str.contains('危険血統')]
-
-col_s1, col_s2 = st.columns([2.5, 1.5])
-with col_s1:
-    kw = st.text_input("🔍 馬名・騎手・調教師・父名で検索", placeholder="検索ワードを入力...", label_visibility="collapsed")
-    if kw:
-        filtered_df = filtered_df[
-            filtered_df['馬名'].str.contains(kw, na=False) |
-            filtered_df['騎手'].str.contains(kw, na=False) |
-            filtered_df['調教師'].str.contains(kw, na=False) |
-            filtered_df['種牡馬'].str.contains(kw, na=False)
-        ]
-with col_s2:
-    sort_opt = st.selectbox(
-        "並び順",
-        [
-            "単勝人気順 (1人気→)",
-            "🚀 調教加速順 (W加速幅・坂路完全)",
-            "馬番順",
-            "🔥 F指数 順位 (1位→)",
-            "🚀 arms指数 順位 (1位→)",
-            "⚡ S指数 順位 (1位→)",
-            "🛡️ tua指数 順位 (1位→)",
-            "✨ Fup 順位 (1位→)"
-        ],
-        index=0,
-        label_visibility="collapsed"
+  # ヒモ穴（人気薄×完全加速または高Fup）
+  ana_horses = df_eval[
+      (df_eval["人気順位"] >= 5) & (df_eval["総合スコア"] >= 15)
+  ]
+  if not ana_horses.empty:
+    ana_h = ana_horses.iloc[0]
+    st.warning(
+        f"**🔥 特大推奨ヒモ穴**: **{int(ana_h['馬番'])}番 {ana_h['馬名']}** "
+        f"({int(ana_h['人気順位'])}番人気)\n\n"
+        f"- **調教/適性**: {ana_h['調教判定']} | {ana_h['血統CV適性']}\n"
+        f"- **激走根拠**: {ana_h['判定タグ']}"
     )
 
-if sort_opt == "単勝人気順 (1人気→)": filtered_df = filtered_df.sort_values(['人気', '馬番'])
-elif sort_opt == "🚀 調教加速順 (W加速幅・坂路完全)":
-    filtered_df['sort_accel_score'] = filtered_df['wood_accel'].fillna(-99.0) + (filtered_df['坂路_完全加速'].astype(int) * 2.0)
-    filtered_df = filtered_df.sort_values(['sort_accel_score', '人気'], ascending=[False, True])
-elif sort_opt == "🔥 F指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['F_rank', '馬番'])
-elif sort_opt == "🚀 arms指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['arms_rank', '馬番'])
-elif sort_opt == "⚡ S指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['S_rank', '馬番'])
-elif sort_opt == "🛡️ tua指数 順位 (1位→)": filtered_df = filtered_df.sort_values(['tua_rank', '馬番'])
-elif sort_opt == "✨ Fup 順位 (1位→)": filtered_df = filtered_df.sort_values(['Fup_rank', '馬番'])
-else: filtered_df = filtered_df.sort_values('馬番')
+  # ダミー消し馬
+  keshi_horses = df_eval[df_eval["判定タグ"].str.contains("ダミー|谷の形|危険")]
+  if not keshi_horses.empty:
+    keshi_names = [
+        f"{int(r['馬番'])}番 {r['馬名']} ({r['判定タグ']})"
+        for _, r in keshi_horses.iterrows()
+    ]
+    st.error("**⚠️ ダミー看破・危険な消し馬**:\n" + "\n".join(keshi_names))
 
-st.markdown(f"**出走馬一覧（該当: {len(filtered_df)}頭）**")
+with col_r:
+  st.subheader("🎫 競馬予想10 実戦買い目（新フォーミュラ）")
+  top_id = int(df_eval["馬番"].iloc[0])
+  sub_ids = [int(x) for x in df_eval["馬番"].iloc[1:4].tolist()]
+  himo_ids = [int(x) for x in df_eval["馬番"].iloc[4:8].tolist()]
 
-for _, row in filtered_df.iterrows():
-    badges = []
-    if row.get('is_danger_jockey'):
-        badges.append("<span class='badge-danger-jockey'>⚠️ 危険騎手【危】</span>")
-
-    # Fup6+ × S/F6位内バッジ
-    if row.get('flag_fup6_s6'):
-        badges.append("<span class='badge-fup6-sf'>🔥 Fup6+×S6 (勝率25%/回収200%)</span>")
-    elif row.get('flag_fup6_f6'):
-        badges.append("<span class='badge-fup6-sf'>🔥 Fup6+×F6 (勝率25%)</span>")
-
-    if row.get('target_win'):
-        badges.append("<span class='badge-target-win'>🥇 1着狙い (勝率26%超)</span>")
-    elif row.get('target_axis'):
-        badges.append("<span class='badge-target-axis'>🛡️ 軸・連対狙い (複勝率55%超)</span>")
-    if row.get('is_syn_iron'):
-        badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬 (複勝61.9%)</span>")
-    elif row.get('is_syn_high'):
-        badges.append("<span class='badge-synergy badge-high'>🔥 高確率軸 (複勝55%超)</span>")
-    if row.get('is_syn_fup_sakaro'):
-        badges.append("<span class='badge-synergy badge-sakaro-fup'>✨ Fup坂路完全</span>")
-    if row.get('is_syn_f1_rap'):
-        badges.append("<span class='badge-synergy badge-f1-rap'>🔥 SSS級・F1位×究極ラップ</span>")
-
-    # 色分け同馬番バッジ
-    if row.get('syn_jk_ub_wood'):
-        badges.append("<span class='badge-jk-ub'>👑 騎手同馬番×W加速×F上位</span>")
-    elif row.get('is_same_ub_jk'):
-        badges.append(f"<span class='badge-jk-ub'>🏇 騎手同馬番{row['same_ub_jk_count']}回目 ({row['same_ub_jk_races']})</span>")
-
-    if row.get('syn_tr_ub_arms'):
-        badges.append("<span class='badge-tr-ub'>🚀 厩舎同馬番×arms上位 (複勝70%)</span>")
-    elif row.get('is_same_ub_tr'):
-        badges.append(f"<span class='badge-tr-ub'>🏛️ 厩舎同馬番{row['same_ub_tr_count']}回目 ({row['same_ub_tr_races']})</span>")
-
-    # 同馬番 × F/S6位以内 バッジ
-    if row.get('syn_same_ub_fs6'):
-        badges.append("<span class='badge-same-ub-fs6'>👑 同馬番×FS6 (複勝42%)</span>")
-    elif row.get('syn_same_ub_f6'):
-        badges.append("<span class='badge-same-ub-f6'>🎯 同馬番×F6 (複勝38%)</span>")
-    elif row.get('syn_same_ub_s6'):
-        badges.append("<span class='badge-same-ub-s6'>⚡ 同馬番×S6 (先行連対)</span>")
-
-    # SF7×加速/同枠バッジ
-    if row.get('flag_sf7_himo'):
-        badges.append("<span class='badge-sf7-himo'>🌪️ SF7×加速/同枠</span>")
-
-    if row.get('is_syn_bomb') or row.get('syn_jk_ub_bomb'):
-        badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
-
-    # クッション値 × 種牡馬バッジ
-    if row.get('cushion_badge'):
-        badges.append(row['cushion_badge'])
-
-    # ★ リアルタイムオッズ・馬体重バッジ
-    if pd.notnull(row.get('リアル単勝オッズ')):
-        badges.append(f"<span class='badge-rt-odds'>単 {row['リアル単勝オッズ']:.1f}倍 ({int(row['人気'])}人気)</span>")
-    if pd.notnull(row.get('馬体重表示')):
-        badges.append(f"<span class='badge-rt-weight'>体重 {row['馬体重表示']}</span>")
-
-    u_no = int(row['馬番']) if pd.notnull(row['馬番']) else 99
-    pop_str = f"{int(row['人気'])}人気" if pd.notnull(row['人気']) else "-人気"
-    sire_display = row.get('種牡馬') if row.get('種牡馬') else "-"
+  st.markdown(f"""
+    **【本線：単勝・複勝】**
+    * 単勝: **{top_id}** (重点配分)
+    * 複勝: **{sub_ids[0] if sub_ids else top_id}**
     
-    # 指数順位バッジ
-    f_badge = f"<span class='rank-1st'>🥇1位</span>" if row['F_rank']==1 else f"{int(row['F_rank'])}位"
-    arms_badge = f"<span class='rank-1st'>🥇1位</span>" if row['arms_rank']==1 else f"{int(row['arms_rank'])}位"
-    s_badge = f"<span class='rank-1st'>🥇1位</span>" if row['S_rank']==1 else f"{int(row['S_rank'])}位"
-    tua_badge = f"<span class='rank-1st'>🥇1位</span>" if row['tua_rank']==1 else f"{int(row['tua_rank'])}位"
-    fup_badge = f"<span class='rank-1st'>🥇1位</span>" if row['Fup_rank']==1 else f"{int(row['Fup_rank'])}位"
+    **【本線：3連複フォーメーション】**
+    * **1列目 (軸)**: `{top_id}`
+    * **2列目 (相手)**: `{sub_ids}`
+    * **3列目 (ヒモ)**: `{sub_ids + himo_ids}`
     
-    # 指数の狙い目数値ハイライト整形
-    f_val_num = float(row.get('F指数', 0.0))
-    if f_val_num >= 72.0:
-        f_val_html = f"<span class='val-f-super'>{f_val_num:.0f}</span>"
-    elif f_val_num >= 66.0:
-        f_val_html = f"<span class='val-f-high'>{f_val_num:.0f}</span>"
-    elif f_val_num >= 50.0:
-        f_val_html = f"<strong>{f_val_num:.0f}</strong>"
-    else:
-        f_val_html = f"{f_val_num:.0f}"
+    **【高配当狙い：3連単 2・3着連軸マルチ】**
+    * **1着**: `{top_id}`, `{sub_ids[0] if sub_ids else top_id}`
+    * **2着**: `{top_id}`, `{sub_ids}`
+    * **3着**: `{top_id}`, `{sub_ids + himo_ids}`
+    
+    **【抑え・資金回収：ワイド】**
+    * `{top_id}` － `{sub_ids[0] if sub_ids else ''}`
+    * `{top_id}` － `{sub_ids[1] if len(sub_ids) > 1 else ''}`
+    """)
 
-    arms_val_num = float(row.get('arms', 0.0))
-    if arms_val_num >= 120.0:
-        arms_val_html = f"<span class='val-arms-super'>{arms_val_num:.0f}</span>"
-    elif arms_val_num >= 100.0:
-        arms_val_html = f"<strong>{arms_val_num:.0f}</strong>"
-    else:
-        arms_val_html = f"{arms_val_num:.0f}"
-
-    tua_val_num = float(row.get('tua', 0.0))
-    if tua_val_num >= 190.0:
-        tua_val_html = f"<span class='val-tua-super'>{tua_val_num:.0f}</span>"
-    else:
-        tua_val_html = f"{tua_val_num:.0f}"
-
-    s_val_num = float(row.get('S指数', 0.0))
-    if s_val_num >= 30.0:
-        s_val_html = f"<span class='val-s-super'>{s_val_num:.0f}</span>"
-    else:
-        s_val_html = f"{s_val_num:.0f}"
-
-    fup_val_num = int(row.get('Fup', 0))
-    if fup_val_num >= 5:
-        fup_val_html = f"<span class='val-f-super'>{fup_val_num}点</span>"
-    elif fup_val_num == 4:
-        fup_val_html = f"<strong style='color:#f97316;'>{fup_val_num}点</strong>"
-    else:
-        fup_val_html = f"{fup_val_num}点"
-
-    # 調教テキストの生成（加速時に色付きバッジを付与）
-    if pd.notnull(row.get('wood_1F')):
-        w_5f_txt = f"{row['wood_5F']:.1f}s " if pd.notnull(row.get('wood_5F')) else ""
-        if row.get('is_wood_accel'):
-            w_acc_badge = f"<span class='badge-accel-on'>加速 +{row['wood_accel']:.1f}s</span>"
-        elif pd.notnull(row.get('wood_accel')):
-            w_acc_badge = f"<span class='badge-accel-off'>減速 {row['wood_accel']:.1f}s</span>"
-        else:
-            w_acc_badge = ""
-        w_str = f"W: {w_5f_txt}1F {row['wood_1F']:.1f}s {w_acc_badge}".strip()
-    else:
-        w_str = "W: 計測無"
-
-    if pd.notnull(row.get('坂路_4F')):
-        if row.get('坂路_完全加速'):
-            s_acc_badge = "<span class='badge-accel-on'>完全加速</span>"
-        else:
-            s_acc_badge = "<span class='badge-accel-off'>非加速</span>"
-        s_str = f"坂路: 4F {row['坂路_4F']:.1f}s (1F {row['坂路_1F']:.1f}s) {s_acc_badge}"
-    else:
-        s_str = "坂路: 計測無"
-
-    st.markdown(
-        f"<div class='horse-card'>"
-        f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番 {row['馬名']} ({pop_str})</span> {' '.join(badges)}</div>"
-        f"<ul class='horse-card-list'>"
-        f"<li><strong>騎手/厩舎</strong>: {row.get('騎手')} / {row.get('調教師')} / <strong>父: {sire_display}</strong></li>"
-        f"<li><strong>調教ラップ</strong>: <strong>{w_str}</strong> | <strong>{s_str}</strong></li>"
-        f"<li><strong>能力指数</strong>: F: {f_val_html} ({f_badge}) | ARMS: {arms_val_html} ({arms_badge}) | S: {s_val_html} ({s_badge}) | TUA: {tua_val_html} ({tua_badge}) | Fup: {fup_val_html} ({fup_badge})</li>"
-        f"</ul></div>",
-        unsafe_allow_html=True
-    )
+st.markdown("---")
+st.caption(
+    "💡 毎週の運用手順: TARGETから出力したCSVをGitHubの `data/`"
+    " フォルダにそのままドラッグ＆ドロップしてコミットするだけで、自動的に即時反映されます。"
+)
