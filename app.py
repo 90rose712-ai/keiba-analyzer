@@ -427,7 +427,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# --- 危険騎手リスト定義（情報提示のみ・買い目排除なし） ---
+# --- 危険騎手リスト定義 ---
 DANGER_JOCKEYS_F3 = [
     '斎藤新', '小沢大仁', '丸山元気', '池添謙一', '松若風馬', '菊沢一樹',
     '田辺裕信', '横山琉人', '岩田康誠', '吉田隼人', '菅原明良', '富田暁',
@@ -604,14 +604,14 @@ def evaluate_course_training(row):
       if sakaro_full:
         badge_html = "<span class='badge-cushion-fit' style='background:linear-gradient(135deg, #d97706 0%, #b45309 100%);border-color:#fcd34d;'>⚡ コース特注 (ダ短×坂路完全加速)</span>"
         is_fit = True
-    else:  # ダート中距離 (>=1600m)
+    else:
       if sakaro_full and wood_accel:
         badge_html = "<span class='badge-cushion-fit' style='background:linear-gradient(135deg, #059669 0%, #047857 100%);border-color:#6ee7b7;'>⚡ コース特注 (中距離ダ×坂路W併用)</span>"
         is_fit = True
       elif sakaro_full:
         badge_html = "<span class='badge-cushion-fit' style='background:linear-gradient(135deg, #059669 0%, #047857 100%);border-color:#6ee7b7;'>⚡ コース特注 (中距離ダ×坂路完全加速)</span>"
         is_fit = True
-  else:  # 芝コース
+  else:
     if dist_val <= 1400:
       if sakaro_full:
         badge_html = "<span class='badge-cushion-fit' style='background:linear-gradient(135deg, #059669 0%, #10b981 100%);border-color:#34d399;'>⚡ コース特注 (芝短距離×坂路完全加速)</span>"
@@ -626,7 +626,7 @@ def evaluate_course_training(row):
       elif wood_accel and wood_1f <= 11.2:
         badge_html = "<span class='badge-cushion-fit' style='background:linear-gradient(135deg, #0284c7 0%, #0369a1 100%);border-color:#7dd3fc;'>⚡ コース特注 (芝マイル×W猛時計加速)</span>"
         is_fit = True
-    else:  # 2000m以上
+    else:
       if sakaro_full and sakaro_1f <= 12.0:
         badge_html = "<span class='badge-cushion-fit' style='background:linear-gradient(135deg, #be123c 0%, #9f1239 100%);border-color:#fda4af;'>🔥 コース特注 (中長距離×坂路究極11秒台)</span>"
         is_fit = True
@@ -1056,7 +1056,7 @@ df['flag_sf7_himo'] = ((df['S_rank'] <= 7) | (df['F_rank'] <= 7)) & (
     df['調教加速'] | df['is_same_waku'] | df['is_same_ub_any']
 )
 
-# 危険騎手判定（情報提供用のみ・馬券構成からは除外しない）
+# 危険騎手判定
 def check_danger_jockey_info(row):
   jk = str(row.get('騎手', '')).strip()
   is_f3 = row.get('F_rank', 99) <= 3
@@ -1323,7 +1323,73 @@ race_df['is_cushion_fit'] = race_df['cushion_badge_raw'].str.contains('特注')
 race_df['is_cushion_danger'] = race_df['cushion_badge_raw'].str.contains('危険')
 
 # ==============================================================================
-# ★ レース判定 ＆ プロの推奨買い目生成（コース特注反映・3連単2パターン化）
+# ★ コース・距離・馬同士の相対比較による動的優先度ロジック
+# ==============================================================================
+cur_track_type = race_df['track'].iloc[0] if not race_df.empty else '芝'
+cur_dist_val = int(re.sub(r'\D', '', str(race_df['dist'].iloc[0]))) if not race_df.empty else 1600
+
+def calculate_dynamic_priority_score(r):
+  score = 0.0
+  f_r = r.get('F_rank', 99)
+  s_r = r.get('S_rank', 99)
+  a_r = r.get('arms_rank', 99)
+  t_r = r.get('tua_rank', 99)
+  fup_val = r.get('Fup', 0)
+  c_fit = bool(r.get('is_cushion_fit', False))
+  c_dang = bool(r.get('is_cushion_danger', False))
+  c_tr_fit = bool(r.get('is_course_training_fit', False))
+  sakaro_full = bool(r.get('坂路_完全加速', False))
+  wood_acc = bool(r.get('is_wood_accel', False))
+
+  # ① ダート短距離 (<=1400m): S指数(先行) × 坂路完全加速
+  if 'ダ' in cur_track_type and cur_dist_val <= 1400:
+    score += (100 - s_r * 8) + (100 - f_r * 4)
+    if sakaro_full: score += 35
+    if t_r <= 3: score += 20
+    if c_tr_fit: score += 25
+
+  # ② 芝マイル〜1800m外回り (1500〜1800m): クッション値×種牡馬バイアス × 坂路W二刀流
+  elif '芝' in cur_track_type and 1500 <= cur_dist_val <= 1800:
+    score += (100 - f_r * 7) + (100 - a_r * 5)
+    if c_fit: score += 30
+    if c_dang: score -= 40
+    if sakaro_full and wood_acc: score += 35
+    elif sakaro_full or wood_acc: score += 15
+    if c_tr_fit: score += 25
+    if fup_val >= 5: score += 20
+
+  # ③ 芝中長距離 (>=2000m): ARMS2(スタミナ持続) × 坂路究極ラップ
+  elif '芝' in cur_track_type and cur_dist_val >= 2000:
+    score += (100 - a_r * 9) + (100 - f_r * 4) + (100 - t_r * 3)
+    if r.get('is_syn_f1_rap', False): score += 35
+    if c_fit: score += 25
+    if c_dang: score -= 35
+    if c_tr_fit: score += 25
+    if fup_val >= 5: score += 20
+
+  # ④ ダート中長距離 (>=1600m): F指数 × TUA(地力スタミナ)
+  else:
+    score += (100 - f_r * 8) + (100 - t_r * 8) + (100 - a_r * 4)
+    if sakaro_full: score += 20
+    if c_tr_fit: score += 25
+    if fup_val >= 4: score += 15
+
+  if r.get('is_fup_trap', False):
+    score -= 60
+  return score
+
+race_df['dynamic_score'] = race_df.apply(calculate_dynamic_priority_score, axis=1)
+
+# 相対ギャップ（1頭突出か、混戦か）判定
+sorted_dynamic = race_df.sort_values('dynamic_score', ascending=False)
+if len(sorted_dynamic) >= 2:
+  score_gap = sorted_dynamic.iloc[0]['dynamic_score'] - sorted_dynamic.iloc[1]['dynamic_score']
+  is_dominant_single = score_gap >= 25.0
+else:
+  is_dominant_single = False
+
+# ==============================================================================
+# ★ レース判定 ＆ プロの推奨買い目生成
 # ==============================================================================
 r_high_cnt = int((race_df['is_syn_high'] == True).sum())
 r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
@@ -1359,121 +1425,58 @@ if not solid_top3 and top3_fav_horses:
   ]
 
 # ------------------------------------------------------------------------------
-# ★ 推奨馬ピックアップ（コース特注・調教事実を最優先反映）
+# ★ 推奨馬ピックアップ（動的優先度スコアを最優先反映）
 # ------------------------------------------------------------------------------
-# 🥇 1着狙い
-win_candidates = race_df[
-    race_df['target_win'] | race_df['flag_fup6_sf_any'] | race_df['is_sss_level']
-].sort_values('F_rank')
-pick_win_horse = (
-    win_candidates.iloc[0]
-    if not win_candidates.empty
-    else race_df.sort_values('F_rank').iloc[0]
-)
+pick_win_horse = sorted_dynamic.iloc[0]
 
-# 🛡️ 軸・連対狙い
-axis_candidates = race_df[
-    (race_df['馬番'] != pick_win_horse['馬番'])
-    & (
-        race_df['target_axis']
-        | (race_df['F_rank'] <= 2)
-        | (race_df['arms_rank'] <= 3)
-        | race_df['is_course_training_fit']
-    )
-].sort_values('F_rank')
-pick_axis_horse = (
-    axis_candidates.iloc[0]
-    if not axis_candidates.empty
-    else (
-        race_df[race_df['馬番'] != pick_win_horse['馬番']]
-        .sort_values('F_rank')
-        .iloc[0]
-        if len(race_df) > 1
-        else pick_win_horse
-    )
-)
+axis_cands = sorted_dynamic[sorted_dynamic['馬番'] != pick_win_horse['馬番']]
+pick_axis_horse = axis_cands.iloc[0] if not axis_cands.empty else pick_win_horse
 
-# 💣 紐穴狙い
-himo_candidates = race_df[
-    (race_df['人気'] >= 4)
+himo_cands = sorted_dynamic[
+    (sorted_dynamic['人気'] >= 4)
     & (
-        race_df['target_himo']
-        | race_df['is_syn_bomb']
-        | race_df['flag_sf7_himo']
-        | race_df['坂路_完全加速']
-        | race_df['is_course_training_fit']
+        sorted_dynamic['target_himo']
+        | sorted_dynamic['is_syn_bomb']
+        | sorted_dynamic['flag_sf7_himo']
+        | sorted_dynamic['is_course_training_fit']
     )
-].sort_values(['人気', 'F_rank'])
+]
 pick_himo_horse = (
-    himo_candidates.iloc[0]
-    if not himo_candidates.empty
-    else race_df.sort_values('arms_rank', ascending=False).iloc[0]
+    himo_cands.iloc[0]
+    if not himo_cands.empty
+    else (
+        sorted_dynamic.iloc[-1]
+        if len(sorted_dynamic) > 2
+        else pick_axis_horse
+    )
 )
 
-# ⚠️ 危険な人気馬
-danger_candidates = race_df[
+danger_cands = race_df[
     (race_df['人気'] <= 5) & (race_df['is_fup_trap'] | race_df['is_cushion_danger'])
 ]
-pick_danger_horse = (
-    danger_candidates.iloc[0] if not danger_candidates.empty else None
-)
+pick_danger_horse = danger_cands.iloc[0] if not danger_cands.empty else None
 
 # ------------------------------------------------------------------------------
-# ★ 買い目列の生成（コース特注適合馬を本線・相手・ヒモへ完全自動反映）
+# ★ 買い目列の生成（動的優先度スコア順に編成）
 # ------------------------------------------------------------------------------
-# 1列目（軸）
-col1_pool = race_df[
-    (
-        race_df['is_sss_level']
-        | race_df['is_syn_iron']
-        | race_df['is_syn_f1_rap']
-        | race_df['target_win']
-        | (race_df['Fup'] >= 5)
-    )
-    & (~race_df['is_fup_trap'])
-].sort_values('F_rank')['馬番'].tolist()
+if is_dominant_single:
+  rec_c1 = [pick_win_horse['馬番']]
+else:
+  rec_c1 = [pick_win_horse['馬番'], pick_axis_horse['馬番']]
 
-if len(col1_pool) < 2:
-  for u in solid_top3 + race_df.sort_values('F_rank')['馬番'].tolist():
-    if u not in col1_pool and u not in race_df[race_df['is_fup_trap']]['馬番'].tolist():
-      col1_pool.append(u)
-    if len(col1_pool) >= 2:
-      break
-rec_c1 = col1_pool[:2]
-
-# 2列目（相手: コース特注該当馬も積極的に組み込み）
 rec_c2 = list(rec_c1)
-for u in race_df[
-    (
-        race_df['target_axis']
-        | (race_df['F_rank'] <= 5)
-        | (race_df['arms_rank'] <= 3)
-        | (race_df['tua_rank'] <= 3)
-        | (race_df['S_rank'] <= 3)
-        | (race_df['is_cushion_fit'] & (race_df['F_rank'] <= 5))
-        | race_df['is_course_training_fit']
-    )
-    & (~race_df['is_fup_trap'])
-].sort_values('F_rank')['馬番'].tolist():
-  if u not in rec_c2:
+for u in sorted_dynamic['馬番'].tolist():
+  if u not in rec_c2 and not race_df[race_df['馬番'] == u].iloc[0].get('is_fup_trap', False):
     rec_c2.append(u)
-  if len(rec_c2) >= 5:
+  if len(rec_c2) >= (4 if is_dominant_single else 5):
     break
 
-# 3列目（ヒモ広め: コース特注馬＋坂路完全加速＋SF7＋爆弾穴馬）
 rec_c3 = list(rec_c2)
 for u in (
-    race_df[
-        race_df['坂路_完全加速']
-        | race_df['flag_sf7_himo']
-        | race_df['is_syn_bomb']
-        | race_df['syn_same_ub_fs6']
-        | race_df['target_himo']
-        | race_df['is_course_training_fit']
-    ]
-    .sort_values('F_rank')['馬番']
-    .tolist()
-    + race_df.sort_values('arms_rank').head(5)['馬番'].tolist()
+    sorted_dynamic.head(8)['馬番'].tolist()
+    + race_df[race_df['is_course_training_fit']]['馬番'].tolist()
+    + race_df[race_df['flag_sf7_himo']]['馬番'].tolist()
+    + race_df[race_df['is_syn_bomb']]['馬番'].tolist()
 ):
   if u not in rec_c3:
     rec_c3.append(u)
@@ -1548,12 +1551,12 @@ p2_c3_str = ', '.join(str(int(u)) for u in p2_3rd)
 wave_label = (
     '【ボーナスレース】'
     if is_bonus_cur
-    else ('【堅調】' if is_go else '【混戦・波乱】')
+    else ('【堅調（1頭突出）】' if is_dominant_single else ('【堅調】' if is_go else '【混戦・波乱】'))
 )
 ticket_type_label = (
-    '【3連複フォーメーション / ワイド / 単勝】'
-    if is_go
-    else '【単勝・ワイド / 3連複フォーメーション】'
+    '【単勝・1着固定3連単 / 3連複】'
+    if is_dominant_single
+    else ('【3連複フォーメーション / ワイド / 単勝】' if is_go else '【単勝・ワイド / 3連複フォーメーション】')
 )
 banner_cls = 'race-type-solid' if is_go else 'race-type-chaos'
 panel_cls = 'recom-panel-go' if is_go else 'recom-panel-chaos'
@@ -1579,7 +1582,7 @@ danger_str = (
 st.markdown(
     f"<div class='{panel_cls}'>"
     f"<div class='{title_cls}'>📋 推奨馬ピックアップ</div>"
-    f"<div class='recom-row'>🥇 <strong>1着狙い</strong>: <span class='recom-val-num'>{int(pick_win_horse['馬番'])}番 {pick_win_horse['馬名']}</span>（F{int(pick_win_horse['F_rank'])}位 × arms{int(pick_win_horse['arms_rank'])}位 / Fup{int(pick_win_horse['Fup'])}点）</div>"
+    f"<div class='recom-row'>🥇 <strong>1着狙い</strong>: <span class='recom-val-num'>{int(pick_win_horse['馬番'])}番 {pick_win_horse['馬名']}</span>（動的適性最上位スコア / F{int(pick_win_horse['F_rank'])}位 × arms{int(pick_win_horse['arms_rank'])}位）</div>"
     f"<div class='recom-row'>🛡️ <strong>軸・連対狙い</strong>: <span class='recom-val-num'>{int(pick_axis_horse['馬番'])}番 {pick_axis_horse['馬名']}</span>（F{int(pick_axis_horse['F_rank'])}位 × arms{int(pick_axis_horse['arms_rank'])}位 / 連対圏確度）</div>"
     f"<div class='recom-row'>💣 <strong>紐穴狙い</strong>: <span class='recom-val-num'>{int(pick_himo_horse['馬番'])}番 {pick_himo_horse['馬名']}</span>（{int(pick_himo_horse['人気'])}人気 / Fup{int(pick_himo_horse['Fup'])}点 / コース調教特注・穴トリガー）</div>"
     f"<div class='recom-row'>⚠️ <strong>危険な人気馬</strong>: {danger_str}</div>"
