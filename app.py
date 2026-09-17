@@ -1268,9 +1268,7 @@ df['flag_sf7_himo'] = ((df['S_rank'] <= 7) | (df['F_rank'] <= 7)) & (
     df['調教加速'] | df['is_same_waku'] | df['is_same_ub_any']
 )
 
-# ------------------------------------------------------------------------------
-# ★ 危険騎手の判定 ＆ 複数狙い目重複による救済ロジック
-# ------------------------------------------------------------------------------
+# 危険騎手判定 ＆ 複数狙い目重複による救済ロジック
 def evaluate_danger_jockey(row):
   jk = str(row.get('騎手', '')).strip()
   is_f3 = row.get('F_rank', 99) <= 3
@@ -1288,9 +1286,8 @@ def evaluate_danger_jockey(row):
     is_raw_danger = True
 
   if not is_raw_danger:
-    return False, False  # 危険なし
+    return False, False
 
-  # 狙い目項目の重複カウント（2つ以上あれば救済）
   synergy_count = 0
   if row.get('flag_fup6_sf_any'):
     synergy_count += 1
@@ -1308,15 +1305,14 @@ def evaluate_danger_jockey(row):
     synergy_count += 1
 
   if synergy_count >= 2:
-    return False, True  # 救済（危険判定解除・救済フラグON）
-  return True, False  # 本物の危険騎手（消去対象）
+    return False, True
+  return True, False
 
 
 eval_jk = df.apply(evaluate_danger_jockey, axis=1)
 df['is_danger_jockey'] = [e[0] for e in eval_jk]
 df['is_danger_rescued'] = [e[1] for e in eval_jk]
 
-# 1着狙い・連対狙い定義（救済馬も組み込み対象）
 df['target_win'] = (
     (
         ((df['F_rank'] == 1) & (df['arms_rank'] == 1))
@@ -1614,11 +1610,10 @@ is_f1_ok = f1_val_cur >= 60
 is_solid = (
     r_high_cnt >= 2
     or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1)
-    or ((r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_c <= 1)
+    or ((r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_cnt <= 1)
 )
 is_go = is_solid and (not danger_in_fav3) and is_f1_ok
 
-# 1〜3番人気アンカーの抽出と除外馬整理
 top3_fav_horses = race_df[race_df['人気'].isin([1, 2, 3])]['馬番'].tolist()
 solid_top3 = []
 dummy_horses = []
@@ -1642,7 +1637,6 @@ if not solid_top3 and top3_fav_horses:
   )
   solid_top3 = [fallback_top]
 
-# 救済された危険騎手
 rescued_horses = race_df[race_df['is_danger_rescued']]['馬番'].tolist()
 
 if is_go:
@@ -1656,7 +1650,6 @@ if is_go:
   title_cls = 'recom-title-go'
   pts_cls = 'recom-pts'
 
-  # 1列目（軸）
   c1_cands = race_df[
       race_df['is_sss_level']
       | race_df['is_syn_iron']
@@ -1677,7 +1670,6 @@ if is_go:
         break
   rec_c1 = c1_cands[:2]
 
-  # 2列目（相手）
   rec_c2 = list(rec_c1)
   for u in race_df[
       race_df['target_axis']
@@ -1694,7 +1686,6 @@ if is_go:
     if len(rec_c2) >= 5:
       break
 
-  # 3列目（ヒモ広め）
   rec_c3 = list(rec_c2)
   for u in race_df[
       race_df['flag_sf7_himo']
@@ -1708,17 +1699,13 @@ if is_go:
     if len(rec_c3) >= 8:
       break
 
-  # 【単勝】
   single_bets = [str(int(rec_c1[0]))]
-
-  # 【馬連・ワイド】
   main_axis = rec_c1[0]
   umaren_targets = [str(int(u)) for u in rec_c2 if u != main_axis][:3]
   umaren_str = f"{int(main_axis)} - {', '.join(umaren_targets)}"
   wide_targets = [str(int(u)) for u in rec_c2 if u != main_axis][:2]
   wide_str = f"{int(main_axis)} - {', '.join(wide_targets)}"
 
-  # 【3連単】（1〜3人気アンカー制約適用）
   raw_trifecta = [
       (h1, h2, h3)
       for h1 in rec_c1
@@ -1769,7 +1756,7 @@ if is_go:
 
 else:
   # --------------------------------------------------------------------------
-  # 🔥 【荒】波乱特化レース（上位人気アンカー×爆弾穴馬 ハイブリッドモデル）
+  # 🔥 【荒】波乱特化レース
   # --------------------------------------------------------------------------
   reasons = []
   if not is_solid:
@@ -1788,14 +1775,12 @@ else:
   title_cls = 'recom-title-chaos'
   pts_cls = 'recom-pts-chaos'
 
-  # 1着狙い・頭特化穴馬
   head_explosive = race_df[
       race_df['flag_fup6_sf_any']
       | race_df['is_syn_f1_rap']
       | (race_df['target_win'] & (race_df['人気'] >= 4))
   ]['馬番'].tolist()
 
-  # 爆弾穴馬プール
   bomb_pool = race_df[
       race_df['is_syn_bomb']
       | race_df['syn_jk_ub_bomb']
@@ -1803,7 +1788,6 @@ else:
       | (race_df['調教加速'] & (race_df['人気'] >= 5))
   ]['馬番'].tolist()
 
-  # 1列目（頭特化穴馬 ＋ 信頼できる上位人気アンカー）
   col1_cands = list(dict.fromkeys(head_explosive[:2] + solid_top3[:2]))
   if not col1_cands:
     col1_cands = (
@@ -1812,7 +1796,6 @@ else:
     )
   rec_c1 = [h for h in col1_cands if h not in dummy_horses][:3]
 
-  # 2列目（1列目 ＋ 指数上位 ＋ 爆弾穴馬 ＋ 救済騎手馬）
   rec_c2 = list(rec_c1)
   for u in (
       race_df[
@@ -1834,7 +1817,6 @@ else:
     if len(rec_c2) >= 6:
       break
 
-  # 3列目（2列目 ＋ SF7穴ヒモ ＋ 調教加速全馬）
   rec_c3 = list(rec_c2)
   for u in (
       race_df[
@@ -1852,10 +1834,8 @@ else:
     if len(rec_c3) >= 8:
       break
 
-  # 【単勝】
   single_bets = [str(int(u)) for u in rec_c1[:2]]
 
-  # 【馬連・ワイド】
   anchor_horse = (
       solid_top3[0]
       if solid_top3
@@ -1881,7 +1861,6 @@ else:
     wide_targets = [str(int(u)) for u in rec_c2 if u != anchor_horse][:3]
   wide_str = f"{int(anchor_horse)} - {', '.join(wide_targets)}"
 
-  # 【3連単】（1〜3人気アンカー制約適用）
   raw_trifecta = [
       (h1, h2, h3)
       for h1 in rec_c1
@@ -1983,8 +1962,8 @@ with col_s2:
           '🚀 調教加速順 (W加速幅・坂路完全)',
           '馬番順',
           '🔥 F指数 順位 (1位→)',
-          '🚀 arms指数 順位 (1位→)',
           '⚡ S指数 順位 (1位→)',
+          '🚀 arms指数 順位 (1位→)',
           '🛡️ tua指数 順位 (1位→)',
           '✨ Fup 順位 (1位→)',
       ],
@@ -2003,10 +1982,10 @@ elif sort_opt == '🚀 調教加速順 (W加速幅・坂路完全)':
   )
 elif sort_opt == '🔥 F指数 順位 (1位→)':
   filtered_df = filtered_df.sort_values(['F_rank', '馬番'])
-elif sort_opt == '🚀 arms指数 順位 (1位→)':
-  filtered_df = filtered_df.sort_values(['arms_rank', '馬番'])
 elif sort_opt == '⚡ S指数 順位 (1位→)':
   filtered_df = filtered_df.sort_values(['S_rank', '馬番'])
+elif sort_opt == '🚀 arms指数 順位 (1位→)':
+  filtered_df = filtered_df.sort_values(['arms_rank', '馬番'])
 elif sort_opt == '🛡️ tua指数 順位 (1位→)':
   filtered_df = filtered_df.sort_values(['tua_rank', '馬番'])
 elif sort_opt == '✨ Fup 順位 (1位→)':
@@ -2136,15 +2115,15 @@ for _, row in filtered_df.iterrows():
       if row['F_rank'] == 1
       else f"{int(row['F_rank'])}位"
   )
-  arms_badge = (
-      "<span class='rank-1st'>🥇1位</span>"
-      if row['arms_rank'] == 1
-      else f"{int(row['arms_rank'])}位"
-  )
   s_badge = (
       "<span class='rank-1st'>🥇1位</span>"
       if row['S_rank'] == 1
       else f"{int(row['S_rank'])}位"
+  )
+  arms_badge = (
+      "<span class='rank-1st'>🥇1位</span>"
+      if row['arms_rank'] == 1
+      else f"{int(row['arms_rank'])}位"
   )
   tua_badge = (
       "<span class='rank-1st'>🥇1位</span>"
@@ -2167,6 +2146,12 @@ for _, row in filtered_df.iterrows():
   else:
     f_val_html = f'{f_val_num:.0f}'
 
+  s_val_num = float(row.get('S指数', 0.0))
+  if s_val_num >= 30.0:
+    s_val_html = f"<span class='val-s-super'>{s_val_num:.0f}</span>"
+  else:
+    s_val_html = f'{s_val_num:.0f}'
+
   arms_val_num = float(row.get('arms', 0.0))
   if arms_val_num >= 120.0:
     arms_val_html = f"<span class='val-arms-super'>{arms_val_num:.0f}</span>"
@@ -2180,12 +2165,6 @@ for _, row in filtered_df.iterrows():
     tua_val_html = f"<span class='val-tua-super'>{tua_val_num:.0f}</span>"
   else:
     tua_val_html = f'{tua_val_num:.0f}'
-
-  s_val_num = float(row.get('S指数', 0.0))
-  if s_val_num >= 30.0:
-    s_val_html = f"<span class='val-s-super'>{s_val_num:.0f}</span>"
-  else:
-    s_val_html = f'{s_val_num:.0f}'
 
   fup_val_num = int(row.get('Fup', 0))
   if fup_val_num >= 5:
@@ -2225,6 +2204,7 @@ for _, row in filtered_df.iterrows():
   else:
     s_str = '坂路: 計測無'
 
+  # 【更新箇所】能力指数の表示順を F → S → ARMS → TUA → Fup に変更
   st.markdown(
       f"<div class='horse-card'>"
       f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番"
@@ -2234,8 +2214,8 @@ for _, row in filtered_df.iterrows():
       f" <strong>父: {sire_display}</strong></li>"
       f'<li><strong>調教ラップ</strong>: <strong>{w_str}</strong> |'
       f' <strong>{s_str}</strong></li>'
-      f'<li><strong>能力指数</strong>: F: {f_val_html} ({f_badge}) | ARMS:'
-      f' {arms_val_html} ({arms_badge}) | S: {s_val_html} ({s_badge}) | TUA:'
+      f'<li><strong>能力指数</strong>: F: {f_val_html} ({f_badge}) | S:'
+      f' {s_val_html} ({s_badge}) | ARMS: {arms_val_html} ({arms_badge}) | TUA:'
       f' {tua_val_html} ({tua_badge}) | Fup: {fup_val_html} ({fup_badge})</li>'
       '</ul></div>',
       unsafe_allow_html=True,
