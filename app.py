@@ -1418,7 +1418,7 @@ is_bonus_cur = bool(
 is_solid = (
     r_high_cnt >= 2
     or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1)
-    or ((r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_cnt <= 1)
+    or ((r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_c <= 1)
 )
 is_go = (is_solid and is_f1_ok) or is_bonus_cur
 
@@ -1465,16 +1465,13 @@ danger_cands = race_df[
 pick_danger_horse = danger_cands.iloc[0] if not danger_cands.empty else None
 
 # 買い目列の生成
-if is_dominant_single:
-  rec_c1 = [pick_win_horse['馬番']]
-else:
-  rec_c1 = [pick_win_horse['馬番'], pick_axis_horse['馬番']]
+rec_c1 = [pick_win_horse['馬番'], pick_axis_horse['馬番']]
 
 rec_c2 = list(rec_c1)
 for u in sorted_dynamic['馬番'].tolist():
   if u not in rec_c2 and not race_df[race_df['馬番'] == u].iloc[0].get('is_fup_trap', False):
     rec_c2.append(u)
-  if len(rec_c2) >= (4 if is_dominant_single else 5):
+  if len(rec_c2) >= 5:
     break
 
 rec_c3 = list(rec_c2)
@@ -1522,36 +1519,32 @@ if not wide_opponents:
   wide_opponents = [str(int(u)) for u in rec_c2 if u != main_axis][:2]
 wide_str = f"{int(main_axis)} - {', '.join(wide_opponents)}"
 
-# 3連単 2パターン分散化
-p1_1st = [rec_c1[0]]
-p1_2nd = [h for h in rec_c2 if h not in p1_1st][:3]
-p1_3rd = [h for h in rec_c3 if h not in p1_1st and h not in p1_2nd][:4] + p1_2nd
-p1_3rd = list(dict.fromkeys(p1_3rd))
+# ------------------------------------------------------------------------------
+# ★ 3連単（2頭軸マルチ 相手5頭・計30点）
+# ------------------------------------------------------------------------------
+# 2頭の軸馬: pick_win_horse と pick_axis_horse
+sanrentan_axes = [int(pick_win_horse['馬番']), int(pick_axis_horse['馬番'])]
 
-trifecta_p1 = [
-    (a, b, c) for a in p1_1st for b in p1_2nd for c in p1_3rd
-    if len({a, b, c}) == 3
+# 相手5頭の選定: 軸2頭を除く、dynamic上位・特注馬・穴ヒモから5頭抽出
+opp_candidates = [
+    int(u) for u in (
+        [h for h in rec_c2 if h not in sanrentan_axes]
+        + [pick_himo_horse['馬番']]
+        + [h for h in rec_c3 if h not in sanrentan_axes]
+    )
+    if u not in sanrentan_axes
 ]
+sanrentan_opps = list(dict.fromkeys(opp_candidates))[:5]
 
-p2_1st = [rec_c1[1]] if len(rec_c1) > 1 else ([pick_himo_horse['馬番']] if pick_himo_horse['馬番'] != rec_c1[0] else [])
-if not p2_1st and len(rec_c2) > 1:
-  p2_1st = [rec_c2[1]]
-p2_2nd = [rec_c1[0]] + [h for h in rec_c2 if h not in p2_1st][:2]
-p2_2nd = list(dict.fromkeys(p2_2nd))
-p2_3rd = [h for h in rec_c3 if h not in p2_1st][:5]
+# 3連単2頭軸マルチ生成 (軸2頭 A, B と 相手 C による順列: 6通り × 5頭 = 30点)
+trifecta_multi_tickets = []
+for opp in sanrentan_opps:
+  for p in itertools.permutations([sanrentan_axes[0], sanrentan_axes[1], opp]):
+    trifecta_multi_tickets.append(p)
 
-trifecta_p2 = [
-    (a, b, c) for a in p2_1st for b in p2_2nd for c in p2_3rd
-    if len({a, b, c}) == 3
-]
-
-p1_c1_str = ', '.join(str(int(u)) for u in p1_1st)
-p1_c2_str = ', '.join(str(int(u)) for u in p1_2nd)
-p1_c3_str = ', '.join(str(int(u)) for u in p1_3rd)
-
-p2_c1_str = ', '.join(str(int(u)) for u in p2_1st)
-p2_c2_str = ', '.join(str(int(u)) for u in p2_2nd)
-p2_c3_str = ', '.join(str(int(u)) for u in p2_3rd)
+trifecta_multi_pts = len(trifecta_multi_tickets)
+axes_str = f"{sanrentan_axes[0]}, {sanrentan_axes[1]}"
+opps_str = ", ".join(str(u) for u in sanrentan_opps)
 
 # 判定テキスト
 wave_label = (
@@ -1560,9 +1553,9 @@ wave_label = (
     else ('【堅調（1頭突出）】' if is_dominant_single else ('【堅調】' if is_go else '【混戦・波乱】'))
 )
 ticket_type_label = (
-    '【単勝・1着固定3連単 / 3連複】'
-    if is_dominant_single
-    else ('【3連複フォーメーション / ワイド / 単勝】' if is_go else '【単勝・ワイド / 3連複フォーメーション】')
+    '【3連単2頭軸マルチ / 3連複フォーメーション】'
+    if is_go or is_bonus_cur
+    else '【単勝・ワイド / 3連単2頭軸マルチ】'
 )
 banner_cls = 'race-type-solid' if is_go else 'race-type-chaos'
 panel_cls = 'recom-panel-go' if is_go else 'recom-panel-chaos'
@@ -1605,11 +1598,10 @@ st.markdown(
     f"<div class='{title_cls}'>🎫 推奨買い目（実戦フォーメーション改善規定）</div>"
     f"<div class='recom-block'><span class='recom-label'>🎫 【本線：3連複フォーメーション（中京8R的中モデル）】</span> <span class='{pts_cls}'>計 {trio_pts}点</span><br>"
     f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>1列目(軸)</strong>: <span class='recom-val-num'>{c1_str}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong>2列目(相手)</strong>: <span class='recom-val-num'>{c2_str}</span>&nbsp;&nbsp;→&nbsp;&nbsp;<strong>3列目(ヒモ広め)</strong>: <span class='recom-val-num'>{c3_str}</span></div>"
+    f"<div class='recom-block'><span class='recom-label'>💥 【3連単：2頭軸マルチ（相手5頭）】</span> <span class='{pts_cls}'>計 {trifecta_multi_pts}点</span><br>"
+    f"&nbsp;&nbsp;&nbsp;&nbsp;<strong>軸2頭</strong>: <span class='recom-val-num'>{axes_str}</span>&nbsp;&nbsp;⇄&nbsp;&nbsp;<strong>相手5頭</strong>: <span class='recom-val-num'>{opps_str}</span></div>"
     f"<div class='recom-block'><span class='recom-label'>🛡️ 【抑え・資金回収：ワイド】</span>&nbsp;&nbsp;高回収流し: <span class='recom-val-num'>{wide_str}</span> <span class='{pts_cls}'>計 {len(wide_opponents)}点</span></div>"
     f"<div class='recom-block'><span class='recom-label'>🥇 【単勝】</span>&nbsp;&nbsp;<span class='recom-val-num'>{', '.join(single_bets)}</span> <span class='{pts_cls}'>計 {len(single_bets)}点</span></div>"
-    f"<div class='recom-block'><span class='recom-label'>💥 【3連単フォーメーション（2パターン相互カバーモデル）】</span><br>"
-    f"&nbsp;&nbsp;<strong>パターンA（本命地力型・計{len(trifecta_p1)}点）</strong>: <span class='recom-val-num'>{p1_c1_str}</span> → <span class='recom-val-num'>{p1_c2_str}</span> → <span class='recom-val-num'>{p1_c3_str}</span><br>"
-    f"&nbsp;&nbsp;<strong>パターンB（波乱一撃型・計{len(trifecta_p2)}点）</strong>: <span class='recom-val-num'>{p2_c1_str}</span> → <span class='recom-val-num'>{p2_c2_str}</span> → <span class='recom-val-num'>{p2_c3_str}</span></div>"
     '</div>',
     unsafe_allow_html=True,
 )
@@ -1848,7 +1840,7 @@ for _, row in filtered_df.iterrows():
   else:
     s_str = '坂路: 計測無'
 
-  # 馬情報カード表示（印追加・F→S→ARMS→TUA→Fup順）
+  # 馬情報カード表示
   st.markdown(
       f"<div class='horse-card'>"
       f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番"
