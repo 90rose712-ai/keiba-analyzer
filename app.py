@@ -214,6 +214,15 @@ st.markdown(
         font-weight: bold;
     }
 
+    .badge-mark-gtv {
+        background: linear-gradient(135deg, #b45309 0%, #d97706 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 12px;
+        padding: 2px 8px;
+        border-radius: 4px;
+        border: 1px solid #fde68a;
+    }
     .badge-accel-on {
         background: linear-gradient(135deg, #059669 0%, #10b981 100%);
         color: #ffffff;
@@ -775,7 +784,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             'dist': dist,
             '馬番': u_int,
             '馬名': horse,
-            '印': mark,
+            '印': str(mark).strip(),
             '調教師': clean_horse_name(trainer),
             '騎手': clean_horse_name(jockey),
             '種牡馬': str(sire).strip(),
@@ -1242,6 +1251,7 @@ races_in_v = (
     .sort_values('R番号')
 )
 
+# レース選択肢の生成（黄金シナジー・狙い目抽出の該当マーク完全網羅）
 race_options = {}
 for _, r_row in races_in_v.iterrows():
   r_horses = df[df['race_uid'] == r_row['race_uid']]
@@ -1273,18 +1283,20 @@ for _, r_row in races_in_v.iterrows():
     tag = '🔥荒'
 
   marks = []
-  if r_iron_c >= 1:
-    marks.append('💎鉄')
-  if r_high_c >= 1:
-    marks.append('🌟高')
-  if (r_horses['flag_fup6_sf_any'] == True).any():
-    marks.append('🔥頭')
-  if (r_horses['is_sss_level'] == True).any():
-    marks.append('👑神')
-  if (r_horses['is_syn_f1_rap'] == True).any():
-    marks.append('⚡極')
-  if r_bomb_c >= 1:
-    marks.append('💣穴')
+  # 👑 黄金シナジー・絶対軸馬マーク
+  if r_iron_c >= 1: marks.append('💎鉄')
+  if r_high_c >= 1: marks.append('🌟高')
+  if (r_horses['is_syn_fup_sakaro'] == True).any(): marks.append('✨坂')
+  if (r_horses['is_sss_level'] == True).any(): marks.append('👑神')
+  if (r_horses['is_syn_f1_rap'] == True).any(): marks.append('⚡極')
+  if r_bomb_c >= 1: marks.append('💣爆')
+
+  # 🎯 狙い目抽出マーク
+  if (r_horses['flag_fup6_sf_any'] == True).any(): marks.append('🔥頭')
+  if r_win_c >= 1: marks.append('🥇勝')
+  if r_axis_c >= 1: marks.append('🛡️軸')
+  if (r_horses['flag_sf7_himo'] == True).any(): marks.append('🌪️SF')
+  if (r_horses['target_himo'] == True).any(): marks.append('🎯使')
 
   lbl = (
       f"{tag} {r_row['R番号']}R ({r_row['track']}{r_row['dist']}m)"
@@ -1380,7 +1392,6 @@ def calculate_dynamic_priority_score(r):
 
 race_df['dynamic_score'] = race_df.apply(calculate_dynamic_priority_score, axis=1)
 
-# 相対ギャップ（1頭突出か、混戦か）判定
 sorted_dynamic = race_df.sort_values('dynamic_score', ascending=False)
 if len(sorted_dynamic) >= 2:
   score_gap = sorted_dynamic.iloc[0]['dynamic_score'] - sorted_dynamic.iloc[1]['dynamic_score']
@@ -1411,7 +1422,6 @@ is_solid = (
 )
 is_go = (is_solid and is_f1_ok) or is_bonus_cur
 
-# 1〜3番人気アンカー
 top3_fav_horses = race_df[race_df['人気'].isin([1, 2, 3])]['馬番'].tolist()
 solid_top3 = [
     h for h in top3_fav_horses
@@ -1424,9 +1434,7 @@ if not solid_top3 and top3_fav_horses:
       .iloc[0]['馬番']
   ]
 
-# ------------------------------------------------------------------------------
-# ★ 推奨馬ピックアップ（動的優先度スコアを最優先反映）
-# ------------------------------------------------------------------------------
+# 推奨馬ピックアップ
 pick_win_horse = sorted_dynamic.iloc[0]
 
 axis_cands = sorted_dynamic[sorted_dynamic['馬番'] != pick_win_horse['馬番']]
@@ -1456,9 +1464,7 @@ danger_cands = race_df[
 ]
 pick_danger_horse = danger_cands.iloc[0] if not danger_cands.empty else None
 
-# ------------------------------------------------------------------------------
-# ★ 買い目列の生成（動的優先度スコア順に編成）
-# ------------------------------------------------------------------------------
+# 買い目列の生成
 if is_dominant_single:
   rec_c1 = [pick_win_horse['馬番']]
 else:
@@ -1516,7 +1522,7 @@ if not wide_opponents:
   wide_opponents = [str(int(u)) for u in rec_c2 if u != main_axis][:2]
 wide_str = f"{int(main_axis)} - {', '.join(wide_opponents)}"
 
-# 3連単 2パターン分散化（相互カバー・点数圧縮モデル）
+# 3連単 2パターン分散化
 p1_1st = [rec_c1[0]]
 p1_2nd = [h for h in rec_c2 if h not in p1_1st][:3]
 p1_3rd = [h for h in rec_c3 if h not in p1_1st and h not in p1_2nd][:4] + p1_2nd
@@ -1705,7 +1711,7 @@ for _, row in filtered_df.iterrows():
   if row.get('is_fup_kakugen'):
     badges.append("<span class='badge-fup6-sf'>✨ Fup7確変馬</span>")
 
-  # 危険騎手は目立たないサブ情報バッジとして表示（買い目からは除外しない）
+  # 危険騎手は目立たないサブ情報バッジとして表示
   if row.get('is_danger_jockey'):
     badges.append("<span class='badge-danger-jockey-subtle'>騎手注意</span>")
 
@@ -1770,6 +1776,10 @@ for _, row in filtered_df.iterrows():
   u_no = int(row['馬番']) if pd.notnull(row['馬番']) else 99
   pop_str = f"{int(row['人気'])}人気" if pd.notnull(row['人気']) else '-人気'
   sire_display = row.get('種牡馬') if row.get('種牡馬') else '-'
+  
+  # 印バッジ（GTV・指数印の表示）
+  mark_val = str(row.get('印', '')).strip()
+  mark_html = f"<span class='badge-mark-gtv'>印: {mark_val}</span>" if mark_val and mark_val != 'nan' else ""
 
   # 指数バッジ
   f_badge = "<span class='rank-1st'>🥇1位</span>" if row['F_rank'] == 1 else f"{int(row['F_rank'])}位"
@@ -1838,11 +1848,11 @@ for _, row in filtered_df.iterrows():
   else:
     s_str = '坂路: 計測無'
 
-  # 能力指数の表示順: F → S → ARMS → TUA → Fup
+  # 馬情報カード表示（印追加・F→S→ARMS→TUA→Fup順）
   st.markdown(
       f"<div class='horse-card'>"
       f"<div class='horse-card-header'><span class='horse-card-title'>{u_no}番"
-      f" {row['馬名']} ({pop_str})</span> {' '.join(badges)}</div>"
+      f" {row['馬名']} ({pop_str}) {mark_html}</span> {' '.join(badges)}</div>"
       "<ul class='horse-card-list'>"
       f"<li><strong>騎手/厩舎</strong>: {row.get('騎手')} / {row.get('調教師')} /"
       f" <strong>父: {sire_display}</strong></li>"
