@@ -1033,7 +1033,7 @@ def check_trainer_patterns(row):
     elif status == '特注':
         badge_html = "<span class='badge-tr-tokuchu'>💎【特注穴パターン】</span>"
     elif status == '危険':
-        badge_html = "<span class='badge-tr-danger'>⚠️️【厩舎危険】</span>"
+        badge_html = "<span class='badge-tr-danger'>⚠️【厩舎危険】</span>"
 
     flag_str = " / ".join(flags) if flags else ""
     return pd.Series([status, flag_str, badge_html], index=['調教ステータス', '厩舎狙い目フラグ', 'tr_badge_html'])
@@ -1087,6 +1087,56 @@ def find_col_regex(df, patterns):
                 return col
     return None
 
+def extract_date_from_source(source_obj, candidate_patterns, lines):
+    """
+    ファイル名、ファイル更新日時、またはCSVヘッダー/行から開催日付を自動検出する
+    """
+    # 1. ファイル名から日付正規表現 (YYYYMMDD または YYYY-MM-DD または YYYY/MM/DD)
+    fn = ""
+    if source_obj is not None:
+        if isinstance(source_obj, str):
+            fn = source_obj
+        elif hasattr(source_obj, 'name'):
+            fn = source_obj.name
+    
+    if fn:
+        m = re.search(r'(20\d{2})[-_/]?([01]\d)[-_/]?([0-3]\d)', fn)
+        if m:
+            try:
+                return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                pass
+
+    # 2. CSV内部のテキストから探索
+    for line in lines[:25]:
+        m = re.search(r'(20\d{2})[年/-](0?[1-9]|1[0-2])[月/-](0?[1-9]|[12]\d|3[01])', line)
+        if m:
+            try:
+                return datetime.date(int(m.group(1)), int(m.group(2)), int(m.group(3)))
+            except Exception:
+                pass
+        m8 = re.search(r'\b(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])\b', line)
+        if m8:
+            try:
+                return datetime.date(int(m8.group(1)), int(m8.group(2)), int(m8.group(3)))
+            except Exception:
+                pass
+
+    # 3. ファイルの更新日時から取得
+    if isinstance(source_obj, str) and os.path.exists(source_obj):
+        mtime = os.path.getmtime(source_obj)
+        return datetime.date.fromtimestamp(mtime)
+
+    for pat in candidate_patterns:
+        matched = glob.glob(pat)
+        if matched:
+            newest = max(matched, key=os.path.getmtime)
+            mtime = os.path.getmtime(newest)
+            return datetime.date.fromtimestamp(mtime)
+
+    # 4. フォールバック: 本日の日付
+    return datetime.date.today()
+
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
         'data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv',
@@ -1100,8 +1150,8 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             index_src = max(matched, key=os.path.getmtime)
 
     records = []
+    lines = []
     if index_src is not None:
-        lines = []
         for enc in ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']:
             try:
                 if isinstance(index_src, str):
@@ -1197,7 +1247,9 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         lambda x: pd.Series(parse_race(x))
     )
     df_main['race_uid'] = df_main['race_id']
-    detected_date = datetime.date(2026, 9, 13)
+
+    # ★ 開催日付の動的検出（固定日付を廃止）
+    detected_date = extract_date_from_source(index_src, index_patterns, lines)
 
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(
@@ -1229,19 +1281,18 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_s_raw['坂路_Lap2'] = pd.to_numeric(df_s_raw[c_s_l2], errors='coerce')
         df_s_raw['坂路_Lap1'] = pd.to_numeric(df_s_raw[c_s_l1], errors='coerce')
 
-        # ラップ型判定 (A1~A3, B1~B3)
         def determine_sakaro_lap_type(r):
             l1, l2 = r['坂路_Lap1'], r['坂路_Lap2']
             if pd.isnull(l1) or pd.isnull(l2):
                 return ''
-            if l1 < l2:  # 加速
+            if l1 < l2:
                 if l1 <= 11.9:
                     return 'A3'
                 elif 12.0 <= l1 <= 12.9 and 12.0 <= l2 <= 12.9:
                     return 'A2'
                 elif 12.0 <= l1 <= 12.9 and l2 >= 13.0:
                     return 'A1'
-            else:  # 減速・同等
+            else:
                 if l1 <= 11.9 and l2 <= 11.9:
                     return 'B3'
                 elif 12.0 <= l1 <= 12.9 and 12.0 <= l2 <= 12.9:
@@ -1368,7 +1419,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['坂路_穴トリガー'] = df_main['坂路_穴トリガー'].fillna(False).astype(bool)
     df_main['is_wood_accel'] = df_main['is_wood_accel'].fillna(False).astype(bool)
 
-    # 補助項目の補完・追切コース判定
     def infer_course(r):
         if pd.notnull(r.get('坂路_4F')) and pd.isnull(r.get('wood_1F')):
             return '坂路'
@@ -1426,7 +1476,7 @@ df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
 
 if df.empty:
     st.warning(
-        '⚠️️ CSVデータが読み込まれていません。サイドバーから出走表・坂路・ウッドのCSVファイルを指定してください。'
+        '⚠️ CSVデータが読み込まれていません。サイドバーから出走表・坂路・ウッドのCSVファイルを指定してください。'
     )
     st.stop()
 
