@@ -1033,7 +1033,7 @@ def check_trainer_patterns(row):
     elif status == '特注':
         badge_html = "<span class='badge-tr-tokuchu'>💎【特注穴パターン】</span>"
     elif status == '危険':
-        badge_html = "<span class='badge-tr-danger'>⚠️【厩舎危険】</span>"
+        badge_html = "<span class='badge-tr-danger'>⚠️️【厩舎危険】</span>"
 
     flag_str = " / ".join(flags) if flags else ""
     return pd.Series([status, flag_str, badge_html], index=['調教ステータス', '厩舎狙い目フラグ', 'tr_badge_html'])
@@ -1252,7 +1252,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
 
         df_s_raw['坂路_ラップ型'] = df_s_raw.apply(determine_sakaro_lap_type, axis=1)
 
-        # 週末・前日・併せカラムの抽出（存在する場合）
         c_sun_sat_h = find_col_regex(df_s_raw, ['^土日坂路', '^週末坂路'])
         c_prev_h = find_col_regex(df_s_raw, ['^前日坂路'])
         c_align = find_col_regex(df_s_raw, ['^併せ', '^追切併せ'])
@@ -1427,7 +1426,7 @@ df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
 
 if df.empty:
     st.warning(
-        '⚠️ CSVデータが読み込まれていません。サイドバーから出走表・坂路・ウッドのCSVファイルを指定してください。'
+        '⚠️️ CSVデータが読み込まれていません。サイドバーから出走表・坂路・ウッドのCSVファイルを指定してください。'
     )
     st.stop()
 
@@ -1681,7 +1680,7 @@ filter_target_himo = st.sidebar.checkbox(
 )
 
 # 厩舎バージョンアップ フィルター
-st.sidebar.markdown('### 🏛️️ 厩舎勝負・特注抽出')
+st.sidebar.markdown('### 🏛 厩舎勝負・特注抽出')
 filter_tr_teppan = st.sidebar.checkbox(
     f"🔥 厩舎鉄板馬 ({(df['調教ステータス'] == '鉄板').sum()}頭)"
 )
@@ -1733,7 +1732,9 @@ races_in_v = (
     .sort_values('R番号')
 )
 
-# レース選択肢の生成
+# ==============================================================================
+# レース選択肢の生成（厩舎勝負・特注マークを明確に差別化して追加）
+# ==============================================================================
 race_options = {}
 for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
@@ -1779,7 +1780,11 @@ for _, r_row in races_in_v.iterrows():
     if r_axis_c >= 1: marks.append('🛡️軸')
     if (r_horses['flag_sf7_himo'] == True).any(): marks.append('🌪️SF')
     if (r_horses['target_himo'] == True).any(): marks.append('🎯使')
+
+    # 🏛️ 厩舎勝負・特注マーク（他マークと重複しない独自印）
     if (r_horses['調教ステータス'] == '鉄板').any(): marks.append('🏛️鉄')
+    if (r_horses['調教ステータス'] == '勝負').any(): marks.append('⚔️厩')
+    if (r_horses['調教ステータス'] == '特注').any(): marks.append('💎特')
 
     lbl = (
         f"{tag} {r_row['R番号']}R ({r_row['track']}{r_row['dist']}m)"
