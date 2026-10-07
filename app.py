@@ -12,7 +12,7 @@ import streamlit as st
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
 # ARMS×Fup / ダートで食う / C馬判定 / 指数マトリクス / 調教完全加速 / クッション値特注
-# 【最新アップデート】脚質表示（逃げ/先行/差し/追込）完全対応版
+# 【最新アップデート】脚質表示（逃げ/先行/差し/中団/追込）完全修正版
 # ==============================================================================
 
 st.set_page_config(
@@ -49,11 +49,12 @@ st.markdown(
     .badge-accel-on { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #34d399; }
     .badge-accel-off { background-color: #374151; color: #9ca3af; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #4b5563; }
     
-    /* 脚質バッジ */
+    /* 脚質カラーバッジ */
     .badge-style-nige { background: linear-gradient(135deg, #e11d48 0%, #be123c 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fda4af; }
     .badge-style-senko { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; }
     .badge-style-sashi { background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #6ee7b7; }
     .badge-style-oikomi { background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c4b5fd; }
+    .badge-style-chudan { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #7dd3fc; }
     .badge-style-other { background-color: #374151; color: #e5e7eb; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #6b7280; }
 
     .val-f-super { color: #1a1000; background-color: #fcd34d; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #f59e0b; }
@@ -240,8 +241,29 @@ def get_jra_waku(umaban, total_horses):
         curr += cnt
     return 8
 
+# 脚質バッジ生成関数
+def get_running_style_badge(style_str):
+    if not style_str or pd.isnull(style_str) or style_str in ['-', '－', '不明', 'nan', '']:
+        return ""
+    s = str(style_str).strip()
+    if '逃' in s:
+        return "<span class='badge-style-nige'>🏃 逃げ</span>"
+    elif '先' in s:
+        return "<span class='badge-style-senko'>🐎 先行</span>"
+    elif '差' in s:
+        return "<span class='badge-style-sashi'>⚡ 差し</span>"
+    elif '追' in s:
+        return "<span class='badge-style-oikomi'>🔥 追込</span>"
+    elif '後' in s:
+        return "<span class='badge-style-oikomi'>後方</span>"
+    elif '中' in s:
+        return "<span class='badge-style-chudan'>中団</span>"
+    elif 'マ' in s or 'ﾏ' in s:
+        return "<span class='badge-style-other'>まくり</span>"
+    return f"<span class='badge-style-other'>{s}</span>"
+
 # ==============================================================================
-# ★ データ読み込み＆結合エンジン（脚質：23列/24列の取得対応）
+# ★ データ読み込み＆結合エンジン（脚質カラム抽出完全対応）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = ['data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv']
@@ -269,7 +291,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             '10': 10, '11': 11, '12': 12, '13': 13, '14': 14, '15': 15, '16': 16, '17': 17, '18': 18,
         }
 
-        # csv.reader を用いてクォートで囲まれた文字列（父名等）を正確にパース
         reader = csv.reader(lines)
         for parts in reader:
             n = len(parts)
@@ -277,6 +298,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
 
             race_id, track, dist, umaban, horse_raw = parts[0], parts[1], parts[2], parts[3], parts[4]
             c_marker = str(parts[5]).strip() if n > 5 else ''
+            
             trainer, jockey, pop = parts[6], parts[7], parts[8]
             mark = parts[9] if n > 9 else ''
             fup = pd.to_numeric(parts[10], errors='coerce') if n > 10 else 0
@@ -292,8 +314,8 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
 
             finish = parts[20] if n > 20 else None
             sire = parts[21] if n > 21 else ''
-            
-            # 脚質データ（23列目: 略称 / 24列目: 正式名称）
+
+            # 脚質の取得（24列目: 正式名称 / 23列目: 略称）
             running_style_short = str(parts[22]).strip() if n > 22 else ''
             running_style_full = str(parts[23]).strip() if n > 23 else ''
             running_style = running_style_full if running_style_full else running_style_short
@@ -860,25 +882,6 @@ def load_cushion_history_stats():
     return stats_dict
 
 cushion_history_data = load_cushion_history_stats()
-
-# 脚質バッジ生成ヘルパー関数
-def get_running_style_badge(style_str):
-    if not style_str or pd.isnull(style_str) or style_str in ['-', '－', '不明']:
-        return ""
-    s = str(style_str).strip()
-    if '逃' in s:
-        return f"<span class='badge-style-nige'>🏃 逃げ</span>"
-    elif '先' in s:
-        return f"<span class='badge-style-senko'>🐎 先行</span>"
-    elif '差' in s:
-        return f"<span class='badge-style-sashi'>⚡ 差し</span>"
-    elif '追' in s or '後' in s:
-        return f"<span class='badge-style-oikomi'>🔥 追込</span>" if '追' in s else f"<span class='badge-style-oikomi'>後方</span>"
-    elif '中' in s:
-        return f"<span class='badge-style-sashi'>中団</span>"
-    elif 'マ' in s or 'ﾏ' in s:
-        return f"<span class='badge-style-other'>まくり</span>"
-    return f"<span class='badge-style-other'>{s}</span>"
 
 # ==============================================================================
 # ★ サイドバー: データ読み込み
@@ -1619,11 +1622,11 @@ st.markdown(f'**出走馬一覧（該当: {len(filtered_df)}頭）**')
 for _, row in filtered_df.iterrows():
     badges = []
     
-    # 脚質バッジ（ヘッダー先頭に配置）
+    # 🏃 脚質バッジの生成と配置
     style_badge = get_running_style_badge(row.get('脚質', ''))
     if style_badge:
         badges.append(style_badge)
-    
+
     # 前日坂路バッジ
     if row.get('is_prev_han_solid'):
         badges.append(f"<span class='badge-prev-fast'>🔥【前日坂路王道】4F {row.get('前日坂路時計'):.1f}s (勝率40%超)</span>")
@@ -1649,7 +1652,7 @@ for _, row in filtered_df.iterrows():
     if row.get('is_valley_trap'): badges.append("<span class='badge-c-fake'>⚠️【谷の形】地雷人気馬(頭消し)</span>")
 
     if row.get('is_arms_fup_super'): badges.append("<span class='badge-arms-fup'>👑 ARMS×Fup黄金軸</span>")
-    if row.get('is_dirt_eat_super'): badges.append("<span class='badge-dirt-eat'>🏜️ ダートで食う勝負馬</span>")
+    if row.get('is_dirt_eat_super'): badges.append("<span class='badge-dirt-eat'>🏜️ ダートで食う勝戻馬</span>")
     if row.get('is_sss_level'): badges.append("<span class='badge-synergy' style='background:#f59e0b;color:#000;'>👑 SSS級・絶対神域</span>")
     if row.get('is_iron_f72'): badges.append("<span class='badge-synergy' style='background:#e11d48;color:#fff;'>⚡ F>72鉄板級 (勝率52%)</span>")
     if row.get('is_fup_axis'): badges.append("<span class='badge-synergy' style='background:#b45309;color:#fff;'>👑 Fup最上位評価 (軸)</span>")
@@ -1696,7 +1699,7 @@ for _, row in filtered_df.iterrows():
     mark_html = f"<span class='badge-mark-gtv'>印: {mark_val}</span>" if mark_val and mark_val != 'nan' else ""
 
     style_display = str(row.get('脚質', '')).strip()
-    style_text = style_display if style_display else '未設定'
+    style_text = style_display if (style_display and style_display != 'nan') else '未設定'
 
     tr_name_raw = str(row.get('調教師', ''))
     if any(x in tr_name_raw for x in PREV_HAN_SOLID_TRAINERS):
