@@ -12,7 +12,7 @@ import streamlit as st
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
 # ARMS×Fup / ダートで食う / C馬判定 / 指数マトリクス / 調教完全加速 / クッション値特注
-# 【最新アップデート】サイドバー一括全レース抽出＆レース番号付き馬情報表示完全統合版
+# 【最新アップデート】自動CSV検知・脚質自動判定フォールバック完全統合版
 # ==============================================================================
 
 st.set_page_config(
@@ -241,6 +241,36 @@ def get_jra_waku(umaban, total_horses):
         curr += cnt
     return 8
 
+# 脚質判定・フォールバック関数（CSV欠損時もS/F指数から100%自動推計）
+def resolve_running_style(raw_style_full, raw_style_short, s_rank, f_rank, s_val):
+    s = str(raw_style_full).strip() if pd.notnull(raw_style_full) else ''
+    if not s or s in ['nan', 'None', '', '不明', '未設定', '-', '－']:
+        s = str(raw_style_short).strip() if pd.notnull(raw_style_short) else ''
+    
+    if s and s not in ['nan', 'None', '', '不明', '未設定', '-', '－']:
+        if '逃' in s: return '逃げ'
+        elif '先' in s: return '先行'
+        elif '差' in s: return '差し'
+        elif '追' in s: return '追込'
+        elif '後' in s: return '後方'
+        elif '中' in s: return '中団'
+        elif 'マ' in s or 'ﾏ' in s: return 'まくり'
+        return s
+
+    # 指数関係による自動推計フォールバック
+    if s_rank == 1 and s_val >= 50.0:
+        return '逃げ'
+    elif s_rank <= 3:
+        return '先行'
+    elif f_rank <= 3 and s_rank >= 5:
+        return '差し'
+    elif f_rank <= 2 and s_rank >= 8:
+        return '追込'
+    elif s_rank <= 6:
+        return '先行'
+    else:
+        return '中団'
+
 def get_running_style_badge(style_str):
     if not style_str or pd.isnull(style_str) or style_str in ['-', '－', '不明', 'nan', '']:
         return ""
@@ -262,15 +292,20 @@ def get_running_style_badge(style_str):
     return f"<span class='badge-style-other'>{s}</span>"
 
 # ==============================================================================
-# ★ データ読み込み＆結合エンジン
+# ★ データ読み込み＆結合エンジン（フォルダ内CSV自動検知・常時脚質即時反映）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
-    index_patterns = ['data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv']
+    index_patterns = [
+        'data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv',
+        'data/出馬表*.csv', '出馬表*.csv'
+    ]
     index_src = f_index
     if index_src is None:
         matched = []
-        for pat in index_patterns: matched.extend(glob.glob(pat))
-        if matched: index_src = max(matched, key=os.path.getmtime)
+        for pat in index_patterns:
+            matched.extend(glob.glob(pat))
+        if matched:
+            index_src = max(matched, key=os.path.getmtime)
 
     records = []
     lines = []
@@ -278,10 +313,15 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         for enc in ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']:
             try:
                 if isinstance(index_src, str):
-                    with open(index_src, 'r', encoding=enc, errors='ignore') as f: lines = f.readlines()
+                    with open(index_src, 'r', encoding=enc, errors='ignore') as f:
+                        lines = [l.strip() for l in f if l.strip()]
                 else:
                     index_src.seek(0)
-                    lines = index_src.read().decode(enc, errors='ignore').splitlines()
+                    content = index_src.read()
+                    if isinstance(content, bytes):
+                        lines = [l.strip() for l in content.decode(enc, errors='ignore').splitlines() if l.strip()]
+                    else:
+                        lines = [l.strip() for l in content.splitlines() if l.strip()]
                 if lines: break
             except Exception: continue
 
@@ -293,12 +333,18 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         reader = csv.reader(lines)
         for parts in reader:
             n = len(parts)
-            if n < 10 or parts[0] in ['場所', 'レースID', 'race_id']: continue
+            if n < 8 or parts[0] in ['場所', 'レースID', 'race_id']: continue
 
-            race_id, track, dist, umaban, horse_raw = parts[0], parts[1], parts[2], parts[3], parts[4]
+            race_id = parts[0]
+            track = parts[1] if n > 1 else '芝'
+            dist = parts[2] if n > 2 else '1600'
+            umaban = parts[3] if n > 3 else '99'
+            horse_raw = parts[4] if n > 4 else ''
             c_marker = str(parts[5]).strip() if n > 5 else ''
             
-            trainer, jockey, pop = parts[6], parts[7], parts[8]
+            trainer = parts[6] if n > 6 else ''
+            jockey = parts[7] if n > 7 else ''
+            pop = parts[8] if n > 8 else '99'
             mark = parts[9] if n > 9 else ''
             fup = pd.to_numeric(parts[10], errors='coerce') if n > 10 else 0
             fup_rank = pd.to_numeric(parts[11], errors='coerce') if n > 11 else 99
@@ -314,9 +360,19 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             finish = parts[20] if n > 20 else None
             sire = parts[21] if n > 21 else ''
 
-            running_style_short = str(parts[22]).strip() if n > 22 else ''
-            running_style_full = str(parts[23]).strip() if n > 23 else ''
-            running_style = running_style_full if running_style_full else running_style_short
+            # 脚質取得ロジック（23列目/24列目、または末尾の脚質候補を自動スキャン）
+            raw_style_short = str(parts[22]).strip() if n > 22 else ''
+            raw_style_full = str(parts[23]).strip() if n > 23 else ''
+            
+            # 列ずれ対策（行内の全要素から「逃げ・先行・差し・中団・追込」を検知）
+            if not raw_style_full and not raw_style_short:
+                for p in parts[20:]:
+                    p_str = str(p).strip()
+                    if p_str in ['逃げ', '先行', '差し', '中団', '追込', '後方', 'まくり', '逃', '先', '中', '差', '追', '後']:
+                        raw_style_full = p_str
+                        break
+
+            final_style = resolve_running_style(raw_style_full, raw_style_short, s_rank, f_rank, s_val)
 
             horse = clean_horse_name(horse_raw)
             if horse:
@@ -329,8 +385,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
                     'C馬': c_marker,
                     '印': str(mark).strip(), '調教師': clean_horse_name(trainer), '騎手': clean_horse_name(jockey),
                     '種牡馬': str(sire).strip(), '人気': pop_int, '着順': fin_int,
-                    '脚質': running_style,
-                    '脚質_略': running_style_short,
+                    '脚質': final_style,
                     'Fup': fup if not np.isnan(fup) else 0,
                     'Fup_rank': int(fup_rank) if not np.isnan(fup_rank) else 99,
                     'S指数': s_val if not np.isnan(s_val) else 0.0,
@@ -494,7 +549,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         if c_need not in df_main.columns: df_main[c_need] = 999.0
     for c_bool in ['前日坂路あり', '前日ウッドあり']:
         if c_bool not in df_main.columns: df_main[c_bool] = False
-    for c_str in ['土日坂路ラップ型', '併せ結果', 'クラス', '前走追切コース', '馬主', '性別', '性', 'C馬', '脚質', '脚質_略']:
+    for c_str in ['土日坂路ラップ型', '併せ結果', 'クラス', '前走追切コース', '馬主', '性別', '性', 'C馬', '脚質']:
         if c_str not in df_main.columns: df_main[c_str] = ''
 
     jk_ub_grp = df_main.groupby(['騎手', '馬番'])['race_id'].apply(list).to_dict()
@@ -1264,7 +1319,6 @@ race_df['cushion_badge_raw'] = race_df.apply(
 race_df['is_cushion_fit'] = race_df['cushion_badge_raw'].str.contains('特注')
 race_df['is_cushion_danger'] = race_df['cushion_badge_raw'].str.contains('危険')
 
-# 全頭に対してもクッション血統バッジを計算
 df['cushion_badge_raw'] = df.apply(
     lambda r: evaluate_sire_cushion(r['種牡馬'], r['競馬場名'], r['dist'], current_band) if '芝' in str(r.get('track', '')) else '', axis=1
 )
@@ -1552,7 +1606,6 @@ sidebar_filter_active = (
     or filter_dirt_wood or filter_c_fake or filter_valley_trap or filter_danger_jockey or filter_fup_trap or filter_tr_danger
 )
 
-# サイドバーチェック時はデータ全体(df)から抽出、未チェック時は選択レース(race_df)を表示
 if sidebar_filter_active:
     filtered_df = df.copy()
 else:
@@ -1716,7 +1769,7 @@ for _, row in filtered_df.iterrows():
     mark_html = f"<span class='badge-mark-gtv'>印: {mark_val}</span>" if mark_val and mark_val != 'nan' else ""
 
     style_display = str(row.get('脚質', '')).strip()
-    style_text = style_display if (style_display and style_display != 'nan') else '未設定'
+    style_text = style_display if (style_display and style_display != 'nan') else '先行'
 
     tr_name_raw = str(row.get('調教師', ''))
     if any(x in tr_name_raw for x in PREV_HAN_SOLID_TRAINERS):
@@ -1787,7 +1840,6 @@ for _, row in filtered_df.iterrows():
     cushion_stat_str = " | ".join(c_parts)
     cushion_li = f"<li><strong>クッション値別成績(芝)</strong>: <span style='font-size:12.5px;'>{cushion_stat_str}</span></li>"
 
-    # レース番号バッジ（一括抽出時は必ず表示）
     race_info_badge = f"<span class='race-badge-title'>{row.get('競馬場名', '')}{row.get('R番号', '')}R ({row.get('track', '')}{row.get('dist', '')}m)</span>"
 
     st.markdown(
