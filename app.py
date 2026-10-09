@@ -12,7 +12,7 @@ import streamlit as st
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
 # ARMS×Fup / ダートで食う / C馬判定 / 指数マトリクス / 調教完全加速 / クッション値特注
-# 【最新完全統合版】脚質×コース形態連動・新馬券構成ロジック・森秀行厩舎加速自動判定
+# 【最新完全統合版】前日坂路自動日付検知・森秀行厩舎加速・脚質×コース新連動
 # ==============================================================================
 
 st.set_page_config(
@@ -290,7 +290,7 @@ def get_running_style_badge(style_str):
     return f"<span class='badge-style-other'>{s}</span>"
 
 # ==============================================================================
-# ★ データ読み込み＆結合エンジン（森秀行厩舎調教検知対応）
+# ★ データ読み込み＆結合エンジン（前日坂路日付自動検知＆森秀行厩舎調教完全連動）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
@@ -416,16 +416,24 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
     if not df_s_raw.empty:
         c_s_name = find_col_regex(df_s_raw, ['^馬名$', '^競走馬名$']) or (
-            df_s_raw.columns[3] if len(df_s_raw.columns) > 3 else df_s_raw.columns[1]
+            df_s_raw.columns[4] if len(df_s_raw.columns) > 4 else df_s_raw.columns[1]
         )
         df_s_raw['clean_name'] = df_s_raw[c_s_name].apply(clean_horse_name)
 
-        c_s_4f = find_col_regex(df_s_raw, ['^time1$', '^4f$', '^４ｆ$', '^4Ｆ$']) or df_s_raw.columns[8]
+        c_s_date = find_col_regex(df_s_raw, ['^年月日$', '^日付$', '^date$']) or (
+            df_s_raw.columns[1] if len(df_s_raw.columns) > 1 else None
+        )
+        if c_s_date:
+            df_s_raw['clean_date'] = pd.to_numeric(df_s_raw[c_s_date].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
+        else:
+            df_s_raw['clean_date'] = np.nan
+
+        c_s_4f = find_col_regex(df_s_raw, ['^time1$', '^4f$', '^４ｆ$', '^4Ｆ$']) or df_s_raw.columns[9]
         c_s_1f = find_col_regex(df_s_raw, ['^time4$', '^1f$', '^１ｆ$', '^1Ｆ$']) or df_s_raw.columns[12]
-        c_s_l4 = find_col_regex(df_s_raw, ['^lap4$', '^ｌａｐ４$']) or df_s_raw.columns[9]
-        c_s_l3 = find_col_regex(df_s_raw, ['^lap3$', '^ｌａｐ３$']) or df_s_raw.columns[10]
-        c_s_l2 = find_col_regex(df_s_raw, ['^lap2$', '^ｌａｐ２$']) or df_s_raw.columns[11]
-        c_s_l1 = find_col_regex(df_s_raw, ['^lap1$', '^ｌａｐ１$']) or df_s_raw.columns[12]
+        c_s_l4 = find_col_regex(df_s_raw, ['^lap4$', '^ｌａｐ４$']) or df_s_raw.columns[13]
+        c_s_l3 = find_col_regex(df_s_raw, ['^lap3$', '^ｌａｐ３$']) or df_s_raw.columns[14]
+        c_s_l2 = find_col_regex(df_s_raw, ['^lap2$', '^ｌａｐ２$']) or df_s_raw.columns[15]
+        c_s_l1 = find_col_regex(df_s_raw, ['^lap1$', '^ｌａｐ１$']) or df_s_raw.columns[16]
 
         df_s_raw['坂路_4F'] = pd.to_numeric(df_s_raw[c_s_4f], errors='coerce')
         df_s_raw['坂路_1F'] = pd.to_numeric(df_s_raw[c_s_1f], errors='coerce')
@@ -450,19 +458,35 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_s_raw['坂路_ラップ型'] = df_s_raw.apply(determine_sakaro_lap_type, axis=1)
 
         c_sun_sat_h = find_col_regex(df_s_raw, ['^土日坂路', '^週末坂路'])
-        c_prev_h = find_col_regex(df_s_raw, ['^前日坂路', '^前日坂路時計', '^前日4F'])
         c_align = find_col_regex(df_s_raw, ['^併せ', '^追切併せ'])
 
         if c_sun_sat_h: df_s_raw['土日坂路最速'] = pd.to_numeric(df_s_raw[c_sun_sat_h], errors='coerce')
-        if c_prev_h:
-            df_s_raw['前日坂路時計'] = pd.to_numeric(df_s_raw[c_prev_h], errors='coerce')
-            df_s_raw['前日坂路あり'] = df_s_raw['前日坂路時計'].notna() & (df_s_raw['前日坂路時計'] < 900)
-        else:
-            df_s_raw['前日坂路時計'] = np.nan
-            df_s_raw['前日坂路あり'] = False
-
         if c_align: df_s_raw['併せ結果'] = df_s_raw[c_align].astype(str)
 
+        # ★ 前日坂路（レース前日日付：例 20261009）の厳格・自動抽出
+        prev_target_date = int((detected_date - datetime.timedelta(days=1)).strftime('%Y%m%d'))
+        df_s_prev_day = df_s_raw[df_s_raw['clean_date'] == prev_target_date].copy()
+        
+        # もし日付が合致しない場合（ファイル更新日からのフォールバック）
+        if df_s_prev_day.empty and df_s_raw['clean_date'].notna().any():
+            max_d = df_s_raw['clean_date'].max()
+            if max_d >= prev_target_date - 1:
+                df_s_prev_day = df_s_raw[df_s_raw['clean_date'] == max_d].copy()
+
+        if not df_s_prev_day.empty:
+            df_s_prev_best = (
+                df_s_prev_day.dropna(subset=['坂路_4F'])
+                .sort_values('坂路_4F')
+                .drop_duplicates('clean_name', keep='first')
+                .copy()
+            )
+            df_s_prev_best['前日坂路時計'] = df_s_prev_best['坂路_4F']
+            df_s_prev_best['前日坂路あり'] = True
+            df_prev_merged = df_s_prev_best[['clean_name', '前日坂路時計', '前日坂路あり']]
+        else:
+            df_prev_merged = pd.DataFrame(columns=['clean_name', '前日坂路時計', '前日坂路あり'])
+
+        # 本追い切り（最速タイム）の抽出
         df_s_best = (
             df_s_raw.dropna(subset=['坂路_4F']).sort_values('坂路_4F').drop_duplicates('clean_name', keep='first').copy()
         )
@@ -475,7 +499,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         )
         df_s_best['坂路_穴トリガー'] = (df_s_best['坂路_Lap3'] <= 14.0) & (df_s_best['坂路_Lap2'] > df_s_best['坂路_Lap1'])
         
-        # 森秀行厩舎向け厳格加速判定（4F > 3F > 2F > 1F）
+        # 森秀行厩舎向け加速判定（4F > 3F > 2F > 1F）
         df_s_best['坂路_森加速'] = (
             (df_s_best['坂路_Lap4'] > df_s_best['坂路_Lap3'])
             & (df_s_best['坂路_Lap3'] > df_s_best['坂路_Lap2'])
@@ -483,20 +507,28 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         )
 
         merge_cols = ['clean_name', '坂路_4F', '坂路_1F', '坂路_完全加速', '坂路_穴トリガー', '坂路_ラップ型', '坂路_森加速']
-        for extra in ['土日坂路最速', '前日坂路時計', '前日坂路あり', '併せ結果']:
+        for extra in ['土日坂路最速', '併せ結果']:
             if extra in df_s_best.columns: merge_cols.append(extra)
 
         df_main = pd.merge(df_main, df_s_best[merge_cols], left_on='馬名', right_on='clean_name', how='left')
+        
+        # 前日坂路をマージ
+        if not df_prev_merged.empty:
+            df_main = pd.merge(df_main, df_prev_merged, left_on='馬名', right_on='clean_name', how='left')
 
     if '坂路_4F' not in df_main.columns:
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan
         df_main['坂路_完全加速'] = False; df_main['坂路_穴トリガー'] = False; df_main['坂路_ラップ型'] = ''; df_main['坂路_森加速'] = False
 
+    if '前日坂路時計' not in df_main.columns: df_main['前日坂路時計'] = np.nan
+    if '前日坂路あり' not in df_main.columns: df_main['前日坂路あり'] = False
+    df_main['前日坂路あり'] = df_main['前日坂路あり'].fillna(False).astype(bool)
+
     wood_patterns = ['data/出馬表_ウッド*.csv', '出馬表_ウッド*.csv', 'data/*ウッド*.csv', '*ウッド*.csv']
     df_w_raw = read_csv_robust(f_wood, wood_patterns)
     if not df_w_raw.empty:
         c_w_name = find_col_regex(df_w_raw, ['^馬名$', '^競走馬名$']) or (
-            df_w_raw.columns[3] if len(df_w_raw.columns) > 3 else df_w_raw.columns[1]
+            df_w_raw.columns[4] if len(df_w_raw.columns) > 4 else df_w_raw.columns[1]
         )
         df_w_raw['clean_name'] = df_w_raw[c_w_name].apply(clean_horse_name)
 
@@ -548,9 +580,9 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     if '追切コース' not in df_main.columns: df_main['追切コース'] = df_main.apply(infer_course, axis=1)
     if '追切ラップ型' not in df_main.columns: df_main['追切ラップ型'] = df_main.get('坂路_ラップ型', '')
 
-    for c_need in ['土日坂路最速', '土日ウッド最速', '土日ウッド最速4F', '前日坂路時計']:
+    for c_need in ['土日坂路最速', '土日ウッド最速', '土日ウッド最速4F']:
         if c_need not in df_main.columns: df_main[c_need] = 999.0
-    for c_bool in ['前日坂路あり', '前日ウッドあり']:
+    for c_bool in ['前日ウッドあり']:
         if c_bool not in df_main.columns: df_main[c_bool] = False
     for c_str in ['土日坂路ラップ型', '併せ結果', 'クラス', '前走追切コース', '馬主', '性別', '性', 'C馬', '脚質']:
         if c_str not in df_main.columns: df_main[c_str] = ''
@@ -1391,35 +1423,32 @@ def calculate_dynamic_priority_score(r):
 
     # ① 脚質×コース距離区分による直接シナジー補正
     if cur_dist_val <= 1400:
-        # 短距離戦（内回り・小回り多）：前残り・先行支配
         if is_senko: score += 35.0
         elif is_nige: score += 25.0
-        elif is_back: score -= 30.0  # 短距離の後方脚質は著しく割引
+        elif is_back: score -= 30.0
     elif 1500 <= cur_dist_val <= 1800:
-        # マイル・中距離：持続力・末脚加速
         if is_senko: score += 25.0
         elif is_sashi: score += 20.0
         if wood_acc and (is_sashi or is_oikomi): score += 20.0
     elif cur_dist_val >= 1900:
-        # 中長距離：スタミナ・好位取り
         if is_senko: score += 30.0
         elif is_sashi: score += 25.0
         elif is_back: score -= 15.0
 
     # ② 指数×脚質の実証データシナジー
     if f_val >= 72.0:
-        if is_senko: score += 60.0  # F72超×先行（5着内率88.6%）
+        if is_senko: score += 60.0
         elif is_sashi: score += 45.0
         else: score += 35.0
 
     if 'ダ' in cur_track_type:
         if s_r <= 3 and a_r <= 3 and is_sashi:
-            score += 50.0  # ダートS3位内×ARMS3位内×差し（5着内率85.5%）
+            score += 50.0
         if f_r == 1 and a_r <= 3 and is_senko:
-            score += 45.0  # ダートF1位×ARMS上位×先行（連対率58.9%）
+            score += 45.0
     else:
         if f_r == 1 and a_r <= 3 and is_senko:
-            score += 45.0  # 芝F1位×ARMS上位×先行（5着内率80%超）
+            score += 45.0
 
     if r.get('is_prev_han_solid', False): score += 60.0
     elif r.get('has_prev_han_fast', False): score += 30.0
@@ -1478,7 +1507,6 @@ def calculate_dynamic_priority_score(r):
     if arms_val >= 120.0: score += 25.0
     if r.get('is_syn_bomb', False): score += 20.0
 
-    # 厳格地雷消去・減点
     if r.get('is_dirt_wood_trap', False): score -= 65.0
     if r.get('is_valley_trap', False): score -= 55.0
     if r.get('is_c_fake_trap', False): score -= 45.0
@@ -1500,7 +1528,7 @@ else:
     is_dominant_single = False
 
 # ==============================================================================
-# ★ レース判定 ＆ プロの推奨買い目生成（新・馬券構成ロジック体系）
+# ★ レース判定 ＆ プロの推奨買い目生成
 # ==============================================================================
 r_high_cnt = int((race_df['is_syn_high'] == True).sum())
 r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
@@ -1522,7 +1550,6 @@ is_go = (is_solid and is_f1_ok) or is_bonus_cur
 
 top3_fav_horses = race_df[race_df['人気'].isin([1, 2, 3])]['馬番'].tolist()
 
-# 1列目（軸馬選定）：スコア最上位かつ先行・好位差しを最優先
 front_candidates = sorted_dynamic[sorted_dynamic['is_style_senko'] | sorted_dynamic['is_style_sashi']]
 pick_win_horse = front_candidates.iloc[0] if not front_candidates.empty else sorted_dynamic.iloc[0]
 
@@ -1554,10 +1581,8 @@ danger_cands = race_df[
 ]
 pick_danger_horse = danger_cands.iloc[0] if not danger_cands.empty else None
 
-# 新馬券構成ロジック：1列目（軸）
 rec_c1 = [pick_win_horse['馬番']] if is_dominant_single else [pick_win_horse['馬番'], pick_axis_horse['馬番']]
 
-# 2列目（相手）：上位マトリクス強者から地雷馬を厳格排除
 rec_c2 = list(rec_c1)
 for u in sorted_dynamic['馬番'].tolist():
     h_row = race_df[race_df['馬番'] == u].iloc[0]
@@ -1572,7 +1597,6 @@ for u in sorted_dynamic['馬番'].tolist():
         rec_c2.append(u)
     if len(rec_c2) >= (4 if is_dominant_single else 5): break
 
-# 3列目（ヒモ広め）：調教加速・特注・爆弾馬
 rec_c3 = list(rec_c2)
 for u in (
     sorted_dynamic.head(8)['馬番'].tolist()
