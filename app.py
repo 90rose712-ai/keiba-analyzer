@@ -11,6 +11,8 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
+# ARMS×Fup / ダートで食う / C馬判定 / 指数マトリクス / 調教完全加速 / クッション値特注
+# 【完全単一ファイル版】全関数最優先定義・KeyError＆NameError＆SyntaxError完全根絶
 # ==============================================================================
 
 st.set_page_config(
@@ -337,7 +339,7 @@ def check_trainer_patterns(r):
         return pd.Series(['勝負', '王道厩舎×前日坂路勝負', "<span class='badge-tr-shobu'>⚔️ 王道×前日坂路勝負</span>"])
 
     # 4. 【調教特注の厳格化】
-    # 単なる加速ではなく、本追い切り好時計 ＋ (土日坂路速時計 または 前日坂路) がある馬のみ
+    # 水木本追い切り好時計 ＋ (土日坂路速時計 または 前日坂路) がある馬のみ
     is_main_tuned = (s_full and s_4f <= 54.0 and s_1f <= 12.5) or (w_acc and w_1f <= 11.8)
     has_sub_backing = (sat_sun_s <= 56.5) or prev_han or r.get('坂路_穴トリガー', False)
     
@@ -633,7 +635,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
 
-    # 厳格な前日日付計算 (例: 開催が2026/10/11なら前日は20261010)
+    # 厳格な前日日付計算 (開催が2026/10/11なら前日は20261010)
     exact_prev_day_int = int((detected_date - datetime.timedelta(days=1)).strftime('%Y%m%d'))
 
     # 坂路データ結合
@@ -999,6 +1001,65 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+with st.expander("🏆 コース×種牡馬 データブック最強マトリクス ＆ 危険リスト", expanded=False):
+    st.markdown("### 🔥 最重要・狙い目 上位20")
+    col_rk1, col_rk2 = st.columns(2)
+    with col_rk1:
+        st.markdown("""
+        1. **阪神芝1800外 × キズナ** (9.5-9.9) - 勝19.6% / 単回421
+        2. **東京芝1600 × エピファネイア** (9.5-9.9) - 勝13.3% / 単回277
+        3. **東京芝1400 × モーリス** (9.5-9.9) - 勝10.1% / 単回408
+        4. **東京芝1800 × ディープインパクト** (9.5-9.9) - 勝15.8% / 単回228
+        5. **東京芝2000 × キズナ** (8.6-9.4) - 勝19.7% / 単回200
+        6. **中京芝2000 × ディープインパクト** (8.6-9.4) - 勝18.0% / 単回178
+        7. **東京芝1600 × イスラボニータ** (8.6-9.4) - 勝10.5% / 単回350
+        8. **東京芝2000 × エピファネイア** (8.6-9.4) - 勝15.3% / 単回149
+        9. **函館芝1800 × キズナ** (≤8.5低) - 勝17.7% / 単回143
+        10. **小倉芝1200 × ダイワメジャー** (9.5-9.9) - 勝13.6% / 単回173
+        """)
+    with col_rk2:
+        st.markdown("""
+        11. **札幌芝2000 × オルフェーヴル** (≤8.5低) - 勝15.8% / 単回136
+        12. **東京芝1400 × ロードカナロア** (8.6-9.4) - 勝15.6% / 単回123
+        13. **阪神芝1600外 × ルーラーシップ** (8.6-9.4) - 勝20.0% / 単回156
+        14. **東京芝1600 × モーリス** (9.5-9.9) - 勝11.1% / 単回100
+        15. **阪神芝2000内 × キズナ** (8.6-9.4) - 勝11.8% / 単回152
+        16. **東京芝1600 × スクリーンヒーロー** (8.6-9.4) - 勝9.9% / 単回72
+        17. **小倉芝1200 × ビッグアーサー** (8.6-9.4) - 勝12.2% / 単回131
+        18. **中京芝1600 × ロードカナロア** (10.0-10.4) - 勝14.8% / 単回133
+        19. **福島芝1200 × ビッグアーサー** (8.6-9.4) - 勝13.2% / 単回87
+        20. **札幌芝1200 × ロードカナロア** (≤8.5低) - 勝15.0% / 単回121
+        """)
+
+    st.markdown("### ⚠️ RISK LIST 危険・割引対象 上位20")
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        st.markdown("""
+        1. **中山芝2000 × ダノンバラード** (9.5-9.9) - 複勝率0.0%
+        2. **東京芝2000 × ルーラーシップ** (9.5-9.9) - 複勝率9.1%
+        3. **小倉芝1200 × ジャスタウェイ** (8.6-9.4) - 複勝率2.9%
+        4. **東京芝1400 × シルバーステート** (8.6-9.4) - 複勝率4.7%
+        5. **東京芝1600 × ゴールドシップ** (8.6-9.4) - 複勝率4.5%
+        6. **小倉芝1200 × ヴィクトワールピサ** (8.6-9.4) - 複勝率4.8%
+        7. **東京芝1800 × ルーラーシップ** (9.5-9.9) - 複勝率10.5%
+        8. **阪神芝2000内 × ゴールドシップ** (8.6-9.4) - 複勝率10.0%
+        9. **東京芝1600 × エイシンフラッシュ** (8.6-9.4) - 複勝率7.3%
+        10. **東京芝2000 × オルフェーヴル** (8.6-9.4) - 複勝率13.2%
+        """)
+    with col_d2:
+        st.markdown("""
+        11. **福島芝2000 × ルーラーシップ** (8.6-9.4) - 複勝率4.7%
+        12. **新潟芝1400内 × リオンディーズ** (8.6-9.4) - 複勝率6.7%
+        13. **東京芝2400 × ゴールドシップ** (9.5-9.9) - 複勝率11.1%
+        14. **小倉芝1800 × ルーラーシップ** (9.5-9.9) - 複勝率10.0%
+        15. **阪神芝1800外 × ハービンジャー** (9.5-9.9) - 複勝率10.0%
+        16. **東京芝1600 × サトノクラウン** (8.6-9.4) - 複勝率9.7%
+        17. **福島芝1200 × マツリダゴッホ** (8.6-9.4) - 複勝率5.9%
+        18. **東京芝1600 × シルバーステート** (9.5-9.9) - 複勝率8.9%
+        19. **福島芝1200 × カレンブラックヒル** (8.6-9.4) - 複勝率9.7%
+        20. **中京芝2000 × オルフェーヴル** (8.6-9.4) - 複勝率15.2%
+        """)
+
 if has_active_filter:
     st.info(f"🔍 狙い目フィルタ適用中: 合計 {len(filtered_df)} 頭が該当しています（該当馬が存在するレースのみ抽出）")
 
@@ -1167,12 +1228,18 @@ wave_label = '【👑 ボーナスレース】' if is_bonus_cur else '【標準�
 
 st.markdown(f"<div class='race-type-banner race-type-solid'><div><strong>🎯 レース判定: {wave_label}</strong></div><div>推奨券種: 3連複フォーメーション / 単勝 / ワイド</div></div>", unsafe_allow_html=True)
 
+# 危険な人気馬の文字列を事前フォーマット（SyntaxError完全防止）
+if pick_danger_horse is not None:
+    danger_text = f"{int(pick_danger_horse['馬番'])}番 {pick_danger_horse['馬名']}"
+else:
+    danger_text = "該当なし"
+
 st.markdown(
     f"<div class='recom-panel-go'><div class='recom-title-go'>📋 推奨馬ピックアップ（前日調教＆指数統合）</div>"
     f"<div class='recom-row'>🥇 <strong>1着狙い</strong>: <span class='recom-val-num'>{int(pick_win_horse['馬番'])}番 {pick_win_horse['馬名']}</span>（F{int(pick_win_horse['F_rank'])}位 / 枠{int(pick_win_horse['枠番'])})</div>"
     f"<div class='recom-row'>🛡️ <strong>軸・連対狙い</strong>: <span class='recom-val-num'>{int(pick_axis_horse['馬番'])}番 {pick_axis_horse['馬名']}</span>（F{int(pick_axis_horse['F_rank'])}位 × S{int(pick_axis_horse['S_rank'])}位）</div>"
     f"<div class='recom-row'>💣 <strong>紐穴狙い</strong>: <span class='recom-val-num'>{int(pick_himo_horse['馬番'])}番 {pick_himo_horse['馬名']}</span>（{int(pick_himo_horse['人気'])}人気 / Fup{int(pick_himo_horse['Fup'])}点）</div>"
-    f"<div class='recom-row'>⚠️ <strong>危険な人気馬</strong>: {f'{int(pick_danger_horse[\"馬番\"])}番 {pick_danger_horse[\"馬名\"]}' if pick_danger_horse is not None else '該当なし'}</div></div>",
+    f"<div class='recom-row'>⚠️ <strong>危険な人気馬</strong>: {danger_text}</div></div>",
     unsafe_allow_html=True,
 )
 
