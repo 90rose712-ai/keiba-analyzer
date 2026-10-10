@@ -47,6 +47,7 @@ st.markdown(
     .horse-card-list { list-style-type: none; padding-left: 0; margin: 0; }
     .horse-card-list li { font-size: 13.5px; color: #c9d1d9; margin-bottom: 5px; line-height: 1.6; }
     .horse-card-list li::before { content: "• "; color: #58a6ff; font-weight: bold; }
+    
     .badge-mark-gtv { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; }
     .badge-accel-on { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #34d399; }
     .badge-accel-off { background-color: #374151; color: #9ca3af; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #4b5563; }
@@ -58,11 +59,15 @@ st.markdown(
     .badge-style-chudan { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #7dd3fc; }
     .badge-style-other { background-color: #374151; color: #e5e7eb; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #6b7280; }
 
-    .val-f-super { color: #1a1000; background-color: #fcd34d; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #f59e0b; }
-    .val-f-high { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
-    .val-arms-super { color: #083344; background-color: #38bdf8; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #0284c7; }
-    .val-tua-super { color: #022c22; background-color: #34d399; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #059669; }
-    .val-s-super { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
+    /* 指数色分け専用クラス（1〜3位＋S指数5位以内＋通常） */
+    .val-rank1-gold { color: #1a1000; background-color: #fcd34d; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #f59e0b; }
+    .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
+    .val-arms-top { color: #083344; background-color: #38bdf8; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #0284c7; }
+    .val-tua-top { color: #022c22; background-color: #34d399; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #059669; }
+    .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
+    .val-s-sub { color: #e0f2fe; background-color: #0369a1; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #38bdf8; }
+    .val-normal { color: #cbd5e1; font-weight: normal; }
+
     .badge-c-gold { background: linear-gradient(135deg, #b45309 0%, #f59e0b 50%, #d97706 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #fde68a; box-shadow: 0 1px 4px rgba(245, 158, 11, 0.4); }
     .badge-c-fake { background: linear-gradient(135deg, #475569 0%, #334155 100%); color: #fca5a5; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #ef4444; }
     .badge-arms-fup { background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #7dd3fc; box-shadow: 0 1px 4px rgba(2, 132, 199, 0.4); }
@@ -84,6 +89,10 @@ st.markdown(
     .badge-tr-danger { background: linear-gradient(135deg, #4b5563 0%, #1f2937 100%); color: #f87171; font-weight: bold; font-size: 11px; padding: 2px 7px; border-radius: 6px; border: 1px solid #ef4444; }
     .badge-cushion-fit { display: inline-flex; align-items: center; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #34d399; }
     .badge-cushion-danger { display: inline-flex; align-items: center; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #f87171; }
+    .badge-prev-han { background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #7dd3fc; box-shadow: 0 0 6px rgba(2, 132, 199, 0.4); }
+    .badge-prev-fast { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #fcd34d; box-shadow: 0 0 6px rgba(217, 119, 6, 0.5); }
+    .badge-prev-kato { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fef08a; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #f87171; box-shadow: 0 0 8px rgba(220, 38, 38, 0.6); }
+    .badge-prev-wood-dirt { background: linear-gradient(135deg, #7c2d12 0%, #9a3412 100%); color: #fef3c7; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #fdba74; }
 
     /* 買い目印バッジ（◎、◯、▲、△、★） */
     .badge-mark-honmei { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #fca5a5; margin-right: 6px; box-shadow: 0 0 8px rgba(220, 38, 38, 0.7); }
@@ -968,7 +977,6 @@ df['target_himo'] = (
 
 st.sidebar.markdown('---')
 st.sidebar.markdown('### ⏱️ 前日坂路・調教検索')
-search_prev_han = st.sidebar.text_input('前日坂路・厩舎検索', placeholder='例: 堀, 中内田, 加藤征...', label_visibility='collapsed')
 filter_prev_han_all = st.sidebar.checkbox(f"🏇 前日坂路あり全頭 ({int(df['has_prev_han'].sum())}頭)")
 filter_prev_han_fast = st.sidebar.checkbox(f"🔥 前日坂路65秒以下 ({int(df['has_prev_han_fast'].sum())}頭)", help='勝負気配・平均より2〜3秒以上速い')
 filter_prev_han_solid = st.sidebar.checkbox(f"👑 前日坂路×王道上位人気 ({int(df['is_prev_han_solid'].sum())}頭)", help='堀・中内田等×1〜3番人気(勝率40%超)')
@@ -1320,7 +1328,7 @@ is_bonus_cur = bool(((race_df['F_rank'] <= 3) & (race_df['arms_rank'] <= 3) & (r
 is_solid = (
     r_high_cnt >= 2
     or (r_win_cnt >= 1 and r_axis_cnt >= 1 and r_bomb_cnt <= 1)
-    or ((r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_c <= 1)
+    or ((r_iron_cnt >= 1 or r_high_cnt >= 1 or r_win_cnt >= 1) and r_bomb_cnt <= 1)
 )
 is_go = (is_solid and is_f1_ok) or is_bonus_cur
 
@@ -1482,7 +1490,7 @@ p3_3rd = [h for h in rec_c3 if h not in p3_1st and h not in p3_2nd][:5]
 trifecta_p3 = [(a, b, c) for a in p3_1st for b in p3_2nd for c in p3_3rd if len({a, b, c}) == 3]
 
 p1_c1_str = ', '.join(str(int(u)) for u in p1_1st); p1_c2_str = ', '.join(str(int(u)) for u in p1_2nd); p1_c3_str = ', '.join(str(int(u)) for u in p1_3rd)
-p2_c1_str = ', '.join(str(int(u)) for u in p2_1st); p2_c2_str = ', '.join(str(int(u)) for u in p2_2nd); p2_c3_str = ', '.join(str(int(u)) for u in p2_3rd)
+p2_c1_str = ', '.join(str(int(u)) for u in p2_1st); p2_c2_str = ', '.join(str(int(u)) for u in p2_1st); p2_c3_str = ', '.join(str(int(u)) for u in p2_3rd)
 p3_c1_str = ', '.join(str(int(u)) for u in p3_1st); p3_c2_str = ', '.join(str(int(u)) for u in p3_2nd); p3_c3_str = ', '.join(str(int(u)) for u in p3_3rd)
 
 wave_label = '【👑 ボーナスレース (F・arms・tua 独占)】' if is_bonus_cur else ('【堅調（1頭突出）】' if is_dominant_single else ('【堅調】' if is_go else '【混戦・波乱】'))
@@ -1545,7 +1553,7 @@ single_disp = ', '.join(single_bets) if single_bets else '条件合致なし（�
 single_cnt = len(single_bets)
 
 # ==============================================================================
-# ★ 推奨買い目出力（フォーメーション・単勝・ワイド・3連単裏表マルチの補完完了）
+# ★ 推奨買い目出力（フォーメーション・単勝・ワイド・3連単裏表マルチ）
 # ==============================================================================
 st.markdown(
     f"<div class='{panel_cls}'><div class='{title_cls}'>🎫 推奨買い目（実戦フォーメーション改善規定）</div>"
@@ -1565,11 +1573,92 @@ st.markdown(
 )
 
 # ==============================================================================
-# ★ 出走馬カード一覧（印・指数・前日坂路・調教加速・クッション値・各種フラグ詳細）
+# ★ 出走馬カルテ 並び替えソート選択バー（完全復活）
 # ==============================================================================
 st.markdown("### 🏇 出走馬詳細カルテ")
 
-for _, h in race_df.sort_values('馬番').iterrows():
+col_sort, _ = st.columns([3, 1])
+with col_sort:
+    sort_option = st.selectbox(
+        "🔄 カルテ並び替え（ソート順）",
+        options=[
+            '馬番順',
+            '推奨度(動的スコア)順',
+            'F指数順(降順)',
+            'Fup得点順(降順)',
+            'arms指数順(降順)',
+            'tua指数順(降順)',
+            'S指数順(降順)',
+            '脚質順(逃げ→先行→差し→追込)',
+            '調教加速順'
+        ],
+        index=0
+    )
+
+# ソート実行ロジック
+display_horses_df = race_df.copy()
+if sort_option == '馬番順':
+    display_horses_df = display_horses_df.sort_values('馬番', ascending=True)
+elif sort_option == '推奨度(動的スコア)順':
+    display_horses_df = display_horses_df.sort_values('dynamic_score', ascending=False)
+elif sort_option == 'F指数順(降順)':
+    display_horses_df = display_horses_df.sort_values(['F_rank', 'F指数'], ascending=[True, False])
+elif sort_option == 'Fup得点順(降順)':
+    display_horses_df = display_horses_df.sort_values(['Fup', 'Fup_rank'], ascending=[False, True])
+elif sort_option == 'arms指数順(降順)':
+    display_horses_df = display_horses_df.sort_values(['arms_rank', 'arms'], ascending=[True, False])
+elif sort_option == 'tua指数順(降順)':
+    display_horses_df = display_horses_df.sort_values(['tua_rank', 'tua'], ascending=[True, False])
+elif sort_option == 'S指数順(降順)':
+    display_horses_df = display_horses_df.sort_values(['S_rank', 'S指数'], ascending=[True, False])
+elif sort_option == '脚質順(逃げ→先行→差し→追込)':
+    style_priority = {'逃げ': 1, '先行': 2, '差し': 3, '中団': 4, '追込': 5, '後方': 6, 'まくり': 7}
+    display_horses_df['style_order'] = display_horses_df['脚質'].map(lambda x: style_priority.get(x, 99))
+    display_horses_df = display_horses_df.sort_values('style_order', ascending=True)
+elif sort_option == '調教加速順':
+    display_horses_df = display_horses_df.sort_values(['坂路_完全加速', 'is_wood_accel', '坂路_穴トリガー'], ascending=[False, False, False])
+
+# ==============================================================================
+# ★ 出走馬カード一覧（適正色分け：1〜3位、S指数5位以内対応）
+# ==============================================================================
+def format_index_badge(val, rank, metric_type):
+    if pd.isnull(val): return "-"
+    v_str = f"{float(val):.1f}"
+    r_int = int(rank) if pd.notnull(rank) else 99
+    
+    # 1位は一律ゴールド
+    if r_int == 1:
+        return f"<span class='val-rank1-gold'>{v_str}</span> (第1位)"
+    
+    # 2〜3位の色分け
+    if r_int in [2, 3]:
+        if metric_type == 'F':
+            return f"<span class='val-f-top'>{v_str}</span> (第{r_int}位)"
+        elif metric_type == 'arms':
+            return f"<span class='val-arms-top'>{v_str}</span> (第{r_int}位)"
+        elif metric_type == 'tua':
+            return f"<span class='val-tua-top'>{v_str}</span> (第{r_int}位)"
+        elif metric_type == 'S':
+            return f"<span class='val-s-top'>{v_str}</span> (第{r_int}位)"
+            
+    # S指数のみ4〜5位も狙い目ゾーンとして色付け
+    if metric_type == 'S' and r_int in [4, 5]:
+        return f"<span class='val-s-sub'>{v_str}</span> (第{r_int}位)"
+        
+    return f"<span class='val-normal'>{v_str}</span> (第{r_int}位)"
+
+def format_fup_badge(fup_val, fup_rank):
+    val_int = int(fup_val) if pd.notnull(fup_val) else 0
+    rk_int = int(fup_rank) if pd.notnull(fup_rank) else 99
+    if val_int == 7:
+        return f"<span class='val-rank1-gold'>{val_int}点</span> (第{rk_int}位)"
+    elif val_int in [5, 6]:
+        return f"<span class='val-f-top'>{val_int}点</span> (第{rk_int}位)"
+    elif val_int == 4:
+        return f"<span class='val-arms-top'>{val_int}点</span> (第{rk_int}位)"
+    return f"<span class='val-normal'>{val_int}点</span> (第{rk_int}位)"
+
+for _, h in display_horses_df.iterrows():
     u_no = int(h['馬番'])
     h_mark = bet_marks_dict.get(u_no, '')
     style_badge = get_running_style_badge(h.get('脚質', ''))
@@ -1609,11 +1698,12 @@ for _, h in race_df.sort_values('馬番').iterrows():
 
     badges_html = " ".join([b for b in badges if b])
 
-    # 数値フォーマット
-    f_val_str = f"{h['F指数']:.1f}" if pd.notnull(h.get('F指数')) else "-"
-    s_val_str = f"{h['S指数']:.1f}" if pd.notnull(h.get('S指数')) else "-"
-    arms_val_str = f"{h['arms']:.1f}" if pd.notnull(h.get('arms')) else "-"
-    tua_val_str = f"{h['tua']:.1f}" if pd.notnull(h.get('tua')) else "-"
+    # 1〜3位(およびS指数5位内)のみを的確に色分け
+    f_badge_html = format_index_badge(h.get('F指数'), h.get('F_rank'), 'F')
+    fup_badge_html = format_fup_badge(h.get('Fup'), h.get('Fup_rank'))
+    arms_badge_html = format_index_badge(h.get('arms'), h.get('arms_rank'), 'arms')
+    tua_badge_html = format_index_badge(h.get('tua'), h.get('tua_rank'), 'tua')
+    s_badge_html = format_index_badge(h.get('S指数'), h.get('S_rank'), 'S')
 
     han_4f_str = f"{h['坂路_4F']:.1f}s" if pd.notnull(h.get('坂路_4F')) else "-"
     han_1f_str = f"{h['坂路_1F']:.1f}s" if pd.notnull(h.get('坂路_1F')) else "-"
@@ -1629,23 +1719,10 @@ for _, h in race_df.sort_values('馬番').iterrows():
         f"</div>"
         f"<div style='margin-bottom: 8px;'>{badges_html}</div>"
         f"<ul class='horse-card-list'>"
-        f"<li><strong>指数マトリクス</strong>: F指数 <span class='val-f-high'>{f_val_str}</span> (第{int(h['F_rank'])}位) / Fup2: <strong>{int(h['Fup'])}点</strong> (第{int(h['Fup_rank'])}位) / arms: <span class='val-arms-super'>{arms_val_str}</span> (第{int(h['arms_rank'])}位) / tua: <span class='val-tua-super'>{tua_val_str}</span> (第{int(h['tua_rank'])}位) / S指数: <span class='val-s-super'>{s_val_str}</span> (第{int(h['S_rank'])}位)</li>"
+        f"<li><strong>指数マトリクス</strong>: F指数 {f_badge_html} / Fup2: {fup_badge_html} / arms: {arms_badge_html} / tua: {tua_badge_html} / S指数: {s_badge_html}</li>"
         f"<li><strong>調教時計・加速</strong>: 坂路4F {han_4f_str} - 1F {han_1f_str} ({h.get('坂路_ラップ型','-')}) / W終い {wood_1f_str} / 前日坂路: {prev_han_str} / 週末最速: {h.get('土日坂路最速','-')}s</li>"
         f"<li><strong>血統＆クッション値</strong>: 父 {h.get('種牡馬','-')} / 当日クッション値帯 ({current_bin_name}: {current_band}) 適性判定: {h.get('cushion_badge_raw','') if is_turf_race else 'ダート戦（クッション値対象外）'}</li>"
         f"</ul>"
         f"</div>",
         unsafe_allow_html=True,
     )
-
-# ==============================================================================
-# ★ レース全頭一覧テーブル表示
-# ==============================================================================
-with st.expander("📊 レース全頭データ一覧テーブル（詳細数値確認）", expanded=False):
-    view_cols = [
-        '馬番', '馬名', '枠番', '人気', '脚質', 'F指数', 'F_rank', 'Fup', 'Fup_rank',
-        'arms', 'arms_rank', 'tua', 'tua_rank', 'S指数', 'S_rank',
-        '坂路_4F', '坂路_1F', '坂路_完全加速', 'wood_1F', 'is_wood_accel', '前日坂路あり',
-        '種牡馬', '騎手', '調教師'
-    ]
-    disp_df = race_df[[c for c in view_cols if c in race_df.columns]].sort_values('馬番').reset_index(drop=True)
-    st.dataframe(disp_df, use_container_width=True)
