@@ -12,7 +12,7 @@ import streamlit as st
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
 # ARMS×Fup / ダートで食う / C馬判定 / 指数マトリクス / 調教完全加速 / クッション値特注
-# 【最新完全統合版】前日坂路自動日付検知・森秀行厩舎加速・脚質×コース新連動
+# 【最新完全統合版】距離別馬券構成・前日坂路自動検知・森秀行厩舎加速・重複馬5段階序列
 # ==============================================================================
 
 st.set_page_config(
@@ -463,11 +463,10 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         if c_sun_sat_h: df_s_raw['土日坂路最速'] = pd.to_numeric(df_s_raw[c_sun_sat_h], errors='coerce')
         if c_align: df_s_raw['併せ結果'] = df_s_raw[c_align].astype(str)
 
-        # ★ 前日坂路（レース前日日付：例 20261009）の厳格・自動抽出
+        # 前日坂路（レース前日日付：例 20261009）の厳格・自動抽出
         prev_target_date = int((detected_date - datetime.timedelta(days=1)).strftime('%Y%m%d'))
         df_s_prev_day = df_s_raw[df_s_raw['clean_date'] == prev_target_date].copy()
         
-        # もし日付が合致しない場合（ファイル更新日からのフォールバック）
         if df_s_prev_day.empty and df_s_raw['clean_date'].notna().any():
             max_d = df_s_raw['clean_date'].max()
             if max_d >= prev_target_date - 1:
@@ -1507,6 +1506,7 @@ def calculate_dynamic_priority_score(r):
     if arms_val >= 120.0: score += 25.0
     if r.get('is_syn_bomb', False): score += 20.0
 
+    # 厳格地雷消去・減点
     if r.get('is_dirt_wood_trap', False): score -= 65.0
     if r.get('is_valley_trap', False): score -= 55.0
     if r.get('is_c_fake_trap', False): score -= 45.0
@@ -1521,14 +1521,9 @@ def calculate_dynamic_priority_score(r):
 
 race_df['dynamic_score'] = race_df.apply(calculate_dynamic_priority_score, axis=1)
 sorted_dynamic = race_df.sort_values('dynamic_score', ascending=False)
-if len(sorted_dynamic) >= 2:
-    score_gap = sorted_dynamic.iloc[0]['dynamic_score'] - sorted_dynamic.iloc[1]['dynamic_score']
-    is_dominant_single = score_gap >= 30.0
-else:
-    is_dominant_single = False
 
 # ==============================================================================
-# ★ レース判定 ＆ プロの推奨買い目生成
+# ★ レース判定 ＆ プロの推奨買い目生成（コース距離別フォーメーション完全連動）
 # ==============================================================================
 r_high_cnt = int((race_df['is_syn_high'] == True).sum())
 r_iron_cnt = int((race_df['is_syn_iron'] == True).sum())
@@ -1550,16 +1545,40 @@ is_go = (is_solid and is_f1_ok) or is_bonus_cur
 
 top3_fav_horses = race_df[race_df['人気'].isin([1, 2, 3])]['馬番'].tolist()
 
-front_candidates = sorted_dynamic[sorted_dynamic['is_style_senko'] | sorted_dynamic['is_style_sashi']]
-pick_win_horse = front_candidates.iloc[0] if not front_candidates.empty else sorted_dynamic.iloc[0]
+# 重複馬複数時の5段階序列決定ルール
+# ① F72超 ＞ ② 先行・差し ＞ ③ クッション合致 ＞ ④ 調教加速 ＞ ⑤ 内中枠
+def get_horse_hierarchy_rank(r):
+    p_rank = 0
+    if r.get('F指数', 0) >= 72.0: p_rank += 1000
+    elif r.get('F_rank', 99) == 1: p_rank += 500
+    
+    style = str(r.get('脚質', ''))
+    if '先' in style: p_rank += 300
+    elif '差' in style: p_rank += 200
+    elif '後' in style or '中' in style: p_rank -= 300
 
-axis_cands = sorted_dynamic[
-    (sorted_dynamic['馬番'] != pick_win_horse['馬番'])
-    & (sorted_dynamic['is_style_senko'] | sorted_dynamic['is_style_sashi'])
-]
-pick_axis_horse = axis_cands.iloc[0] if not axis_cands.empty else (
-    sorted_dynamic[sorted_dynamic['馬番'] != pick_win_horse['馬番']].iloc[0] if len(sorted_dynamic) > 1 else pick_win_horse
-)
+    if bool(r.get('is_cushion_fit', False)) or bool(r.get('is_cushion_horse_fit', False)): p_rank += 150
+    if bool(r.get('is_cushion_danger', False)) or bool(r.get('is_cushion_horse_danger', False)): p_rank -= 400
+
+    if str(r.get('調教ステータス')) == '鉄板' or bool(r.get('is_prev_han_solid')): p_rank += 120
+    elif str(r.get('調教ステータス')) == '勝負' or bool(r.get('坂路_完全加速')) or bool(r.get('坂路_森加速')): p_rank += 80
+
+    if r.get('枠番', 8) <= 6: p_rank += 50
+    else: p_rank -= 50
+
+    return p_rank
+
+sorted_dynamic['hierarchy_rank'] = sorted_dynamic.apply(get_horse_hierarchy_rank, axis=1)
+hierarchy_sorted = sorted_dynamic.sort_values(['hierarchy_rank', 'dynamic_score'], ascending=[False, False])
+
+pick_win_horse = hierarchy_sorted.iloc[0]
+axis_cands = hierarchy_sorted[hierarchy_sorted['馬番'] != pick_win_horse['馬番']]
+pick_axis_horse = axis_cands.iloc[0] if not axis_cands.empty else pick_win_horse
+
+# 1頭突出判定（F72超かつ先行、または序列差大）
+has_iron_solo = (pick_win_horse.get('F指数', 0) >= 72.0 and '先' in str(pick_win_horse.get('脚質', '')))
+score_gap = pick_win_horse['dynamic_score'] - (pick_axis_horse['dynamic_score'] if len(hierarchy_sorted) > 1 else 0)
+is_dominant_single = has_iron_solo or (score_gap >= 25.0)
 
 himo_cands = sorted_dynamic[
     (sorted_dynamic['人気'] >= 4)
@@ -1581,10 +1600,13 @@ danger_cands = race_df[
 ]
 pick_danger_horse = danger_cands.iloc[0] if not danger_cands.empty else None
 
+# 新馬券構成ロジック：1列目（軸）
 rec_c1 = [pick_win_horse['馬番']] if is_dominant_single else [pick_win_horse['馬番'], pick_axis_horse['馬番']]
 
+# 2列目（相手）：コース距離に応じた相手頭数
+max_c2 = 3 if cur_dist_val >= 2200 else (4 if is_dominant_single else 5)
 rec_c2 = list(rec_c1)
-for u in sorted_dynamic['馬番'].tolist():
+for u in hierarchy_sorted['馬番'].tolist():
     h_row = race_df[race_df['馬番'] == u].iloc[0]
     if (u not in rec_c2 
         and not h_row.get('is_fup_trap', False) 
@@ -1595,8 +1617,10 @@ for u in sorted_dynamic['馬番'].tolist():
         and not (h_row.get('調教ステータス') == '危険')
         and not h_row.get('is_short_back_trap', False)):
         rec_c2.append(u)
-    if len(rec_c2) >= (4 if is_dominant_single else 5): break
+    if len(rec_c2) >= max_c2: break
 
+# 3列目（ヒモ広め）：コース距離別のヒモ頭数（短距離は手広く最大8頭、長距離は絞って6頭）
+max_c3 = 6 if cur_dist_val >= 2200 else (8 if cur_dist_val <= 1400 else 7)
 rec_c3 = list(rec_c2)
 for u in (
     sorted_dynamic.head(8)['馬番'].tolist()
@@ -1619,7 +1643,7 @@ for u in (
         and not h_row.get('is_dirt_wood_trap', False)
         and not h_row.get('is_cushion_danger', False)):
         rec_c3.append(u)
-    if len(rec_c3) >= 8: break
+    if len(rec_c3) >= max_c3: break
 
 trio_combinations = set()
 for h1, h2, h3 in itertools.product(rec_c1, rec_c2, rec_c3):
@@ -1649,8 +1673,17 @@ trifecta_p2 = [(a, b, c) for a in p2_1st for b in p2_2nd for c in p2_3rd if len(
 p1_c1_str = ', '.join(str(int(u)) for u in p1_1st); p1_c2_str = ', '.join(str(int(u)) for u in p1_2nd); p1_c3_str = ', '.join(str(int(u)) for u in p1_3rd)
 p2_c1_str = ', '.join(str(int(u)) for u in p2_1st); p2_c2_str = ', '.join(str(int(u)) for u in p2_2nd); p2_c3_str = ', '.join(str(int(u)) for u in p2_3rd)
 
+# コース距離×波乱度に応じた推奨券種ラベルの動的決定
 wave_label = '【👑 ボーナスレース (F・arms・tua 独占)】' if is_bonus_cur else ('【堅調（1頭突出）】' if is_dominant_single else ('【堅調】' if is_go else '【混戦・波乱】'))
-ticket_type_label = '【3連複厚張り / 1着固定3連単】' if is_bonus_cur else ('【単勝・1着固定3連単 / 3連複】' if is_dominant_single else ('【3連複フォーメーション / ワイド / 単勝】' if is_go else '【単勝・ワイド / 3連複フォーメーション】'))
+
+if cur_dist_val <= 1400:
+    dist_ticket_label = '【短距離戦：厳選単勝 ＋ ワイド流し・BOX ＋ 3連複ヒモ手広く】'
+elif 1500 <= cur_dist_val <= 2000:
+    dist_ticket_label = '【マイル〜中距離：3連複少数厚張り ＋ 1着固定3連単】' if is_go else '【マイル〜中距離：単勝 ＋ ワイド ＋ 3連複フォーメーション】'
+else:
+    dist_ticket_label = '【長距離戦：馬連集中 ＋ 3連複少数精鋭】'
+
+ticket_type_label = dist_ticket_label
 banner_cls = 'race-type-bonus' if is_bonus_cur else ('race-type-solid' if is_go else 'race-type-chaos')
 panel_cls = 'recom-panel-go' if is_go else 'recom-panel-chaos'
 title_cls = 'recom-title-go' if is_go else 'recom-title-chaos'
