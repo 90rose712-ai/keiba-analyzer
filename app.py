@@ -444,6 +444,10 @@ def populate_all_derived_columns(d):
     res['人気'] = pd.to_numeric(res.get('人気', 99), errors='coerce').fillna(99)
     res['枠番'] = pd.to_numeric(res.get('枠番', 8), errors='coerce').fillna(8)
 
+    # 印 (GTV) の安全抽出・判定
+    mark_s = res['印'].astype(str) if '印' in res.columns else pd.Series('', index=res.index)
+    res['is_gtv_marked'] = mark_s.str.contains(r'GTV|G|Ｔ|★|☆|特|注', na=False, regex=True)
+
     # 脚質系列の安全チェック
     style_s = res['脚質'].astype(str) if '脚質' in res.columns else pd.Series('', index=res.index)
     res['is_style_senko'] = style_s.str.contains('先', na=False)
@@ -1154,7 +1158,7 @@ def calculate_dynamic_priority_score(r):
     elif waku_val in [7, 8]: score -= 25.0
 
     if tr_stat == '鉄板': score += 45.0
-    elif tr_stat == '勝戻': score += 30.0
+    elif tr_stat == '勝負': score += 30.0
     elif tr_stat == '特注': score += 20.0
     elif tr_stat == '危険': score -= 45.0
 
@@ -1317,6 +1321,12 @@ for _, h in display_horses_df.iterrows():
     badges = []
     if h_mark: badges.append(h_mark)
     if style_badge: badges.append(style_badge)
+    
+    # 読み込んだ印(GTV)のバッジ表示（印列にデータがある場合）
+    mark_val = str(h.get('印', '')).strip()
+    if mark_val and mark_val not in ['nan', 'None', '']:
+        badges.append(f"<span class='badge-mark-gtv'>🏷️ 印: {mark_val}</span>")
+
     if h.get('target_win'): badges.append("<span class='badge-target-win'>🥇 1着狙い</span>")
     if h.get('target_axis'): badges.append("<span class='badge-target-axis'>🛡️ 軸候補</span>")
     if h.get('is_syn_iron'): badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬</span>")
