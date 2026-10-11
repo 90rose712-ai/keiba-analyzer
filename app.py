@@ -11,11 +11,11 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
-# 4段階ゲートキーパー（過剰除外バグ完全是正・適正ペナルティ版）
+# 4段階ゲートキーパー ＆ 【実践馬券構成フォーミュラ完全連動版】
 # ==============================================================================
 
 st.set_page_config(
-    page_title="競馬予想10 クッション値Vr - ゲートキーパー適正版",
+    page_title="競馬予想10 クッション値Vr - 実戦馬券構成完全連動",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -27,15 +27,17 @@ st.markdown(
     .date-header-badge { display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, #1f2937 0%, #111827 100%); border: 1px solid #3b82f6; padding: 6px 16px; border-radius: 20px; color: #60a5fa; font-size: 14.5px; font-weight: bold; margin-bottom: 12px; }
     .race-type-banner { padding: 12px 18px; border-radius: 8px; margin-bottom: 14px; font-size: 15px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
     .race-type-solid { background: linear-gradient(135deg, #064e3b 0%, #047857 100%); color: #ecfdf5; border: 1px solid #34d399; }
+    .race-type-bonus { background: linear-gradient(135deg, #7c2d12 0%, #b45309 50%, #d97706 100%); color: #fef3c7; border: 2px solid #fde68a; box-shadow: 0 0 10px rgba(245, 158, 11, 0.5); }
+    .race-type-chaos { background: linear-gradient(135deg, #881337 0%, #be123c 100%); color: #fff1f2; border: 1px solid #fb7185; }
+    
     .recom-panel-go { background: linear-gradient(135deg, #111827 0%, #1f2937 100%); border: 2px solid #10b981; border-radius: 10px; padding: 16px 20px; margin-bottom: 20px; }
     .recom-title-go { font-size: 16px; font-weight: bold; color: #34d399; margin-bottom: 12px; border-bottom: 1px solid #374151; padding-bottom: 5px; }
     .recom-row { margin-bottom: 8px; font-size: 14.5px; line-height: 1.6; }
-    .recom-block { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; }
+    .recom-block { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 8px; padding: 12px 16px; margin-bottom: 10px; }
     .recom-val-num { color: #ffffff; font-weight: bold; font-size: 15.5px; letter-spacing: 1px; }
 
     /* 出走馬カルテ通常 */
     .horse-card { background-color: #161e2e; border-left: 5px solid #238636; padding: 14px 18px; border-radius: 8px; margin-bottom: 14px; border-top: 1px solid #30363d; border-right: 1px solid #30363d; border-bottom: 1px solid #30363d; }
-    /* 危険馬用カード（暗転しすぎず警告色で明示） */
     .horse-card-danger { background-color: #1a1618 !important; border-left: 5px solid #ef4444 !important; padding: 14px 18px; border-radius: 8px; margin-bottom: 14px; border-top: 1px solid #4c1d24; border-right: 1px solid #4c1d24; border-bottom: 1px solid #4c1d24; }
     
     .horse-card-header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
@@ -46,7 +48,6 @@ st.markdown(
     .horse-card-list li::before { content: "• "; color: #58a6ff; font-weight: bold; }
     
     /* バッジ */
-    .badge-gate-danger { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; }
     .badge-mark-gtv { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; }
     .badge-accel-on { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #34d399; }
     .badge-c-gold { background: linear-gradient(135deg, #b45309 0%, #f59e0b 50%, #d97706 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #fde68a; }
@@ -80,7 +81,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# 定数定義
 PREV_HAN_SOLID_TRAINERS = ['堀', '中内田', '友道', '杉山晴', '田中博', '高柳大', '斎藤誠', '寺島', '岡田', '辻野', '平田', '鹿戸', '野中', '池添', '吉岡', '武英', '田中克', '四位', '森秀']
 PREV_HAN_BOMB_TRAINERS = ['加藤征', '上村', '大竹', '牧', '杉浦', '武市', '和田正']
 PREV_WOOD_DIRT_TRAINERS = ['稲垣', '小笠', '武英', '長谷川', '田中克', '本田']
@@ -288,9 +288,6 @@ def check_trainer_patterns(r):
 
     return pd.Series(['通常', '', ""])
 
-# ==============================================================================
-# ★ 安全化された派生列生成 ＆ ゲート判定（適正バランス調整版）
-# ==============================================================================
 def populate_all_derived_columns(d):
     res = d.copy()
     res['dist_num'] = pd.to_numeric(res.get('dist', 1600), errors='coerce').fillna(1600)
@@ -307,14 +304,12 @@ def populate_all_derived_columns(d):
     res['人気'] = pd.to_numeric(res.get('人気', 99), errors='coerce').fillna(99)
     res['枠番'] = pd.to_numeric(res.get('枠番', 8), errors='coerce').fillna(8)
 
-    # 印 (GTV) の安全抽出
     if '印' in res.columns:
         mark_s = res['印'].astype(str)
         res['is_gtv_marked'] = mark_s.str.contains(r'GTV|G|Ｔ|★|☆|特|注', na=False, regex=True)
     else:
         res['is_gtv_marked'] = False
 
-    # 脚質系列
     if '脚質' in res.columns:
         style_s = res['脚質'].astype(str)
     else:
@@ -326,7 +321,6 @@ def populate_all_derived_columns(d):
     res['is_style_front'] = res['is_style_senko'] | res['is_style_nige']
     res['is_style_back'] = style_s.str.contains('後|中', na=False)
 
-    # 調教
     if '坂路_4F' in res.columns: s_4f_val = pd.to_numeric(res['坂路_4F'], errors='coerce').fillna(99.0)
     else: s_4f_val = pd.Series(99.0, index=res.index)
 
@@ -344,15 +338,12 @@ def populate_all_derived_columns(d):
     res['坂路_完全加速_有効'] = res['坂路_完全加速'] & (s_4f_val <= 56.0) & (s_1f_val <= 13.0)
     res['調教加速'] = res['坂路_完全加速_有効'] | res['is_wood_accel']
 
-    # C馬判定
     if 'C馬' in res.columns: c_s = res['C馬'].astype(str)
     else: c_s = pd.Series('', index=res.index)
     res['is_c_horse'] = c_s.str.contains('C|Ｃ', na=False)
     res['is_c_real_gold'] = res['is_c_horse'] & (res['Fup'] >= 4)
-    # 偽C馬判定: Fup3以下かつF指数も1位でない場合のみ罠とする
     res['is_c_fake_trap'] = res['is_c_horse'] & (res['Fup'] <= 3) & (res['F_rank'] > 1)
 
-    # 前日調教
     if '前日坂路あり' in res.columns: res['has_prev_han'] = res['前日坂路あり'].fillna(False).astype(bool)
     else: res['has_prev_han'] = pd.Series(False, index=res.index)
 
@@ -372,8 +363,7 @@ def populate_all_derived_columns(d):
     else: tk_s = pd.Series('', index=res.index)
     res['is_prev_wood_dirt'] = prev_w_s & tk_s.str.contains('ダ', na=False) & tr_s.apply(lambda t: any(x in str(t) for x in PREV_WOOD_DIRT_TRAINERS))
 
-    # ★ ダート×ウッド追い判定の正常化:
-    # F指数が4位以下で、かつ坂路加速がない馬のみを割引（F上位馬は能力でカバーできるため完全除外しない）
+    # ダート×ウッド追い判定
     res['is_dirt_wood_trap'] = tk_s.str.contains('ダ', na=False) & res['is_wood_accel'] & (~res['坂路_完全加速_有効']) & (~res['is_prev_wood_dirt']) & (res['F_rank'] >= 4)
 
     # SSS級＆確変馬
@@ -381,12 +371,11 @@ def populate_all_derived_columns(d):
     res['is_iron_f72'] = res['F指数'] >= 72.0
     res['is_value_arms120'] = res['arms'] >= 120.0
 
-    # 谷の形・Fupの罠（S1〜3位の先行馬は先行力があるため谷の形から除外）
+    # 谷の形・Fupの罠
     res['is_fup_trap'] = (res['Fup'] == 1) & (res['人気'] <= 3) & (res['F指数'] <= 72) & (~res['is_sss_level'])
     res['is_valley_trap'] = (res['人気'] <= 3) & (res['F_rank'] >= 4) & (res['S_rank'] >= 4) & (~res['is_sss_level']) & (res['F指数'] <= 70)
     res['is_short_back_trap'] = (res['dist_num'] <= 1400) & res['is_style_back'] & (res['人気'] <= 3) & (~res['is_sss_level'])
 
-    # GATE 1: 致命的消し・地雷判定（真の地雷馬のみを抽出）
     c_dang = res['is_cushion_danger'] if 'is_cushion_danger' in res.columns else pd.Series(False, index=res.index)
     res['is_gate1_fatal_trap'] = (
         res['is_dirt_wood_trap']
@@ -397,7 +386,6 @@ def populate_all_derived_columns(d):
         | c_dang
     )
 
-    # GATE 2: 真の絶対軸（◎）必須条件
     res['is_gate2_axis_qualified'] = (
         (~res['is_gate1_fatal_trap'])
         & ((res['Fup'] >= 4) | (res['F_rank'] == 1) | (res['S_rank'] == 1))
@@ -405,18 +393,14 @@ def populate_all_derived_columns(d):
         & (res['坂路_完全加速_有効'] | res['is_prev_han_solid'] | (res['F指数'] >= 65.0))
     )
 
-    # GATE 3: 特大推奨穴馬（🔥）
     res['is_gate3_bomb_qualified'] = (
-        (res['人気'] >= 6)
+        (res['人気'] >= 4)
         & (~res['is_gate1_fatal_trap'])
-        & ((res['arms'] >= 120.0) | (res['tua'] >= 190.0) | (res['Fup'] >= 4))
+        & ((res['arms'] >= 110.0) | (res['tua'] >= 180.0) | (res['Fup'] >= 4) | res['坂路_穴トリガー'])
     )
 
     return res
 
-# ==============================================================================
-# ★ データロードエンジン
-# ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = ['data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv', 'data/出馬表*.csv', '出馬表*.csv']
     index_src = f_index
@@ -658,7 +642,7 @@ race_df = df[df['race_uid'] == selected_race_uid].copy()
 race_df = populate_all_derived_columns(race_df)
 
 # ==============================================================================
-# ★ 適正化された動的スコア算出（-9999即死を廃止し、バランス型重み付け）
+# ★ 動的スコア算出（能力・調教・減点ペナルティ統合評価）
 # ==============================================================================
 def calculate_dynamic_priority_score(r):
     score = 0.0
@@ -688,8 +672,9 @@ def calculate_dynamic_priority_score(r):
     # 調教加点
     if bool(r.get('坂路_完全加速_有効', False)): score += 30.0
     if bool(r.get('is_prev_han_solid', False)): score += 35.0
+    if bool(r.get('is_cushion_fit', False)): score += 35.0
 
-    # ★ 適正減点ペナルティ（-9999の即死を撤廃し、減点として処理）
+    # 減点ペナルティ
     if bool(r.get('is_c_fake_trap', False)): score -= 45.0
     if bool(r.get('is_fup_trap', False)): score -= 45.0
     if bool(r.get('is_dirt_wood_trap', False)): score -= 40.0
@@ -701,71 +686,138 @@ def calculate_dynamic_priority_score(r):
 race_df['dynamic_score'] = race_df.apply(calculate_dynamic_priority_score, axis=1)
 sorted_dynamic = race_df.sort_values('dynamic_score', ascending=False)
 
-# 軸・対抗・穴馬の選定
+# ==============================================================================
+# ★ 【完全連動】新実戦馬券構成フォーミュラ自動生成エンジン
+# ==============================================================================
+
+# ① 本命馬◎（連軸筆頭：動的スコア最上位）
 pick_win_horse = sorted_dynamic.iloc[0]
-pick_axis_horse = sorted_dynamic.iloc[1] if len(sorted_dynamic) > 1 else pick_win_horse
 
-# 特大推奨穴馬（人気4番人気以下でスコア上位の馬）
-himo_cands = sorted_dynamic[sorted_dynamic['人気'] >= 4]
-pick_himo_horse = himo_cands.iloc[0] if not himo_cands.empty else (
-    sorted_dynamic.iloc[2] if len(sorted_dynamic) > 2 else pick_axis_horse
-)
+# ② 対抗馬◯（軸・連対狙い：2番手実力馬）
+remain_pool = sorted_dynamic[sorted_dynamic['馬番'] != pick_win_horse['馬番']]
+pick_axis_horse = remain_pool.iloc[0] if not remain_pool.empty else pick_win_horse
 
-# 危険な人気馬（人気3番人気以内で何らかの減点ペナルティを抱えている馬）
+# ③ 特大推奨穴馬★（GATE3適合、または4人気以降のスコア最上位）
+bomb_pool = sorted_dynamic[
+    (sorted_dynamic['人気'] >= 4) &
+    (sorted_dynamic['is_gate3_bomb_qualified'] | (sorted_dynamic['arms'] >= 110.0) | (sorted_dynamic['tua'] >= 180.0))
+]
+if not bomb_pool.empty:
+    pick_himo_horse = bomb_pool.iloc[0]
+else:
+    pick_himo_horse = remain_pool.iloc[1] if len(remain_pool) > 1 else pick_axis_horse
+
+# ④ 危険な人気馬⚠️（3人気以内で何らかの減点要因あり）
 danger_cands = race_df[
     (race_df['人気'] <= 3) &
     (race_df['is_gate1_fatal_trap'] | (race_df['Fup'] <= 2))
 ]
 pick_danger_horse = danger_cands.iloc[0] if not danger_cands.empty else None
 
-# 自動買い目フォーメーション生成
-rec_c1 = [int(pick_win_horse['馬番'])]
-rec_c2 = [int(pick_win_horse['馬番']), int(pick_axis_horse['馬番'])]
-for u in sorted_dynamic['馬番'].tolist():
-    if int(u) not in rec_c2: rec_c2.append(int(u))
-    if len(rec_c2) >= 3: break
+# ------------------------------------------------------------------------------
+# 🎫 3連複フォーメーション生成（中京8R的中モデル・多重防壁型）
+# ------------------------------------------------------------------------------
+# 1列目（軸・2頭）: 本命◎ ＋ 対抗◯
+col1_horses = [int(pick_win_horse['馬番'])]
+if pick_axis_horse['馬番'] != pick_win_horse['馬番']:
+    col1_horses.append(int(pick_axis_horse['馬番']))
 
-rec_c3 = list(rec_c2)
-if int(pick_himo_horse['馬番']) not in rec_c3: rec_c3.append(int(pick_himo_horse['馬番']))
+# 2列目（相手・3〜4頭）: 1列目 ＋ マトリクス強者（F上位・S上位・arms上位）
+col2_horses = list(col1_horses)
 for u in sorted_dynamic['馬番'].tolist():
-    if int(u) not in rec_c3: rec_c3.append(int(u))
-    if len(rec_c3) >= 6: break
+    u_int = int(u)
+    if u_int not in col2_horses:
+        col2_horses.append(u_int)
+    if len(col2_horses) >= 4:
+        break
 
+# 3列目（ヒモ広め・6〜7頭）: 2列目 ＋ 特大穴馬★ ＋ 調教加速馬 ＋ 押さえ
+col3_horses = list(col2_horses)
+if int(pick_himo_horse['馬番']) not in col3_horses:
+    col3_horses.append(int(pick_himo_horse['馬番']))
+
+# スコア上位馬を追加して最大7頭まで展開
+for u in sorted_dynamic['馬番'].tolist():
+    u_int = int(u)
+    if u_int not in col3_horses:
+        col3_horses.append(u_int)
+    if len(col3_horses) >= 7:
+        break
+
+# ------------------------------------------------------------------------------
+# 🎫 精鋭BOX（馬連・ワイド・4頭）: 本命 ＋ 対抗 ＋ マトリクス3位 ＋ 特大穴馬
+# ------------------------------------------------------------------------------
+box_cands = [int(pick_win_horse['馬番']), int(pick_axis_horse['馬番']), int(pick_himo_horse['馬番'])]
+for u in sorted_dynamic['馬番'].tolist():
+    u_int = int(u)
+    if u_int not in box_cands:
+        box_cands.append(u_int)
+    if len(box_cands) >= 4:
+        break
+box_horses = sorted(list(dict.fromkeys(box_cands)))
+
+# ------------------------------------------------------------------------------
+# 🎫 3連単フォーメーション（高配当・裏表マルチ対応）
+# ------------------------------------------------------------------------------
+trio_1st = [int(pick_win_horse['馬番'])]
+if int(pick_himo_horse['馬番']) not in trio_1st:
+    trio_1st.append(int(pick_himo_horse['馬番']))
+
+trio_2nd = list(dict.fromkeys(trio_1st + [int(pick_axis_horse['馬番'])] + col2_horses[:3]))
+trio_3rd = list(col3_horses)
+
+# 印マッピング
 bet_marks_dict = {}
 bet_marks_dict[int(pick_win_horse['馬番'])] = "<span class='badge-mark-honmei'>◎</span>"
 if pick_axis_horse['馬番'] != pick_win_horse['馬番']:
     bet_marks_dict[int(pick_axis_horse['馬番'])] = "<span class='badge-mark-taikou'>◯</span>"
-for u in rec_c2:
+for u in col2_horses:
     if int(u) not in bet_marks_dict: bet_marks_dict[int(u)] = "<span class='badge-mark-tanana'>▲</span>"
-for u in rec_c3:
+for u in col3_horses:
     if int(u) not in bet_marks_dict: bet_marks_dict[int(u)] = "<span class='badge-mark-himo'>△</span>"
 if int(pick_himo_horse['馬番']) not in bet_marks_dict:
     bet_marks_dict[int(pick_himo_horse['馬番'])] = "<span class='badge-mark-ana'>★</span>"
 
 # ==============================================================================
-# ★ UIパネル表示
+# ★ UIパネル表示（実戦推奨買い目完全連動出力）
 # ==============================================================================
 if pick_danger_horse is not None:
-    danger_horse_label = f"{int(pick_danger_horse['馬番'])}番 {pick_danger_horse['馬名']}（人気に対して割引要素あり）"
+    danger_horse_label = f"{int(pick_danger_horse['馬番'])}番 {pick_danger_horse['馬名']}（人気先行・割引要素あり）"
 else:
     danger_horse_label = "該当なし"
 
+is_bonus_cur = bool(((race_df['F_rank'] <= 3) & (race_df['arms_rank'] <= 3) & (race_df['tua_rank'] <= 3)).sum() >= 3)
+wave_label = '【👑 ボーナスレース】' if is_bonus_cur else '【標準・混戦レース】'
+
 st.markdown(
-    f"<div class='recom-panel-go'><div class='recom-title-go'>🛡️ ゲートキーパー適正推奨（能力×調教×リスク総合判定）</div>"
-    f"<div class='recom-row'>🥇 <strong>本命・1着狙い（◎）</strong>: <span class='recom-val-num'>{int(pick_win_horse['馬番'])}番 {pick_win_horse['馬名']}</span>（F{int(pick_win_horse['F_rank'])}位 / S{int(pick_win_horse['S_rank'])}位 / 枠{int(pick_win_horse['枠番'])})</div>"
-    f"<div class='recom-row'>🛡️ <strong>対抗・連対狙い（◯）</strong>: <span class='recom-val-num'>{int(pick_axis_horse['馬番'])}番 {pick_axis_horse['馬名']}</span>（F{int(pick_axis_horse['F_rank'])}位 / arms{int(pick_axis_horse['arms_rank'])}位）</div>"
-    f"<div class='recom-row'>🔥 <strong>特大推奨穴馬（★）</strong>: <span class='recom-val-num'>{int(pick_himo_horse['馬番'])}番 {pick_himo_horse['馬名']}</span>（{int(pick_himo_horse['人気'])}人気 / arms: {pick_himo_horse['arms']:.1f}）</div>"
-    f"<div class='recom-row'>⚠️ <strong>注意・割引人気馬</strong>: <span style='color:#ef4444; font-weight:bold;'>{danger_horse_label}</span></div></div>",
+    f"<div class='race-type-banner race-type-solid'>"
+    f"<div><strong>🎯 レース波乱度判定: {wave_label}</strong></div>"
+    f"<div>推奨券種: 3連複フォーメーション / 馬連・ワイド精鋭BOX / 単勝</div></div>",
     unsafe_allow_html=True,
 )
 
-# 精鋭BOX＆フォーメーション
-box_horses = list(dict.fromkeys(rec_c2 + [int(pick_himo_horse['馬番'])]))[:4]
 st.markdown(
-    f"<div class='recom-panel-go'><div class='recom-title-go'>🎫 自動生成・高精度買い目フォーメーション</div>"
-    f"<div class='recom-block'><strong>精鋭BOX（馬連・ワイド）</strong>: [{', '.join(str(x) for x in box_horses)}] （4頭BOX：軸崩れ完全保険）</div>"
-    f"<div class='recom-block'><strong>3連複フォーメーション</strong>: 1列目[{int(pick_win_horse['馬番'])}] → 2列目[{', '.join(str(x) for x in rec_c2)}] → 3列目[{', '.join(str(x) for x in rec_c3)}]</div>"
-    f"<div class='recom-block'><strong>単勝</strong>: {int(pick_win_horse['馬番'])}番 / <strong>複勝・ワイド特注</strong>: {int(pick_himo_horse['馬番'])}番</div></div>",
+    f"<div class='recom-panel-go'><div class='recom-title-go'>📋 推奨馬ピックアップ（能力マトリクス×実質負荷調教）</div>"
+    f"<div class='recom-row'>🥇 <strong>1着狙い（◎）</strong>: <span class='recom-val-num'>{int(pick_win_horse['馬番'])}番 {pick_win_horse['馬名']}</span>（F{int(pick_win_horse['F_rank'])}位 / S{int(pick_win_horse['S_rank'])}位 / 枠{int(pick_win_horse['枠番'])})</div>"
+    f"<div class='recom-row'>🛡️ <strong>軸・連対狙い（◯）</strong>: <span class='recom-val-num'>{int(pick_axis_horse['馬番'])}番 {pick_axis_horse['馬名']}</span>（F{int(pick_axis_horse['F_rank'])}位 / arms{int(pick_axis_horse['arms_rank'])}位）</div>"
+    f"<div class='recom-row'>💣 <strong>紐穴狙い・特大推奨（★）</strong>: <span class='recom-val-num'>{int(pick_himo_horse['馬番'])}番 {pick_himo_horse['馬名']}</span>（{int(pick_himo_horse['人気'])}人気 / arms: {pick_himo_horse['arms']:.1f} / tua: {pick_himo_horse['tua']:.1f}）</div>"
+    f"<div class='recom-row'>⚠️ <strong>危険な人気馬</strong>: <span style='color:#ef4444; font-weight:bold;'>{danger_horse_label}</span></div></div>",
+    unsafe_allow_html=True,
+)
+
+st.markdown(
+    f"<div class='recom-panel-go'><div class='recom-title-go'>🎫 実戦推奨買い目フォーメーション（完全連動出力）</div>"
+    f"<div class='recom-block'><strong>【本線：3連複フォーメーション（中京8R的中モデル）】</strong><br>"
+    f"・<strong>1列目（軸）</strong>: [{', '.join(str(x) for x in col1_horses)}]<br>"
+    f"・<strong>2列目（相手）</strong>: [{', '.join(str(x) for x in col2_horses)}]<br>"
+    f"・<strong>3列目（ヒモ広め）</strong>: [{', '.join(str(x) for x in col3_horses)}]</div>"
+    f"<div class='recom-block'><strong>【守り・保険：精鋭4頭BOX（馬連・ワイド）】</strong><br>"
+    f"・<strong>BOX対象馬</strong>: [{', '.join(str(x) for x in box_horses)}] （計6点：軸飛び・縦目完全ケア）</div>"
+    f"<div class='recom-block'><strong>【攻め：3連単フォーメーション（裏表マルチ対応）】</strong><br>"
+    f"・1着: [{', '.join(str(x) for x in trio_1st)}]<br>"
+    f"・2着: [{', '.join(str(x) for x in trio_2nd)}]<br>"
+    f"・3着: [{', '.join(str(x) for x in trio_3rd)}]</div>"
+    f"<div class='recom-block'><strong>【単勝・複勝】</strong>: 単勝 {int(pick_win_horse['馬番'])}番 / 複勝・ワイド特注 {int(pick_himo_horse['馬番'])}番</div></div>",
     unsafe_allow_html=True,
 )
 
@@ -784,7 +836,6 @@ for _, h in sorted_dynamic.iterrows():
     if h_mark: badges.append(h_mark)
     if style_badge: badges.append(style_badge)
     
-    # 印(GTV)
     mark_val = str(h.get('印', '')).strip()
     if mark_val and mark_val not in ['nan', 'None', '']:
         badges.append(f"<span class='badge-mark-gtv'>🏷️ 印: {mark_val}</span>")
