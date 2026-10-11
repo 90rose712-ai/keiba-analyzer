@@ -12,7 +12,7 @@ import streamlit as st
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
 # 4段階ゲートキーパー（足切り門番）＆ 自動馬券アセンブラ搭載
-# 【完全単一ファイル版】KeyError / NameError / SyntaxError 完全根絶
+# 【完全単一ファイル版】f-string構文エラー・KeyError完全根絶版
 # ==============================================================================
 
 st.set_page_config(
@@ -771,14 +771,19 @@ if int(pick_himo_horse['馬番']) not in bet_marks_dict:
     bet_marks_dict[int(pick_himo_horse['馬番'])] = "<span class='badge-mark-ana'>★</span>"
 
 # ==============================================================================
-# ★ UIパネル表示
+# ★ UIパネル表示（安全文字列フォーマット）
 # ==============================================================================
+if pick_danger_horse is not None:
+    danger_horse_label = f"{int(pick_danger_horse['馬番'])}番 {pick_danger_horse['馬名']}"
+else:
+    danger_horse_label = "該当なし"
+
 st.markdown(
     f"<div class='recom-panel-go'><div class='recom-title-go'>🛡️ 4段階ゲートキーパー推奨（地雷排除システム稼働中）</div>"
     f"<div class='recom-row'>🥇 <strong>1着狙い（◎）</strong>: <span class='recom-val-num'>{int(pick_win_horse['馬番'])}番 {pick_win_horse['馬名']}</span>（F{int(pick_win_horse['F_rank'])}位 / Fup{int(pick_win_horse['Fup'])}点 / 枠{int(pick_win_horse['枠番'])})</div>"
     f"<div class='recom-row'>🛡️ <strong>軸・連対狙い（◯）</strong>: <span class='recom-val-num'>{int(pick_axis_horse['馬番'])}番 {pick_axis_horse['馬名']}</span>（F{int(pick_axis_horse['F_rank'])}位 × S{int(pick_axis_horse['S_rank'])}位）</div>"
     f"<div class='recom-row'>🔥 <strong>特大推奨穴馬（★）</strong>: <span class='recom-val-num'>{int(pick_himo_horse['馬番'])}番 {pick_himo_horse['馬名']}</span>（{int(pick_himo_horse['人気'])}人気 / arms: {pick_himo_horse['arms']:.1f}）</div>"
-    f"<div class='recom-row'>⚠️ <strong>ダミー看破・消し馬</strong>: <span style='color:#ef4444; font-weight:bold;'>{f'{int(pick_danger_horse[\"馬番\"])}番 {pick_danger_horse[\"馬名\"]}' if pick_danger_horse is not None else '該当なし'}</span></div></div>",
+    f"<div class='recom-row'>⚠️ <strong>ダミー看破・消し馬</strong>: <span style='color:#ef4444; font-weight:bold;'>{danger_horse_label}</span></div></div>",
     unsafe_allow_html=True,
 )
 
