@@ -10,9 +10,8 @@ import pandas as pd
 import streamlit as st
 
 # ==============================================================================
-# 競馬予想10 クッション値Vr 完全統合Webアプリケーション【確定人気依存排除・完全版】
-# ARMS×Fup / ダートで食う / C馬判定 / 指数マトリクス / 調教完全加速 / クッション値特注
-# 【完全単一ファイル版】全関数最優先定義・KeyError＆NameError＆SyntaxError完全根絶
+# 競馬予想10 クッション値Vr 完全統合Webアプリケーション
+# 【坂路完全加速ソート＆色付けハイライト・前日坂路強化・完全単一ファイル版】
 # ==============================================================================
 
 st.set_page_config(
@@ -65,6 +64,14 @@ st.markdown(
     .val-s-sub { color: #e0f2fe; background-color: #0369a1; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #38bdf8; }
     .val-normal { color: #cbd5e1; font-weight: normal; }
 
+    /* ★ 坂路調教ハイライト用カラー */
+    .highlight-han-a3 { color: #10b981; font-weight: bold; background-color: rgba(16, 185, 129, 0.15); padding: 1px 5px; border-radius: 4px; border: 1px solid #059669; }
+    .highlight-han-a2 { color: #38bdf8; font-weight: bold; background-color: rgba(56, 189, 248, 0.15); padding: 1px 5px; border-radius: 4px; border: 1px solid #0284c7; }
+    .highlight-han-a1 { color: #fcd34d; font-weight: bold; background-color: rgba(252, 211, 77, 0.15); padding: 1px 5px; border-radius: 4px; border: 1px solid #d97706; }
+    .highlight-han-fast1f { color: #f43f5e; font-weight: bold; }
+    .highlight-prev-han-yes { color: #34d399; font-weight: bold; background: rgba(52, 211, 153, 0.15); padding: 1px 6px; border-radius: 4px; border: 1px solid #059669; }
+    .highlight-prev-han-fast { color: #fbbf24; font-weight: bold; background: rgba(251, 191, 36, 0.2); padding: 1px 6px; border-radius: 4px; border: 1px solid #d97706; }
+
     .badge-c-gold { background: linear-gradient(135deg, #b45309 0%, #f59e0b 50%, #d97706 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #fde68a; box-shadow: 0 1px 4px rgba(245, 158, 11, 0.4); }
     .badge-c-fake { background: linear-gradient(135deg, #475569 0%, #334155 100%); color: #fca5a5; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #ef4444; }
     .badge-arms-fup { background: linear-gradient(135deg, #0284c7 0%, #0369a1 50%, #075985 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #7dd3fc; }
@@ -90,7 +97,7 @@ st.markdown(
     .badge-mark-taikou { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #93c5fd; margin-right: 6px; }
     .badge-mark-tanana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #6ee7b7; margin-right: 6px; }
     .badge-mark-himo { display: inline-flex; align-items: center; justify-content: center; background-color: #374151; color: #f3f4f6; font-size: 14.5px; font-weight: bold; width: 30px; height: 30px; border-radius: 6px; border: 1px solid #6b7280; margin-right: 6px; }
-    .badge-mark-ana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #fde68a; margin-right: 6px; }
+    .badge-mark-ana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1px solid #fde68a; margin-right: 6px; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -410,7 +417,7 @@ def evaluate_sire_cushion(sire_name, venue, dist_str, band_str):
     return ""
 
 # ==============================================================================
-# ★ 安全化された派生列生成関数（人気依存の罠ロジック完全排除）
+# ★ 安全化された派生列生成関数（坂路ソート＆前日坂路強化）
 # ==============================================================================
 def populate_all_derived_columns(d):
     res = d.copy()
@@ -510,6 +517,24 @@ def populate_all_derived_columns(d):
     res['waku_gold'] = same_waku & (res['F_rank'] <= 2)
     res['flag_sf7_himo'] = ((res['S_rank'] <= 7) | (res['F_rank'] <= 7)) & (res['調教加速'] | same_waku | same_ub | res['has_prev_han'])
 
+    # ★ 坂路調教ソート用スコア算出
+    def get_sakaro_sort_rank(row):
+        score = 0
+        l_type = str(row.get('坂路_ラップ型', ''))
+        if l_type == 'A3': score += 1000
+        elif l_type == 'A2': score += 800
+        elif l_type == 'A1': score += 600
+        elif row.get('坂路_完全加速', False): score += 500
+        elif l_type == 'B3': score += 300
+        elif l_type == 'B2': score += 200
+
+        # 終い1F速さ加算
+        s_1f = pd.to_numeric(row.get('坂路_1F'), errors='coerce')
+        if pd.notnull(s_1f) and s_1f <= 12.2: score += 100
+        if row.get('has_prev_han', False): score += 50
+        return score
+
+    res['sakaro_sort_score'] = res.apply(get_sakaro_sort_rank, axis=1)
     return res
 
 # ==============================================================================
@@ -671,6 +696,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         c_sun_sat_h = find_col_regex(df_s_raw, ['^土日坂路', '^週末坂路'])
         if c_sun_sat_h: df_s_raw['土日坂路最速'] = pd.to_numeric(df_s_raw[c_sun_sat_h], errors='coerce')
 
+        # 前日坂路データの照合
         df_s_prev_day = df_s_raw[df_s_raw['clean_date'] == exact_prev_day_int].copy()
         if not df_s_prev_day.empty:
             df_s_prev_best = (
@@ -814,7 +840,7 @@ df['cushion_badge_raw'] = df.apply(
 df['is_cushion_fit'] = df['cushion_badge_raw'].str.contains('特注')
 df['is_cushion_danger'] = df['cushion_badge_raw'].str.contains('危険')
 
-# 1着狙い・軸連対狙い・紐穴判定（確定人気依存を排除・優秀ロジック完全優先）
+# 1着狙い・軸連対狙い・紐穴判定（客観的優秀ロジック優先）
 df['target_win'] = (
     (
         df['is_prev_han_solid']
@@ -869,7 +895,7 @@ df['target_himo'] = (
 )
 
 # ==============================================================================
-# ★ サイドバー：フィルタ定義（確定人気依存の危険警告を完全排除）
+# ★ サイドバー：フィルタ定義（前日坂路・坂路調教完全連動）
 # ==============================================================================
 st.sidebar.markdown('---')
 st.sidebar.markdown('### ⏱️ 前日坂路・調教検索')
@@ -1083,11 +1109,11 @@ race_df['is_cushion_danger'] = race_df['cushion_badge_raw'].str.contains('危険
 cur_track_type = race_df['track'].iloc[0] if not race_df.empty else '芝'
 cur_dist_val = int(re.sub(r'\D', '', str(race_df['dist'].iloc[0]))) if not race_df.empty else 1600
 
-# 動的優先度スコア計算（人気依存のペナルティを排除）
 def calculate_dynamic_priority_score(r):
     score = 0.0
-    f_val, arms_val, tua_val = r.get('F指数', 0.0), r.get('arms', 0.0), r.get('tua', 0.0)
+    f_val = r.get('F指数', 0.0)
     c_dang = bool(r.get('is_cushion_danger', False))
+    sakaro_full = bool(r.get('坂路_完全加速', False))
     tr_stat = str(r.get('調教ステータス', ''))
     waku_val = r.get('枠番', 8)
     prev_han = bool(r.get('has_prev_han', False))
@@ -1125,7 +1151,6 @@ def calculate_dynamic_priority_score(r):
     elif tr_stat == '特注': score += 20.0
     elif tr_stat == '危険': score -= 45.0
 
-    # 客観的調教・コース罠のみ減点
     if r.get('is_dirt_wood_trap', False): score -= 65.0
     if r.get('is_c_fake_trap', False): score -= 45.0
     if c_dang: score -= 40.0
@@ -1219,15 +1244,26 @@ st.markdown(
 )
 
 # ==============================================================================
-# ★ 出走馬詳細カルテ（フィルタ一括抽出の反映）
+# ★ 出走馬詳細カルテ（坂路加速判定ソート・色付け・前日坂路情報強化）
 # ==============================================================================
 st.markdown("### 🏇 出走馬詳細カルテ")
 
 col_sort, _ = st.columns([3, 1])
 with col_sort:
+    # ★ 坂路加速ソート（A3/A2/A1完全加速優先）を追加[cite: 2]
     sort_option = st.selectbox(
         "🔄 カルテ並び替え（ソート順）",
-        options=['馬番順', '推奨度(動的スコア)順', 'F指数順(降順)', 'Fup得点順(降順)', 'arms指数順(降順)', 'tua指数順(降順)', 'S指数順(降順)'],
+        options=[
+            '馬番順',
+            '⚡ 坂路加速判定順(A3/A2/A1優先)',
+            '推奨度(動的スコア)順',
+            'F指数順(降順)',
+            'Fup得点順(降順)',
+            'arms指数順(降順)',
+            'tua指数順(降順)',
+            'S指数順(降順)',
+            '⏱️ 前日坂路速時計順'
+        ],
         index=0
     )
 
@@ -1237,6 +1273,8 @@ if has_active_filter:
 
 if sort_option == '馬番順':
     display_horses_df = display_horses_df.sort_values('馬番', ascending=True)
+elif sort_option == '⚡ 坂路加速判定順(A3/A2/A1優先)':
+    display_horses_df = display_horses_df.sort_values(['sakaro_sort_score', '坂路_1F', '坂路_4F'], ascending=[False, True, True])
 elif sort_option == '推奨度(動的スコア)順':
     display_horses_df = display_horses_df.sort_values('dynamic_score', ascending=False)
 elif sort_option == 'F指数順(降順)':
@@ -1249,6 +1287,8 @@ elif sort_option == 'tua指数順(降順)':
     display_horses_df = display_horses_df.sort_values(['tua_rank', 'tua'], ascending=[True, False])
 elif sort_option == 'S指数順(降順)':
     display_horses_df = display_horses_df.sort_values(['S_rank', 'S指数'], ascending=[True, False])
+elif sort_option == '⏱️ 前日坂路速時計順':
+    display_horses_df = display_horses_df.sort_values(['前日坂路あり', '前日坂路時計'], ascending=[False, True])
 
 def format_index_badge(val, rank, metric_type):
     if pd.isnull(val): return "-"
@@ -1289,8 +1329,10 @@ for _, h in display_horses_df.iterrows():
     if h.get('is_syn_iron'): badges.append("<span class='badge-synergy badge-iron'>💎 鉄板軸馬</span>")
     if h.get('is_syn_high'): badges.append("<span class='badge-synergy badge-high'>🔥 高確率軸馬</span>")
     if h.get('is_syn_bomb'): badges.append("<span class='badge-synergy badge-bomb'>💣 爆弾穴馬</span>")
+    
+    # 前日坂路バッジ
     if h.get('is_prev_han_solid'): badges.append("<span class='badge-prev-fast'>🔥 前日坂路×王道厩舎</span>")
-    elif h.get('has_prev_han_fast'): badges.append("<span class='badge-prev-han'>⏱️ 前日坂路速時計</span>")
+    elif h.get('has_prev_han_fast'): badges.append("<span class='badge-prev-han'>⏱️ 前日坂路速時計(65s以下)</span>")
     elif h.get('has_prev_han'): badges.append("<span class='badge-prev-han'>🏇 前日坂路あり</span>")
 
     if h.get('is_c_real_gold'): badges.append("<span class='badge-c-gold'>👑 本物C馬</span>")
@@ -1305,7 +1347,6 @@ for _, h in display_horses_df.iterrows():
     elif h.get('is_wood_accel'): badges.append("<span class='badge-accel-on'>⚡ ウッド連続加速</span>")
     if h.get('坂路_穴トリガー'): badges.append("<span class='badge-bomb'>💣 坂路穴トリガー</span>")
 
-    # 客観的調教・コース罠バッジのみ表示
     if h.get('is_dirt_wood_trap'): badges.append("<span class='badge-tr-danger'>⚠️ ダート×W追消し</span>")
 
     badges_html = " ".join([b for b in badges if b])
@@ -1316,10 +1357,57 @@ for _, h in display_horses_df.iterrows():
     tua_badge_html = format_index_badge(h.get('tua'), h.get('tua_rank'), 'tua')
     s_badge_html = format_index_badge(h.get('S指数'), h.get('S_rank'), 'S')
 
-    han_4f_str = f"{h['坂路_4F']:.1f}s" if pd.notnull(h.get('坂路_4F')) else "-"
-    han_1f_str = f"{h['坂路_1F']:.1f}s" if pd.notnull(h.get('坂路_1F')) else "-"
+    # ★ 坂路調教時計とラップ型の色付けハイライト処理[cite: 3]
+    h_4f_val = h.get('坂路_4F')
+    h_1f_val = h.get('坂路_1F')
+    h_lap_type = str(h.get('坂路_ラップ型', '')).strip()
+    if h_lap_type in ['nan', 'None']: h_lap_type = ''
+
+    if pd.notnull(h_4f_val):
+        h_4f_num = float(h_4f_val)
+        han_4f_str = f"<strong>{h_4f_num:.1f}s</strong>" if h_4f_num <= 53.5 else f"{h_4f_num:.1f}s"
+    else:
+        han_4f_str = "-"
+
+    if pd.notnull(h_1f_val):
+        h_1f_num = float(h_1f_val)
+        if h_1f_num <= 12.0:
+            han_1f_str = f"<span class='highlight-han-fast1f'>⚡ {h_1f_num:.1f}s</span>"
+        elif h_1f_num <= 12.4:
+            han_1f_str = f"<strong>{h_1f_num:.1f}s</strong>"
+        else:
+            han_1f_str = f"{h_1f_num:.1f}s"
+    else:
+        han_1f_str = "-"
+
+    # ラップ型色分けバッジ
+    if h_lap_type == 'A3':
+        lap_type_html = f"<span class='highlight-han-a3'>【A3加速・11s台】</span>"
+    elif h_lap_type == 'A2':
+        lap_type_html = f"<span class='highlight-han-a2'>【A2加速・12s台】</span>"
+    elif h_lap_type == 'A1':
+        lap_type_html = f"<span class='highlight-han-a1'>【A1加速】</span>"
+    elif h.get('坂路_完全加速'):
+        lap_type_html = f"<span class='highlight-han-a2'>【完全加速】</span>"
+    elif h_lap_type in ['B1', 'B2', 'B3']:
+        lap_type_html = f"<span style='color:#94a3b8;'>({h_lap_type})</span>"
+    else:
+        lap_type_html = "(-)"
+
     wood_1f_str = f"{h['wood_1F']:.1f}s" if pd.notnull(h.get('wood_1F')) else "-"
-    prev_han_str = f"{h['前日坂路時計']:.1f}s" if pd.notnull(h.get('前日坂路時計')) and h.get('has_prev_han') else "なし"
+    
+    # ★ 前日坂路表示の強化[cite: 3]
+    if h.get('has_prev_han') and pd.notnull(h.get('前日坂路時計')):
+        prev_time = float(h['前日坂路時計'])
+        if prev_time <= 65.9:
+            prev_han_str = f"<span class='highlight-prev-han-fast'>🔥 {prev_time:.1f}s (前日速計)</span>"
+        else:
+            prev_han_str = f"<span class='highlight-prev-han-yes'>🏇 {prev_time:.1f}s (前日あり)</span>"
+    elif h.get('has_prev_han'):
+        prev_han_str = f"<span class='highlight-prev-han-yes'>あり</span>"
+    else:
+        prev_han_str = "<span style='color:#64748b;'>なし</span>"
+
     sat_sun_str = f"{h['土日坂路最速']:.1f}s" if pd.notnull(h.get('土日坂路最速')) and h.get('土日坂路最速') < 900 else "-"
 
     st.markdown(
@@ -1332,7 +1420,7 @@ for _, h in display_horses_df.iterrows():
         f"<div style='margin-bottom: 8px;'>{badges_html}</div>"
         f"<ul class='horse-card-list'>"
         f"<li><strong>指数マトリクス</strong>: F指数 {f_badge_html} / Fup2: {fup_badge_html} / arms: {arms_badge_html} / tua: {tua_badge_html} / S指数: {s_badge_html}</li>"
-        f"<li><strong>調教時計・加速</strong>: 坂路4F {han_4f_str} - 1F {han_1f_str} ({h.get('坂路_ラップ型','-')}) / W終い {wood_1f_str} / 前日坂路: {prev_han_str} / 週末最速: {sat_sun_str}</li>"
+        f"<li><strong>調教時計・加速</strong>: 坂路4F {han_4f_str} - 1F {han_1f_str} {lap_type_html} / W終い {wood_1f_str} / <strong>前日坂路</strong>: {prev_han_str} / 週末最速: {sat_sun_str}</li>"
         f"<li><strong>血統＆クッション値</strong>: 父 {h.get('種牡馬','-')} / 当日クッション値帯 ({current_bin_name}: {current_band}) 適性判定: {h.get('cushion_badge_raw','') if is_turf_race else 'ダート戦（対象外）'}</li>"
         f"</ul>"
         f"</div>",
