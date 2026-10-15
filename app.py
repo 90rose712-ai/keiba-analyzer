@@ -150,7 +150,7 @@ def read_csv_robust(file_obj, candidate_patterns):
         if matched: src = max(matched, key=os.path.getmtime)
     if src is None: return pd.DataFrame()
 
-    encodings = ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']
+    encodings = ['utf-8', 'utf-8-sig', 'cp932', 'shift-jis']
     for enc in encodings:
         try:
             if hasattr(src, 'seek'): src.seek(0)
@@ -273,11 +273,12 @@ def evaluate_sire_cushion(sire_name, venue, dist_str, band_str):
     return ""
 
 # ==============================================================================
-# ★ データロード＆結合エンジン
+# ★ データロード＆結合エンジン（38列マスター・当日統合CSV両対応）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
-        'data/2026_全11指数統合_出馬表.csv', '2026_全11指数統合_出馬表.csv',
+        'data/当日全指数統合*.csv', '当日全指数統合*.csv',
+        'data/2026_全11指数統合_出馬表*.csv', '2026_全11指数統合_出馬表*.csv',
         'data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv',
         'data/出馬表*.csv', '出馬表*.csv'
     ]
@@ -289,38 +290,20 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
 
     records = []
     lines = []
-    if index_src is not None:
-        for enc in ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']:
-            try:
-                if isinstance(index_src, str):
-                    with open(index_src, 'r', encoding=enc, errors='ignore') as f:
-                        lines = [l.strip() for l in f if l.strip()]
-                else:
-                    index_src.seek(0)
-                    content = index_src.read()
-                    if isinstance(content, bytes):
-                        lines = [l.strip() for l in content.decode(enc, errors='ignore').splitlines() if l.strip()]
-                    else:
-                        lines = [l.strip() for l in content.splitlines() if l.strip()]
-                if lines: break
-            except Exception: continue
-
-        reader = csv.reader(lines)
-        header = None
-        for parts in reader:
-            if not parts: continue
-            if header is None:
-                header = [p.strip() for p in parts]
-                continue
-            
-            row = dict(zip(header, parts))
-            race_id = row.get('場所R', '')
-            dist = row.get('距離', '1600')
-            umaban = row.get('馬番', '99')
+    
+    # Try reading directly with pandas first
+    df_raw = read_csv_robust(index_src, index_patterns)
+    
+    if not df_raw.empty and '場所R' in df_raw.columns:
+        # 38-column integrated CSV format!
+        for _, row in df_raw.iterrows():
+            race_id = str(row.get('場所R', '')).strip()
+            dist = row.get('距離', 1600)
+            umaban = row.get('馬番', 99)
             horse = clean_horse_name(row.get('馬名', ''))
             trainer = clean_horse_name(row.get('調教師', ''))
             jockey = clean_horse_name(row.get('騎手', ''))
-            pop = row.get('人気順位', '99')
+            pop = row.get('人気順位', 99)
             c_marker = row.get('C', '')
             mark = row.get('印', '')
             
@@ -352,7 +335,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             if horse:
                 records.append({
                     'race_id': race_id, 'track': track, 'dist': dist_int,
-                    '馬番': int(umaban) if str(umaban).isdigit() else 99,
+                    '馬番': int(float(umaban)) if pd.notnull(umaban) and str(umaban).replace('.','',1).isdigit() else 99,
                     '馬名': horse, 'C馬': c_marker, '印': str(mark).strip(),
                     '調教師': trainer, '騎手': jockey,
                     '種牡馬': str(sire).strip(),
@@ -375,6 +358,77 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
                     '時計血順位': int(tokei_ketsu_rank) if not np.isnan(tokei_ketsu_rank) else 99,
                     '坂路血順位': int(hanro_ketsu_rank) if not np.isnan(hanro_ketsu_rank) else 99,
                 })
+    elif index_src is not None:
+        # Fallback to line parser for legacy 24-col CSV
+        for enc in ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']:
+            try:
+                if isinstance(index_src, str):
+                    with open(index_src, 'r', encoding=enc, errors='ignore') as f:
+                        lines = [l.strip() for l in f if l.strip()]
+                else:
+                    index_src.seek(0)
+                    content = index_src.read()
+                    if isinstance(content, bytes):
+                        lines = [l.strip() for l in content.decode(enc, errors='ignore').splitlines() if l.strip()]
+                    else:
+                        lines = [l.strip() for l in content.splitlines() if l.strip()]
+                if lines: break
+            except Exception: continue
+
+        reader = csv.reader(lines)
+        for parts in reader:
+            n = len(parts)
+            if n < 8 or parts[0] in ['場所', '場所R', 'レースID', 'race_id']: continue
+
+            race_id = parts[0]
+            track = parts[1] if n > 1 else '芝'
+            dist = parts[2] if n > 2 else '1600'
+            umaban = parts[3] if n > 3 else '99'
+            horse_raw = parts[4] if n > 4 else ''
+            c_marker = str(parts[5]).strip() if n > 5 else ''
+            trainer = parts[6] if n > 6 else ''
+            jockey = parts[7] if n > 7 else ''
+            pop = parts[8] if n > 8 else '99'
+            mark = parts[9] if n > 9 else ''
+            fup = pd.to_numeric(parts[10], errors='coerce') if n > 10 else 0
+            fup_rank = pd.to_numeric(parts[11], errors='coerce') if n > 11 else 99
+            s_val = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0.0
+            s_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
+            f_val = pd.to_numeric(parts[14], errors='coerce') if n > 14 else 0.0
+            f_rank = pd.to_numeric(parts[15], errors='coerce') if n > 15 else 99
+            arms_val = pd.to_numeric(parts[16], errors='coerce') if n > 16 else 0.0
+            arms_rank = pd.to_numeric(parts[17], errors='coerce') if n > 17 else 99
+            tua_val = pd.to_numeric(parts[18], errors='coerce') if n > 18 else 0.0
+            tua_rank = pd.to_numeric(parts[19], errors='coerce') if n > 19 else 99
+            finish = parts[20] if n > 20 else None
+            sire = parts[21] if n > 21 else ''
+
+            raw_style_short = str(parts[22]).strip() if n > 22 else ''
+            raw_style_full = str(parts[23]).strip() if n > 23 else ''
+
+            final_style = resolve_running_style(raw_style_full, raw_style_short, s_rank, f_rank, s_val)
+            horse = clean_horse_name(horse_raw)
+            if horse:
+                records.append({
+                    'race_id': race_id, 'track': track, 'dist': dist,
+                    '馬番': int(umaban) if str(umaban).isdigit() else 99,
+                    '馬名': horse, 'C馬': c_marker, '印': str(mark).strip(),
+                    '調教師': clean_horse_name(trainer), '騎手': clean_horse_name(jockey),
+                    '種牡馬': str(sire).strip(),
+                    '人気': int(pop) if str(pop).isdigit() else 99,
+                    '着順': finish, '脚質': final_style,
+                    'Fup': fup if not np.isnan(fup) else 0,
+                    'Fup_rank': int(fup_rank) if not np.isnan(fup_rank) else 99,
+                    'S指数': s_val if not np.isnan(s_val) else 0.0,
+                    'S_rank': int(s_rank) if not np.isnan(s_rank) else 99,
+                    'F指数': f_val if not np.isnan(f_val) else 0.0,
+                    'F_rank': int(f_rank) if not np.isnan(f_rank) else 99,
+                    'arms': arms_val if not np.isnan(arms_val) else 0.0,
+                    'arms_rank': int(arms_rank) if not np.isnan(arms_rank) else 99,
+                    'tua': tua_val if not np.isnan(tua_val) else 0.0,
+                    'tua_rank': int(tua_rank) if not np.isnan(tua_rank) else 99,
+                    '坂路調順位': 99, 'コース連順位': 99, '血統連順位': 99, '時計血順位': 99, '坂路血順位': 99
+                })
 
     df_main = pd.DataFrame(records)
     if df_main.empty: return pd.DataFrame(), datetime.date.today()
@@ -395,14 +449,16 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
 
-    sakaro_patterns = ['data/坂路、検証用*.csv', '坂路、検証用*.csv', 'data/*坂路*.csv', '*坂路*.csv']
+    # 坂路CSV結合
+    sakaro_patterns = [
+        'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
+        'data/坂路、検証用*.csv', '坂路、検証用*.csv',
+        'data/*坂路*.csv', '*坂路*.csv'
+    ]
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
     if not df_s_raw.empty:
         c_s_name = find_col_regex(df_s_raw, ['^馬名$', '^競走馬名$']) or df_s_raw.columns[4]
         df_s_raw['clean_name'] = df_s_raw[c_s_name].apply(clean_horse_name)
-
-        c_s_date = find_col_regex(df_s_raw, ['^年月日$', '^日付$', '^date$']) or df_s_raw.columns[1]
-        df_s_raw['clean_date'] = pd.to_numeric(df_s_raw[c_s_date].astype(str).str.extract(r'(\d+)')[0], errors='coerce')
 
         c_s_4f = find_col_regex(df_s_raw, ['^time1$', '^4f$', '^４ｆ$', '^4Ｆ$']) or df_s_raw.columns[9]
         c_s_1f = find_col_regex(df_s_raw, ['^time4$', '^1f$', '^１ｆ$', '^1Ｆ$']) or df_s_raw.columns[12]
@@ -472,7 +528,7 @@ with st.sidebar.expander('データ更新', expanded=False):
 df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
 
 if df.empty:
-    st.warning('⚠️ CSVデータが読み込まれていません。サイドバーから出走表・坂路・ウッドのCSVファイルを指定するか、data/フォルダに配置してください。')
+    st.warning('⚠️ CSVデータが読み込まれていません。サイドバーから出走表・坂路・ウッドのCSVファイルを指定するか、リポジトリに配置してください。')
     st.stop()
 
 # ==============================================================================
@@ -511,6 +567,7 @@ df['cushion_badge_raw'] = df.apply(
 df['is_cushion_fit'] = df['cushion_badge_raw'].str.contains('特注')
 df['is_cushion_danger'] = df['cushion_badge_raw'].str.contains('危険')
 
+# 新ロジックフラグ群の実装
 df['p1_hit_solid'] = (df['track'] == '芝') & (df['dist'].between(1500, 1800)) & (df['競馬場名'].isin(['東京', '中山', '京都', '阪神'])) & (df['F_rank'] <= 3) & (df['F指数'] >= 55) & (df['S_rank'] <= 3) & (df['S指数'] >= 40)
 df['p2_dirt_tua'] = (df['track'] == 'ダ') & (df['S_rank'] <= 3) & (df['tua'] >= 190.0)
 df['p3_short_local'] = ((df['dist'] <= 1400) | (df['競馬場名'].isin(['福島', '小倉', '函館']))) & (df['S_rank'] <= 3) & (df['坂路調順位'] <= 3)
@@ -519,6 +576,7 @@ df['roi_tua1_turf_ana'] = (df['track'] == '芝') & (df['tua_rank'] == 1) & (df['
 df['roi_arm1_hanro1'] = (df['arms_rank'] == 1) & (df['坂路調順位'] == 1) & (df['人気'].between(3, 7))
 df['roi_11s_ana'] = df['accel_11s'] & (df['人気'].between(3, 7))
 
+# コース連・血統連による底上げスコア
 def calc_upgraded_dynamic_score(r):
     score = 0.0
     f_val = r.get('F指数', 0.0)
@@ -531,13 +589,16 @@ def calc_upgraded_dynamic_score(r):
     hc_rk = r.get('坂路調順位', 99)
     fup = r.get('Fup', 0)
     
+    # コース連適性フィルター
     if c_rk <= 3: score += 35.0
     elif c_rk >= 6: score -= 30.0
     
+    # 血統・調教補正
     if hk_rk <= 3 or tk_rk <= 3: score += 20.0
     if hc_rk <= 3 or r.get('is_complete_accel', False): score += 25.0
     if r.get('accel_11s', False): score += 40.0
     
+    # F/S/Fup基礎
     if f_rk == 1: score += 50.0
     elif f_rk <= 3: score += 30.0
     if s_rk <= 3: score += 30.0
@@ -546,6 +607,7 @@ def calc_upgraded_dynamic_score(r):
     elif fup == 4: score += 15.0
     elif fup <= 1 and r.get('人気', 99) <= 3: score -= 35.0
     
+    # クッション値バイアス
     if r.get('is_cushion_fit', False): score += 35.0
     if r.get('is_cushion_danger', False): score -= 50.0
     
