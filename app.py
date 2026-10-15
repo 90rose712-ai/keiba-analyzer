@@ -23,6 +23,11 @@ st.set_page_config(
 st.markdown(
     """
 <style>
+/* スマホでセレクトボックスをタップしてもキーボードを出さない設定 */
+    div[data-baseweb="select"] input {
+        inputmode: none !important;
+        pointer-events: none !important;
+    }
     .metric-container { display: flex; justify-content: space-around; background-color: #161b22; padding: 14px; border-radius: 10px; margin-bottom: 18px; border: 1px solid #30363d; }
     .date-header-badge { display: inline-flex; align-items: center; gap: 8px; background: linear-gradient(135deg, #1f2937 0%, #111827 100%); border: 1px solid #3b82f6; padding: 6px 16px; border-radius: 20px; color: #60a5fa; font-size: 14.5px; font-weight: bold; margin-bottom: 12px; }
     .race-type-banner { padding: 12px 18px; border-radius: 8px; margin-bottom: 14px; font-size: 15px; font-weight: bold; display: flex; align-items: center; justify-content: space-between; }
