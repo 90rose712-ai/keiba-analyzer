@@ -313,7 +313,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
                 header = [p.strip() for p in parts]
                 continue
             
-            # Use dictionary if header match
             row = dict(zip(header, parts))
             race_id = row.get('場所R', '')
             dist = row.get('距離', '1600')
@@ -336,7 +335,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             s_val = pd.to_numeric(row.get('S', 0.0), errors='coerce')
             s_rank = pd.to_numeric(row.get('S順位', 99), errors='coerce')
             
-            # Additional 11 indices
             hanro_cho_rank = pd.to_numeric(row.get('坂路調順位', 99), errors='coerce')
             course_ren_rank = pd.to_numeric(row.get('コース連順位', 99), errors='coerce')
             ketsu_ren_rank = pd.to_numeric(row.get('血統連順位', 99), errors='coerce')
@@ -348,8 +346,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             raw_style = row.get('前脚質', '')
 
             final_style = resolve_running_style(raw_style, '', s_rank, f_rank, s_val)
-            
-            # Track inference: default to 芝, refine if distance matches known dirt
             dist_int = int(re.sub(r'\D', '', str(dist))) if re.sub(r'\D', '', str(dist)).isdigit() else 1600
             track = 'ダ' if dist_int in [1150, 1300, 1700, 1900, 2100] else '芝'
 
@@ -399,7 +395,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
 
-    # Load 坂路、検証用.csv or other hanro CSV
     sakaro_patterns = ['data/坂路、検証用*.csv', '坂路、検証用*.csv', 'data/*坂路*.csv', '*坂路*.csv']
     df_s_raw = read_csv_robust(f_sakaro, sakaro_patterns)
     if not df_s_raw.empty:
@@ -457,7 +452,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan
         df_main['坂路_完全加速'] = False; df_main['坂路_穴トリガー'] = False; df_main['坂路_ラップ型'] = ''
 
-    # Additional Derived Flags
     df_main['is_complete_accel'] = df_main['坂路_完全加速'].fillna(False).astype(bool)
     df_main['accel_11s'] = df_main['is_complete_accel'] & (pd.to_numeric(df_main['坂路_1F'], errors='coerce') < 12.0)
     df_main['has_prev_han'] = False
@@ -517,7 +511,6 @@ df['cushion_badge_raw'] = df.apply(
 df['is_cushion_fit'] = df['cushion_badge_raw'].str.contains('特注')
 df['is_cushion_danger'] = df['cushion_badge_raw'].str.contains('危険')
 
-# 新ロジックフラグ群の実装
 df['p1_hit_solid'] = (df['track'] == '芝') & (df['dist'].between(1500, 1800)) & (df['競馬場名'].isin(['東京', '中山', '京都', '阪神'])) & (df['F_rank'] <= 3) & (df['F指数'] >= 55) & (df['S_rank'] <= 3) & (df['S指数'] >= 40)
 df['p2_dirt_tua'] = (df['track'] == 'ダ') & (df['S_rank'] <= 3) & (df['tua'] >= 190.0)
 df['p3_short_local'] = ((df['dist'] <= 1400) | (df['競馬場名'].isin(['福島', '小倉', '函館']))) & (df['S_rank'] <= 3) & (df['坂路調順位'] <= 3)
@@ -526,7 +519,6 @@ df['roi_tua1_turf_ana'] = (df['track'] == '芝') & (df['tua_rank'] == 1) & (df['
 df['roi_arm1_hanro1'] = (df['arms_rank'] == 1) & (df['坂路調順位'] == 1) & (df['人気'].between(3, 7))
 df['roi_11s_ana'] = df['accel_11s'] & (df['人気'].between(3, 7))
 
-# コース連・血統連による底上げスコア
 def calc_upgraded_dynamic_score(r):
     score = 0.0
     f_val = r.get('F指数', 0.0)
@@ -539,25 +531,21 @@ def calc_upgraded_dynamic_score(r):
     hc_rk = r.get('坂路調順位', 99)
     fup = r.get('Fup', 0)
     
-    # コース連適性フィルター
     if c_rk <= 3: score += 35.0
-    elif c_rk >= 6: score -= 30.0  # コース不適合の減点
+    elif c_rk >= 6: score -= 30.0
     
-    # 血統・調教補正
     if hk_rk <= 3 or tk_rk <= 3: score += 20.0
     if hc_rk <= 3 or r.get('is_complete_accel', False): score += 25.0
     if r.get('accel_11s', False): score += 40.0
     
-    # F/S/Fup基礎
     if f_rk == 1: score += 50.0
     elif f_rk <= 3: score += 30.0
     if s_rk <= 3: score += 30.0
     if fup == 7: score += 45.0
     elif fup >= 5: score += 30.0
     elif fup == 4: score += 15.0
-    elif fup <= 1 and r.get('人気', 99) <= 3: score -= 35.0  # ダミー人気馬
+    elif fup <= 1 and r.get('人気', 99) <= 3: score -= 35.0
     
-    # クッション値バイアス
     if r.get('is_cushion_fit', False): score += 35.0
     if r.get('is_cushion_danger', False): score -= 50.0
     
@@ -624,9 +612,8 @@ race_options = {}
 for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
     
-    # レース判定ラベル自動抽出
     p1_cnt = r_horses['p1_hit_solid'].sum()
-    roi_cnt = r_horses['roi_tua1_dirt_ana'].sum() + r_horses['roi_turf_ana' if 'roi_turf_ana' in r_horses else 'roi_tua1_turf_ana'].sum() + r_horses['roi_11s_ana'].sum()
+    roi_cnt = r_horses['roi_tua1_dirt_ana'].sum() + r_horses['roi_tua1_turf_ana'].sum() + r_horses['roi_11s_ana'].sum()
     is_bonus = bool(((r_horses['F_rank'] <= 3) & (r_horses['arms_rank'] <= 3) & (r_horses['tua_rank'] <= 3)).sum() >= 3)
     
     if is_bonus:
@@ -656,7 +643,6 @@ selected_race_uid = st.selectbox(
 race_df = df[df['race_uid'] == selected_race_uid].copy()
 sorted_race = race_df.sort_values('dynamic_score', ascending=False)
 
-# 判定とバナー
 p1_c = race_df['p1_hit_solid'].sum()
 p2_c = race_df['p2_dirt_tua'].sum()
 p3_c = race_df['p3_short_local'].sum()
@@ -687,7 +673,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ピックアップ選定
 pick_honmei = sorted_race.iloc[0]
 rem_axis = sorted_race[sorted_race['馬番'] != pick_honmei['馬番']]
 pick_taikou = rem_axis.iloc[0] if not rem_axis.empty else pick_honmei
@@ -713,7 +698,6 @@ danger_cands = race_df[
 ]
 pick_danger = danger_cands.iloc[0] if not danger_cands.empty else None
 
-# フォーメーション馬番リスト
 rec_col1 = [int(pick_honmei['馬番']), int(pick_taikou['馬番'])]
 rec_col2 = list(rec_col1)
 for u in sorted_race['馬番'].tolist():
@@ -726,16 +710,20 @@ for u in sorted_race['馬番'].tolist():
     if int(u) not in rec_col3: rec_col3.append(int(u))
     if len(rec_col3) >= 7: break
 
+if pick_danger is not None:
+    danger_info_str = f"{int(pick_danger['馬番'])}番 {pick_danger['馬名']} (コース連{int(pick_danger['コース連順位'])}位/消し要素該当)"
+else:
+    danger_info_str = "該当なし"
+
 st.markdown(
     f"<div class='recom-panel-go'><div class='recom-title-go'>📋 推奨馬ピックアップ（新統合ロジック）</div>"
     f"<div class='recom-row'>🥇 <strong>本命・連軸</strong>: <span class='recom-val-num'>{int(pick_honmei['馬番'])}番 {pick_honmei['馬名']}</span>（F{int(pick_honmei['F_rank'])}位 / コース連{int(pick_honmei['コース連順位'])}位 / スコア:{pick_honmei['dynamic_score']:.1f}）</div>"
     f"<div class='recom-row'>🛡️ <strong>対抗・相手筆頭</strong>: <span class='recom-val-num'>{int(pick_taikou['馬番'])}番 {pick_taikou['馬名']}</span>（F{int(pick_taikou['F_rank'])}位 × S{int(pick_taikou['S_rank'])}位）</div>"
     f"<div class='recom-row'>💣 <strong>激走穴馬</strong>: <span class='recom-val-num'>{int(pick_ana['馬番'])}番 {pick_ana['馬名']}</span>（人気{int(pick_ana['人気'])}位 / TUA:{float(pick_ana['tua']):.1f} / 坂路:{'完全加速' if pick_ana['is_complete_accel'] else '-'}）</div>"
-    f"<div class='recom-row'>⚠️ <strong>危険な人気馬・割引</strong>: {f\"{int(pick_danger['馬番'])}番 {pick_danger['馬名']} (コース連{int(pick_danger['コース連順位'])}位/消し要素該当)\" if pick_danger is not None else '該当なし'}</div></div>",
+    f"<div class='recom-row'>⚠️ <strong>危険な人気馬・割引</strong>: {danger_info_str}</div></div>",
     unsafe_allow_html=True,
 )
 
-# 買い目フォーメーション（3連単マルチ/フォーメーション強化）
 c1_str = ', '.join(map(str, rec_col1))
 c2_str = ', '.join(map(str, rec_col2))
 c3_str = ', '.join(map(str, rec_col3))
