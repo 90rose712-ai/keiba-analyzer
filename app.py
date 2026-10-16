@@ -23,7 +23,7 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-/* スマホでセレクトボックスをタップしてもキーボードを出さない設定 */
+    /* スマホでセレクトボックスをタップしてもキーボードを出さない設定 */
     div[data-baseweb="select"] input {
         inputmode: none !important;
         pointer-events: none !important;
@@ -51,7 +51,10 @@ st.markdown(
     .horse-card-list li { font-size: 13.5px; color: #c9d1d9; margin-bottom: 6px; line-height: 1.6; }
     .horse-card-list li::before { content: "• "; color: #58a6ff; font-weight: bold; }
 
+    /* 印バッジ */
     .badge-mark-gtv { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; }
+    .badge-mark-c { background: linear-gradient(135deg, #0891b2 0%, #06b6d4 100%); color: #ffffff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a5f3fc; }
+
     .badge-accel-on { background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #34d399; }
     .badge-accel-off { background-color: #374151; color: #9ca3af; font-size: 11.5px; padding: 2px 7px; border-radius: 4px; border: 1px solid #4b5563; }
 
@@ -83,11 +86,12 @@ st.markdown(
     .badge-cushion-fit { display: inline-flex; align-items: center; background: linear-gradient(135deg, #059669 0%, #10b981 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #34d399; }
     .badge-cushion-danger { display: inline-flex; align-items: center; background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%); color: #ffffff; font-weight: bold; font-size: 11.5px; padding: 2px 8px; border-radius: 6px; border: 1px solid #f87171; }
     
-    .badge-mark-honmei { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #fca5a5; margin-right: 6px; }
-    .badge-mark-taikou { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #93c5fd; margin-right: 6px; }
-    .badge-mark-tanana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1.5px solid #6ee7b7; margin-right: 6px; }
-    .badge-mark-himo { display: inline-flex; align-items: center; justify-content: center; background-color: #374151; color: #f3f4f6; font-size: 14.5px; font-weight: bold; width: 30px; height: 30px; border-radius: 6px; border: 1px solid #6b7280; margin-right: 6px; }
-    .badge-mark-ana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-size: 16px; font-weight: 900; width: 30px; height: 30px; border-radius: 6px; border: 1px solid #fde68a; margin-right: 6px; }
+    /* マークバッジ：文字が縦に潰れないよう横幅・高さを自動調整 */
+    .badge-mark-honmei { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-size: 12.5px; font-weight: 900; width: auto; height: auto; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; margin-right: 6px; }
+    .badge-mark-taikou { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-size: 12.5px; font-weight: 900; width: auto; height: auto; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 6px; }
+    .badge-mark-tanana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #059669 0%, #047857 100%); color: #ffffff; font-size: 12.5px; font-weight: 900; width: auto; height: auto; padding: 2px 8px; border-radius: 4px; border: 1px solid #6ee7b7; margin-right: 6px; }
+    .badge-mark-himo { display: inline-flex; align-items: center; justify-content: center; background-color: #374151; color: #f3f4f6; font-size: 12.5px; font-weight: bold; width: auto; height: auto; padding: 2px 8px; border-radius: 4px; border: 1px solid #6b7280; margin-right: 6px; }
+    .badge-mark-ana { display: inline-flex; align-items: center; justify-content: center; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-size: 12.5px; font-weight: 900; width: auto; height: auto; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -930,6 +934,18 @@ for _, h in display_df.iterrows():
     style_badge = get_running_style_badge(h.get('脚質', ''))
     
     badges = [style_badge]
+    
+    # 印バッジ（GTV印）の追加表示
+    raw_mark = str(h.get('印', '')).strip()
+    if raw_mark and raw_mark not in ['nan', 'None', '', '-', '－']:
+        badges.append(f"<span class='badge-mark-gtv'>印: {raw_mark}</span>")
+    
+    # C馬判定バッジの追加表示
+    c_m = str(h.get('C馬', '')).strip()
+    if c_m and c_m not in ['nan', 'None', '', '-', '－']:
+        badges.append(f"<span class='badge-mark-c'>{c_m}</span>")
+    
+    # 本命・対抗・穴特注バッジ（潰れ防止済）
     if u_no == int(pick_honmei['馬番']): badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
     elif u_no == int(pick_taikou['馬番']): badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
     elif u_no == int(pick_ana['馬番']): badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
