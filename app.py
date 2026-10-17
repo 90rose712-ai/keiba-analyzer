@@ -288,7 +288,7 @@ def evaluate_sire_cushion(sire_name, venue, dist_str, band_str):
     return ""
 
 # ==============================================================================
-# ★ データロード＆結合エンジン（38列マスター・当日統合CSV両対応）
+# ★ データロード＆結合エンジン（Fup2自動補正＆38列マスター両対応）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
@@ -308,6 +308,27 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     
     df_raw = read_csv_robust(index_src, index_patterns)
     
+    # 元のFupファイルを自動探索してバックアップ辞書を作成（Fup2が0点になるのを完全に防ぐ）
+    fup_backup_dict = {}
+    fup_cand_files = glob.glob('*Fup*.csv') + glob.glob('data/*Fup*.csv') + glob.glob('*TUA*.csv')
+    for fpath in fup_cand_files:
+        try:
+            temp_df = pd.read_csv(fpath, header=None, encoding='cp932')
+        except:
+            try: temp_df = pd.read_csv(fpath, header=None, encoding='utf-8')
+            except: continue
+        if not temp_df.empty and temp_df.shape[1] >= 14:
+            for _, r in temp_df.iterrows():
+                # 照合キー: 場所R_馬番
+                k = str(r[0]).strip() + "_" + str(r[3]).strip()
+                # 12列目がFup2数値、13列目がFup2順位
+                f_val = pd.to_numeric(r[12], errors='coerce')
+                f_rk = pd.to_numeric(r[13], errors='coerce')
+                if pd.notnull(f_val):
+                    fup_backup_dict[k] = (f_val, f_rk if pd.notnull(f_rk) else 99)
+            if fup_backup_dict:
+                break
+    
     if not df_raw.empty and '場所R' in df_raw.columns:
         for _, row in df_raw.iterrows():
             race_id = str(row.get('場所R', '')).strip()
@@ -320,8 +341,18 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             c_marker = row.get('C', '')
             mark = row.get('印', '')
             
-            fup = pd.to_numeric(row.get('Fup2', 0), errors='coerce')
-            fup_rank = pd.to_numeric(row.get('Fup2順位', 99), errors='coerce')
+            # ★ Fup2の取得（空欄や0点の場合は自動的に12/13列目または元ファイルから修復）
+            m_key = race_id + "_" + str(umaban).strip()
+            fup = pd.to_numeric(row.get('Fup2'), errors='coerce')
+            fup_rank = pd.to_numeric(row.get('Fup2順位'), errors='coerce')
+            
+            if (pd.isnull(fup) or fup == 0) and m_key in fup_backup_dict:
+                fup, fup_rank = fup_backup_dict[m_key]
+            elif pd.isnull(fup):
+                fup = 0
+            if pd.isnull(fup_rank):
+                fup_rank = 99
+            
             f_val = pd.to_numeric(row.get('F', 0.0), errors='coerce')
             f_rank = pd.to_numeric(row.get('F順位', 99), errors='coerce')
             arms_val = pd.to_numeric(row.get('ARM', 0.0), errors='coerce')
@@ -417,10 +448,13 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             jockey = parts[7] if n > 7 else ''
             pop = parts[8] if n > 8 else '99'
             mark = parts[9] if n > 9 else ''
-            fup = pd.to_numeric(parts[12], errors='coerce') if n > 10 else 0
-            fup_rank = pd.to_numeric(parts[13], errors='coerce') if n > 11 else 99
-            s_val = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0.0
-            s_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
+            
+            # ★ 列ズレ対応：12列目が数値、13列目が順位
+            fup = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0
+            fup_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
+            
+            s_val = 0.0
+            s_rank = 99
             f_val = pd.to_numeric(parts[14], errors='coerce') if n > 14 else 0.0
             f_rank = pd.to_numeric(parts[15], errors='coerce') if n > 15 else 99
             arms_val = pd.to_numeric(parts[16], errors='coerce') if n > 16 else 0.0
