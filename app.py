@@ -11,7 +11,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
-# 【全11指数底上げ＆色付け・実測坂路完全加速・全指数ソート・的中/回収判定・3連単マルチ版】
+# 【全11指数底上げ＆色付け・坂路6大区分＆猛時計例外・全指数ソート・的中/回収判定・3連単マルチ版】
 # ==============================================================================
 
 st.set_page_config(
@@ -288,7 +288,7 @@ def evaluate_sire_cushion(sire_name, venue, dist_str, band_str):
     return ""
 
 # ==============================================================================
-# ★ データロード＆結合エンジン（Fup自動フォールバック＋型変換セーフティ付）
+# ★ データロード＆結合エンジン（Fup自動フォールバック＋型安全性確保）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
@@ -520,19 +520,43 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_s_raw['坂路_Lap2'] = pd.to_numeric(df_s_raw[c_s_l2], errors='coerce')
         df_s_raw['坂路_Lap1'] = pd.to_numeric(df_s_raw[c_s_l1], errors='coerce')
 
+        # ★ 坂路6大区分（A1〜A3、B1〜B3）厳格判定関数
         def determine_sakaro_lap_type(r):
-            l1, l2, l3, l4 = r['坂路_Lap1'], r['坂路_Lap2'], r['坂路_Lap3'], r['坂路_Lap4']
-            if pd.isnull(l1) or pd.isnull(l2): return ''
-            is_full = (l4 > l3 > l2 > l1) and (r['坂路_4F'] <= 56.0) and (l1 <= 13.0)
-            if is_full:
-                if l1 <= 11.9: return 'A3'
-                elif 12.0 <= l1 <= 12.9: return 'A2'
-                else: return 'A1'
-            elif l1 < l2:
-                return 'A1'
-            elif l1 <= 11.9:
+            t1 = r.get('坂路_4F')
+            l1 = r.get('坂路_Lap1')
+            l2 = r.get('坂路_Lap2')
+            if pd.isnull(t1) or pd.isnull(l1) or pd.isnull(l2):
+                return ''
+            
+            # 実質負荷基準: 4F <= 56.0s かつ 終い1F <= 13.0s
+            t1_val = float(t1)
+            l1_val = float(l1)
+            l2_val = float(l2)
+            if t1_val > 56.0 or l1_val > 13.0 or t1_val < 45.0:
+                return '負荷不足'
+                
+            is_accel = l1_val < l2_val
+
+            # A3: 終い11秒台加速ラップ（2F目が11秒台含む）
+            if is_accel and l1_val <= 11.9:
+                return 'A3'
+            # B3: 2F11秒台減速ラップ（2F目または終い1Fが11秒台）
+            if not is_accel and (l2_val <= 11.9 or l1_val <= 11.9):
                 return 'B3'
-            return ''
+            # A2: 終い2F12秒台加速ラップ
+            if is_accel and (12.0 <= l2_val <= 12.9) and (12.0 <= l1_val <= 12.9):
+                return 'A2'
+            # B2: 終い2F12秒台減速ラップ
+            if not is_accel and (12.0 <= l2_val <= 12.9) and (12.0 <= l1_val <= 12.9):
+                return 'B2'
+            # A1: 終いのみ12秒台加速ラップ（Lap2 >= 13.0, Lap1 12秒台）
+            if is_accel and l2_val >= 13.0 and (12.0 <= l1_val <= 12.9):
+                return 'A1'
+            # B1: 2Fのみ12秒台減速ラップ（Lap2 12秒台, Lap1 >= 13.0）
+            if not is_accel and (12.0 <= l2_val <= 12.9) and l1_val >= 13.0:
+                return 'B1'
+                
+            return 'A1' if is_accel else 'B2'
 
         df_s_raw['坂路_ラップ型'] = df_s_raw.apply(determine_sakaro_lap_type, axis=1)
         df_s_best = (
@@ -554,8 +578,14 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_main['坂路_4F'] = np.nan; df_main['坂路_1F'] = np.nan
         df_main['坂路_完全加速'] = False; df_main['坂路_穴トリガー'] = False; df_main['坂路_ラップ型'] = ''
 
-    df_main['is_complete_accel'] = df_main['坂路_完全加速'].fillna(False).astype(bool)
-    df_main['accel_11s'] = df_main['is_complete_accel'] & (pd.to_numeric(df_main['坂路_1F'], errors='coerce') < 12.0)
+    # ★ TAKE TUBE動画の知見：4F 51.5s以下の猛時計減速例外判定
+    df_main['is_super_fast_b'] = (
+        (pd.to_numeric(df_main['坂路_4F'], errors='coerce') <= 51.5)
+        & (pd.to_numeric(df_main['坂路_4F'], errors='coerce') >= 45.0)
+        & (df_main['坂路_ラップ型'].isin(['B2', 'B3']))
+    )
+    df_main['is_complete_accel'] = df_main['坂路_完全加速'].fillna(False).astype(bool) | df_main['坂路_ラップ型'].isin(['A1', 'A2', 'A3'])
+    df_main['accel_11s'] = (df_main['坂路_ラップ型'] == 'A3') | (df_main['is_complete_accel'] & (pd.to_numeric(df_main['坂路_1F'], errors='coerce') < 12.0))
     df_main['has_prev_han'] = False
     df_main['wood_1F'] = np.nan
     df_main['is_wood_accel'] = False
@@ -566,6 +596,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         if l_type == 'A3': score += 1000
         elif l_type == 'A2': score += 800
         elif l_type == 'A1': score += 600
+        elif row.get('is_super_fast_b', False): score += 550  # 猛時計減速を上位へ
         elif row.get('is_complete_accel', False): score += 500
         elif l_type == 'B3': score += 300
         elif l_type == 'B2': score += 200
@@ -645,7 +676,7 @@ df['roi_tua1_turf_ana'] = (df['track'] == '芝') & (df['tua_rank'] == 1) & (df['
 df['roi_arm1_hanro1'] = (df['arms_rank'] == 1) & (df['坂路調順位'] == 1) & (df['人気'].between(3, 7))
 df['roi_11s_ana'] = df['accel_11s'] & (df['人気'].between(3, 7))
 
-# 全11指数を統合した動的スコア（底上げエンジン）
+# ★ 全統合動的スコア（6大区分・猛時計例外・バランス・コース連・前脚質・Fup2完全連動）
 def calc_upgraded_dynamic_score(r):
     score = 0.0
     f_val = r.get('F指数', 0.0)
@@ -658,28 +689,61 @@ def calc_upgraded_dynamic_score(r):
     hc_rk = r.get('坂路調順位', 99)
     b_rk = r.get('バランス順位', 99)
     fup = r.get('Fup', 0)
-    
-    # コース連適性フィルター
-    if c_rk <= 3: score += 35.0
-    elif c_rk >= 6: score -= 30.0
-    
-    # 血統・調教補正
-    if hk_rk <= 3 or tk_rk <= 3: score += 20.0
+    pop = r.get('人気', 99)
+    l_type = str(r.get('坂路_ラップ型', ''))
+    style = str(r.get('脚質', ''))
+    is_sb = r.get('is_super_fast_b', False)
+
+    # 1. 坂路ラップ区分加点 ＆ 動画知見（猛時計減速例外）
+    if l_type == 'A3':
+        score += 45.0
+        if f_rk <= 3: score += 15.0  # A3×F上位の絶対軸ボーナス
+        if '先' in style or '逃' in style: score += 15.0
+    elif l_type == 'A2':
+        score += 25.0
+        if f_rk <= 3 and s_rk <= 3: score += 15.0  # 的中重視軸ボーナス
+    elif l_type == 'A1':
+        score += 15.0
+    elif is_sb:
+        # ★ TAKE TUBE動画知見：4F 51.5s以下の猛時計減速は減点を免除し特注加点
+        score += 30.0
+    elif l_type == 'B1':
+        score -= 25.0  # 終いバテ減速は大幅割引
+    elif l_type in ['B2', 'B3']:
+        score -= 10.0  # 通常減速は軽微割引
+
+    # 2. バランス順位（1位勝率トップ）＆ コース連
+    if b_rk <= 3:
+        score += 25.0
+        if l_type in ['A2', 'A3']: score += 15.0  # バランス×加速シナジー
+    elif b_rk >= 6:
+        score -= 15.0
+
+    if c_rk <= 3: score += 25.0
+    elif c_rk >= 6: score -= 30.0  # コース不適合足切り
+
+    # 3. 血統・調教補正
+    if hk_rk <= 3 or tk_rk <= 3: score += 15.0
     if k_rk <= 3: score += 15.0
-    if b_rk <= 3: score += 15.0
-    if hc_rk <= 3 or r.get('is_complete_accel', False): score += 25.0
-    if r.get('accel_11s', False): score += 40.0
-    
-    # F/S/Fup基礎
+    if hc_rk <= 3: score += 15.0
+
+    # 4. F/S/Fup基礎
     if f_rk == 1: score += 50.0
     elif f_rk <= 3: score += 30.0
     if s_rk <= 3: score += 30.0
+
     if fup == 7: score += 45.0
     elif fup >= 5: score += 30.0
     elif fup == 4: score += 15.0
-    elif fup <= 1 and r.get('人気', 99) <= 3: score -= 35.0
     
-    # クッション値バイアス
+    # 5. 危険な人気馬ペナルティ（実証：1〜3人気×減速×バランス6位以下は着外率52.1%）
+    if pop <= 3:
+        if l_type in ['B1', 'B2', 'B3'] and not is_sb and b_rk >= 6:
+            score -= 40.0
+        elif fup <= 1:
+            score -= 35.0
+
+    # 6. クッション値バイアス
     if r.get('is_cushion_fit', False): score += 35.0
     if r.get('is_cushion_danger', False): score -= 50.0
     
@@ -700,6 +764,7 @@ f_roi_turf = st.sidebar.checkbox(f"💰 単回122%超: 芝TUA1位×坂路上位�
 f_roi_arm = st.sidebar.checkbox(f"💰 単回103%超: ARM1位×坂路1位×中穴 ({int(df['roi_arm1_hanro1'].sum())}頭)")
 f_roi_11s = st.sidebar.checkbox(f"🔥 単回101%超: 終い11秒台加速×中穴 ({int(df['roi_11s_ana'].sum())}頭)")
 f_complete_accel = st.sidebar.checkbox(f"⚡ 坂路完全加速(A1〜A3) ({int(df['is_complete_accel'].sum())}頭)")
+f_super_b = st.sidebar.checkbox(f"🔥 猛時計減速特注(4F51.5s以下) ({int(df['is_super_fast_b'].sum())}頭)")
 f_course_ren = st.sidebar.checkbox(f"🏰 コース連1〜3位 (適性合致) ({int((df['コース連順位'] <= 3).sum())}頭)")
 
 active_filters = []
@@ -712,6 +777,7 @@ f_map = [
     (f_roi_arm, df['roi_arm1_hanro1']),
     (f_roi_11s, df['roi_11s_ana']),
     (f_complete_accel, df['is_complete_accel']),
+    (f_super_b, df['is_super_fast_b']),
     (f_course_ren, df['コース連順位'] <= 3),
 ]
 for act, srs in f_map:
@@ -819,6 +885,7 @@ ana_cands = sorted_race[
         sorted_race['roi_tua1_dirt_ana']
         | sorted_race['roi_tua1_turf_ana']
         | sorted_race['roi_11s_ana']
+        | sorted_race['is_super_fast_b']  # 猛時計減速穴馬
         | (sorted_race['Fup'] >= 4)
         | sorted_race['is_complete_accel']
     )
@@ -829,7 +896,8 @@ danger_cands = race_df[
     (race_df['コース連順位'] >= 6)
     | (race_df['is_cushion_danger'])
     | ((race_df['人気'] <= 3) & (race_df['Fup'] <= 1))
-    | ((race_df['track'] == 'ダ') & (race_df['dist'] <= 1400) & (~race_df['is_complete_accel']))
+    | ((race_df['人気'] <= 3) & (race_df['坂路_ラップ型'].isin(['B1', 'B2'])) & (~race_df['is_super_fast_b']) & (race_df['バランス順位'] >= 6))
+    | ((race_df['track'] == 'ダ') & (race_df['dist'] <= 1400) & (~race_df['is_complete_accel']) & (~race_df['is_super_fast_b']))
 ]
 pick_danger = danger_cands.iloc[0] if not danger_cands.empty else None
 
@@ -852,9 +920,9 @@ else:
 
 st.markdown(
     f"<div class='recom-panel-go'><div class='recom-title-go'>📋 推奨馬ピックアップ（新統合ロジック）</div>"
-    f"<div class='recom-row'>🥇 <strong>本命・連軸</strong>: <span class='recom-val-num'>{int(pick_honmei['馬番'])}番 {pick_honmei['馬名']}</span>（F{int(pick_honmei['F_rank'])}位 / コース連{int(pick_honmei['コース連順位'])}位 / スコア:{pick_honmei['dynamic_score']:.1f}）</div>"
+    f"<div class='recom-row'>🥇 <strong>本命・連軸</strong>: <span class='recom-val-num'>{int(pick_honmei['馬番'])}番 {pick_honmei['馬名']}</span>（F{int(pick_honmei['F_rank'])}位 / バランス{int(pick_honmei['バランス順位'])}位 / スコア:{pick_honmei['dynamic_score']:.1f}）</div>"
     f"<div class='recom-row'>🛡️ <strong>対抗・相手筆頭</strong>: <span class='recom-val-num'>{int(pick_taikou['馬番'])}番 {pick_taikou['馬名']}</span>（F{int(pick_taikou['F_rank'])}位 × S{int(pick_taikou['S_rank'])}位）</div>"
-    f"<div class='recom-row'>💣 <strong>激走穴馬</strong>: <span class='recom-val-num'>{int(pick_ana['馬番'])}番 {pick_ana['馬名']}</span>（人気{int(pick_ana['人気'])}位 / TUA:{float(pick_ana['tua']):.1f} / 坂路:{'完全加速' if pick_ana['is_complete_accel'] else '-'}）</div>"
+    f"<div class='recom-row'>💣 <strong>激走穴馬</strong>: <span class='recom-val-num'>{int(pick_ana['馬番'])}番 {pick_ana['馬名']}</span>（人気{int(pick_ana['人気'])}位 / TUA:{float(pick_ana['tua']):.1f} / 調教:{'猛時計特注' if pick_ana['is_super_fast_b'] else ('加速' if pick_ana['is_complete_accel'] else '-')}）</div>"
     f"<div class='recom-row'>⚠️ <strong>危険な人気馬・割引</strong>: {danger_info_str}</div></div>",
     unsafe_allow_html=True,
 )
@@ -883,18 +951,18 @@ with sort_col:
         options=[
             '馬番順',
             '推奨度(動的スコア)順',
-            '⚡ 坂路加速判定順(A3/A2/A1優先)',
+            '⚡ 坂路加速判定順(A3/A2/A1/猛時計優先)',
             'F指数順(降順)',
             'S指数順(降順)',
             'arms指数順(降順)',
             'tua指数順(降順)',
             'Fup得点順(降順)',
+            'バランス順位(昇順)',
             '🏰 コース連順位(昇順)',
             '血統連順位(昇順)',
             '時計血順位(昇順)',
             '坂路血順位(昇順)',
-            '坂路調順位(昇順)',
-            'バランス順位(昇順)'
+            '坂路調順位(昇順)'
         ],
         index=0
     )
@@ -904,7 +972,7 @@ if sort_option == '馬番順':
     display_df = display_df.sort_values('馬番', ascending=True)
 elif sort_option == '推奨度(動的スコア)順':
     display_df = display_df.sort_values('dynamic_score', ascending=False)
-elif sort_option == '⚡ 坂路加速判定順(A3/A2/A1優先)':
+elif sort_option == '⚡ 坂路加速判定順(A3/A2/A1/猛時計優先)':
     display_df = display_df.sort_values(['sakaro_sort_score', '坂路_1F', '坂路_4F'], ascending=[False, True, True])
 elif sort_option == 'F指数順(降順)':
     display_df = display_df.sort_values(['F_rank', 'F指数'], ascending=[True, False])
@@ -916,6 +984,8 @@ elif sort_option == 'tua指数順(降順)':
     display_df = display_df.sort_values(['tua_rank', 'tua'], ascending=[True, False])
 elif sort_option == 'Fup得点順(降順)':
     display_df = display_df.sort_values(['Fup', 'Fup_rank'], ascending=[False, True])
+elif sort_option == 'バランス順位(昇順)':
+    display_df = display_df.sort_values(['バランス順位', 'バランス'], ascending=[True, False])
 elif sort_option == '🏰 コース連順位(昇順)':
     display_df = display_df.sort_values(['コース連順位', 'コース連'], ascending=[True, False])
 elif sort_option == '血統連順位(昇順)':
@@ -926,8 +996,6 @@ elif sort_option == '坂路血順位(昇順)':
     display_df = display_df.sort_values(['坂路血順位', '坂路血'], ascending=[True, False])
 elif sort_option == '坂路調順位(昇順)':
     display_df = display_df.sort_values(['坂路調順位', '坂路調'], ascending=[True, False])
-elif sort_option == 'バランス順位(昇順)':
-    display_df = display_df.sort_values(['バランス順位', 'バランス'], ascending=[True, False])
 
 # 指数3位以内色分けフォーマッター
 def format_index_badge(val, rank, metric_type):
@@ -977,9 +1045,16 @@ for _, h in display_df.iterrows():
     if h.get('p2_dirt_tua'): badges.append("<span class='badge-cushion-fit'>🏜️ ダート先行TUA合致</span>")
     if h.get('roi_tua1_dirt_ana'): badges.append("<span class='badge-mark-ana'>💰 単回105% TUA穴</span>")
     if h.get('roi_11s_ana'): badges.append("<span class='badge-mark-ana'>🔥 終い11s中穴</span>")
-    if h.get('is_complete_accel'): badges.append("<span class='badge-accel-on'>⚡ 坂路完全加速</span>")
-    if h.get('コース連順位', 99) <= 3: badges.append(f"<span class='badge-cushion-fit'>🏰 コース適性{int(h['コース連順位'])}位</span>")
-    elif h.get('コース連順位', 99) >= 6: badges.append(f"<span class='badge-cushion-danger'>⚠️ コース不適合({int(h['コース連順位'])}位)</span>")
+    if h.get('is_super_fast_b'): badges.append("<span class='badge-mark-gtv'>🔥 猛時計減速(特注)</span>")
+    elif h.get('is_complete_accel'): badges.append("<span class='badge-accel-on'>⚡ 坂路完全加速</span>")
+    
+    if h.get('コース連順位', 99) <= 3 and h.get('バランス順位', 99) <= 3:
+        badges.append(f"<span class='badge-cushion-fit'>🏰 コース＆バランス合致</span>")
+    elif h.get('コース連順位', 99) <= 3:
+        badges.append(f"<span class='badge-cushion-fit'>🏰 コース適性{int(h['コース連順位'])}位</span>")
+    elif h.get('コース連順位', 99) >= 6:
+        badges.append(f"<span class='badge-cushion-danger'>⚠️ コース不適合({int(h['コース連順位'])}位)</span>")
+        
     if h.get('is_cushion_fit'): badges.append(str(h['cushion_badge_raw']))
     if h.get('is_cushion_danger'): badges.append(str(h['cushion_badge_raw']))
 
@@ -1017,10 +1092,14 @@ for _, h in display_df.iterrows():
     else:
         hanro_1f = "-"
 
+    # ★ 坂路6大区分バッジ表示
     lap_type = str(h.get('坂路_ラップ型', '')).strip()
     if lap_type == 'A3': lap_type_html = "<span class='highlight-han-a3'>【A3加速・11s台】</span>"
     elif lap_type == 'A2': lap_type_html = "<span class='highlight-han-a2'>【A2加速・12s台】</span>"
     elif lap_type == 'A1': lap_type_html = "<span class='highlight-han-a1'>【A1加速】</span>"
+    elif lap_type == 'B3': lap_type_html = "<span class='badge-style-other'>【B3減速】</span>"
+    elif lap_type == 'B2': lap_type_html = "<span class='badge-style-other'>【B2減速】</span>"
+    elif lap_type == 'B1': lap_type_html = "<span class='badge-style-other'>【B1減速】</span>"
     elif h.get('is_complete_accel'): lap_type_html = "<span class='highlight-han-a2'>【完全加速】</span>"
     else: lap_type_html = f"【{lap_type if lap_type else '-'}】"
     
@@ -1034,7 +1113,7 @@ for _, h in display_df.iterrows():
         f"<div style='margin-bottom: 8px;'>{badges_html}</div>"
         f"<ul class='horse-card-list'>"
         f"<li><strong>基本5大指数</strong>: F指数: {f_html} / S指数: {s_html} / Fup2: {fup_html} / ARM: {arms_html} / TUA: {tua_html}</li>"
-        f"<li><strong>コース・血統・バランス適性</strong>: コース連: {course_html} / 血統連: {ketsu_html} / 時計血: {tokei_k_html} / 坂路血: {hanro_k_html} / 坂路調: {hanro_c_html} / バランス: {balance_html}</li>"
+        f"<li><strong>コース・血統・バランス適性</strong>: バランス: {balance_html} / コース連: {course_html} / 血統連: {ketsu_html} / 時計血: {tokei_k_html} / 坂路血: {hanro_k_html} / 坂路調: {hanro_c_html}</li>"
         f"<li><strong>調教実測ラップ</strong>: 坂路4F: {hanro_4f} - 終い1F: {hanro_1f} {lap_type_html}</li>"
         f"<li><strong>血統＆クッション値</strong>: 父 {h.get('種牡馬','-')} / 当日クッション値帯 ({current_bin_name}: {current_band})</li>"
         f"</ul>"
