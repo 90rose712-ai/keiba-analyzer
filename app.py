@@ -417,8 +417,8 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             jockey = parts[7] if n > 7 else ''
             pop = parts[8] if n > 8 else '99'
             mark = parts[9] if n > 9 else ''
-            fup = pd.to_numeric(parts[10], errors='coerce') if n > 10 else 0
-            fup_rank = pd.to_numeric(parts[11], errors='coerce') if n > 11 else 99
+            fup = pd.to_numeric(parts[12], errors='coerce') if n > 10 else 0
+            fup_rank = pd.to_numeric(parts[13], errors='coerce') if n > 11 else 99
             s_val = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0.0
             s_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
             f_val = pd.to_numeric(parts[14], errors='coerce') if n > 14 else 0.0
