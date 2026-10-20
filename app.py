@@ -11,7 +11,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
-# 【全11指数底上げ＆色付け・坂路6大区分＆猛時計例外・芝ダ完全復元・全指数ソート・3連単マルチ版】
+# 【全11指数底上げ・坂路6大区分＆猛時計例外・芝ダ完全復元・標準ハイブリッド馬券術版】
 # ==============================================================================
 
 st.set_page_config(
@@ -544,7 +544,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             if pd.isnull(t1) or pd.isnull(l1) or pd.isnull(l2):
                 return ''
             
-            # 実質負荷基準: 4F <= 56.0s かつ 終い1F <= 13.0s
             t1_val = float(t1)
             l1_val = float(l1)
             l2_val = float(l2)
@@ -553,10 +552,10 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
                 
             is_accel = l1_val < l2_val
 
-            # A3: 終い11秒台加速ラップ（2F目が11秒台含む）
+            # A3: 終い11秒台加速ラップ
             if is_accel and l1_val <= 11.9:
                 return 'A3'
-            # B3: 2F11秒台減速ラップ（2F目または終い1Fが11秒台）
+            # B3: 2F11秒台減速ラップ
             if not is_accel and (l2_val <= 11.9 or l1_val <= 11.9):
                 return 'B3'
             # A2: 終い2F12秒台加速ラップ
@@ -565,10 +564,10 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             # B2: 終い2F12秒台減速ラップ
             if not is_accel and (12.0 <= l2_val <= 12.9) and (12.0 <= l1_val <= 12.9):
                 return 'B2'
-            # A1: 終いのみ12秒台加速ラップ（Lap2 >= 13.0, Lap1 12秒台）
+            # A1: 終いのみ12秒台加速ラップ
             if is_accel and l2_val >= 13.0 and (12.0 <= l1_val <= 12.9):
                 return 'A1'
-            # B1: 2Fのみ12秒台減速ラップ（Lap2 12秒台, Lap1 >= 13.0）
+            # B1: 2Fのみ12秒台減速ラップ
             if not is_accel and (12.0 <= l2_val <= 12.9) and l1_val >= 13.0:
                 return 'B1'
                 
@@ -917,18 +916,6 @@ danger_cands = race_df[
 ]
 pick_danger = danger_cands.iloc[0] if not danger_cands.empty else None
 
-rec_col1 = [int(pick_honmei['馬番']), int(pick_taikou['馬番'])]
-rec_col2 = list(rec_col1)
-for u in sorted_race['馬番'].tolist():
-    if int(u) not in rec_col2: rec_col2.append(int(u))
-    if len(rec_col2) >= 4: break
-
-rec_col3 = list(rec_col2)
-if int(pick_ana['馬番']) not in rec_col3: rec_col3.append(int(pick_ana['馬番']))
-for u in sorted_race['馬番'].tolist():
-    if int(u) not in rec_col3: rec_col3.append(int(u))
-    if len(rec_col3) >= 7: break
-
 if pick_danger is not None:
     danger_info_str = f"{int(pick_danger['馬番'])}番 {pick_danger['馬名']} (コース連{int(pick_danger['コース連順位'])}位/消し要素該当)"
 else:
@@ -943,15 +930,64 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-c1_str = ', '.join(map(str, rec_col1))
-c2_str = ', '.join(map(str, rec_col2))
-c3_str = ', '.join(map(str, rec_col3))
+# ==============================================================================
+# ★ パターンA：標準ハイブリッド馬券パック（予算約2,000〜3,000円想定・自動網張り生成）
+# ==============================================================================
+u_honmei = int(pick_honmei['馬番'])
+u_taikou = int(pick_taikou['馬番'])
+u_ana = int(pick_ana['馬番'])
+
+# 2番手・3番手相手の選定
+sorted_candidates = [int(u) for u in sorted_race['馬番'].tolist() if int(u) != u_honmei]
+aite_candidates = [u for u in sorted_candidates if u != u_taikou]
+u_aite2 = aite_candidates[0] if len(aite_candidates) > 0 else u_taikou
+
+# フォーメーション列の組み立て
+col1_hybrid = [u_honmei]
+col2_hybrid = [u_taikou, u_aite2]
+
+col3_hybrid = list(col2_hybrid)
+if u_ana not in col3_hybrid:
+    col3_hybrid.append(u_ana)
+for u in sorted_candidates:
+    if u not in col3_hybrid:
+        col3_hybrid.append(u)
+    if len(col3_hybrid) >= 5:
+        break
+
+# 3連複点数計算
+pts_3f_set = set()
+for a in col1_hybrid:
+    for b in col2_hybrid:
+        for c in col3_hybrid:
+            t_box = tuple(sorted([a, b, c]))
+            if len(t_box) == 3:
+                pts_3f_set.add(t_box)
+count_3f = len(pts_3f_set)
+
+# 3連単点数計算（1着固定極小フォーメーション）
+pts_3t_set = set()
+for a in [u_honmei]:
+    for b in col2_hybrid:
+        for c in col3_hybrid:
+            if len({a, b, c}) == 3:
+                pts_3t_set.add((a, b, c))
+count_3t = len(pts_3t_set)
+
+c1_str = str(u_honmei)
+c2_str = ", ".join(map(str, col2_hybrid))
+c3_str = ", ".join(map(str, col3_hybrid))
+
+# 概算予算計算 (単勝300 + 馬単200 + 馬連400 + ワイド200 + 3連複*100 + 3連単*100)
+budget_estimate = 300 + 200 + 400 + 200 + (count_3f * 100) + (count_3t * 100)
 
 st.markdown(
-    f"<div class='recom-panel-go'><div class='recom-title-go'>🎫 実戦買い目フォーメーション（的中・回収両立）</div>"
-    f"<div class='recom-block'><strong>3連単フォーメーション (裏表・10点推奨)</strong>: 1・2着裏表 [{c1_str}] ⇄ 3着 [{c3_str}]</div>"
-    f"<div class='recom-block'><strong>3連複フォーメーション</strong>: 1列目[{c1_str}] → 2列目[{c2_str}] → 3列目[{c3_str}]</div>"
-    f"<div class='recom-block'><strong>単勝・複勝</strong>: {int(pick_honmei['馬番'])}番 (本線) / {int(pick_ana['馬番'])}番 (穴単複) | <strong>ワイド</strong>: {int(pick_honmei['馬番'])} - {int(pick_taikou['馬番'])}, {int(pick_ana['馬番'])}</div></div>",
+    f"<div class='recom-panel-go'><div class='recom-title-go'>🎫 実戦買い目：標準ハイブリッド馬券パック（想定予算: 約{budget_estimate:,}円）</div>"
+    f"<div class='recom-block'><strong>【第1の網：主軸回収】単勝</strong>: {u_honmei}番（300円） / <strong>馬単</strong>: {u_honmei} → {u_taikou}（1点・200円）</div>"
+    f"<div class='recom-block'><strong>【第2の網：連対確保】馬連</strong>: {u_honmei} - {u_taikou}, {u_aite2}（2点・各200円=400円） / <strong>ワイド(穴保険)</strong>: {u_honmei} - {u_ana}（1点・200円）</div>"
+    f"<div class='recom-block'><strong>【第3の網：中配当カバー】3連複({count_3f}点)</strong>: 1列目[{c1_str}] → 2列目[{c2_str}] → 3列目[{c3_str}]（各100円={count_3f*100}円）</div>"
+    f"<div class='recom-block'><strong>【第4の網：万馬券ボーナス】3連単({count_3t}点)</strong>: 1着[{c1_str}] → 2着[{c2_str}] → 3着[{c3_str}]（各100円={count_3t*100}円）</div>"
+    f"</div>",
     unsafe_allow_html=True,
 )
 
@@ -1026,4 +1062,113 @@ def format_index_badge(val, rank, metric_type):
         elif metric_type == 'tua': return f"<span class='val-tua-top'>{v_str}</span> ({r_int}位)"
         elif metric_type == 'course': return f"<span class='val-course-top'>{v_str}</span> ({r_int}位)"
         else: return f"<span class='val-sub-top'>{v_str}</span> ({r_int}位)"
-    return f
+    return f"<span class='val-normal'>{v_str}</span> ({r_int}位)"
+
+def format_fup_badge(fup_val, fup_rank):
+    val_int = int(fup_val) if pd.notnull(fup_val) else 0
+    rk_int = int(fup_rank) if pd.notnull(fup_rank) else 99
+    if val_int == 7: return f"<span class='val-rank1-gold'>{val_int}点</span> (1位)"
+    elif val_int in [5, 6]: return f"<span class='val-f-top'>{val_int}点</span> ({rk_int}位)"
+    elif val_int == 4: return f"<span class='val-arms-top'>{val_int}点</span> ({rk_int}位)"
+    return f"<span class='val-normal'>{val_int}点</span> ({rk_int}位)"
+
+for _, h in display_df.iterrows():
+    u_no = int(h['馬番'])
+    style_badge = get_running_style_badge(h.get('脚質', ''))
+    
+    badges = [style_badge]
+    
+    # 印バッジ（GTV印）の追加表示
+    raw_mark = str(h.get('印', '')).strip()
+    if raw_mark and raw_mark not in ['nan', 'None', '', '-', '－']:
+        badges.append(f"<span class='badge-mark-gtv'>印: {raw_mark}</span>")
+    
+    # C馬判定バッジの追加表示
+    c_m = str(h.get('C馬', '')).strip()
+    if c_m and c_m not in ['nan', 'None', '', '-', '－']:
+        badges.append(f"<span class='badge-mark-c'>{c_m}</span>")
+    
+    # 本命・対抗・穴特注バッジ（潰れ防止済）
+    if u_no == int(pick_honmei['馬番']): badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
+    elif u_no == int(pick_taikou['馬番']): badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
+    elif u_no == int(pick_ana['馬番']): badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
+    
+    if h.get('p1_hit_solid'): badges.append("<span class='badge-cushion-fit'>🎯 的中重視合致</span>")
+    if h.get('p2_dirt_tua'): badges.append("<span class='badge-cushion-fit'>🏜️ ダート先行TUA合致</span>")
+    if h.get('roi_tua1_dirt_ana'): badges.append("<span class='badge-mark-ana'>💰 単回105% TUA穴</span>")
+    if h.get('roi_11s_ana'): badges.append("<span class='badge-mark-ana'>🔥 終い11s中穴</span>")
+    if h.get('is_super_fast_b'): badges.append("<span class='badge-mark-gtv'>🔥 猛時計減速(特注)</span>")
+    elif h.get('is_complete_accel'): badges.append("<span class='badge-accel-on'>⚡ 坂路完全加速</span>")
+    
+    if h.get('コース連順位', 99) <= 3 and h.get('バランス順位', 99) <= 3:
+        badges.append(f"<span class='badge-cushion-fit'>🏰 コース＆バランス合致</span>")
+    elif h.get('コース連順位', 99) <= 3:
+        badges.append(f"<span class='badge-cushion-fit'>🏰 コース適性{int(h['コース連順位'])}位</span>")
+    elif h.get('コース連順位', 99) >= 6:
+        badges.append(f"<span class='badge-cushion-danger'>⚠️ コース不適合({int(h['コース連順位'])}位)</span>")
+        
+    if h.get('is_cushion_fit'): badges.append(str(h['cushion_badge_raw']))
+    if h.get('is_cushion_danger'): badges.append(str(h['cushion_badge_raw']))
+
+    badges_html = " ".join([b for b in badges if b])
+    
+    # 指数ハイライトフォーマット生成
+    f_html = format_index_badge(h.get('F指数'), h.get('F_rank'), 'F')
+    s_html = format_index_badge(h.get('S指数'), h.get('S_rank'), 'S')
+    arms_html = format_index_badge(h.get('arms'), h.get('arms_rank'), 'arms')
+    tua_html = format_index_badge(h.get('tua'), h.get('tua_rank'), 'tua')
+    fup_html = format_fup_badge(h.get('Fup'), h.get('Fup_rank'))
+    
+    course_html = format_index_badge(h.get('コース連'), h.get('コース連順位'), 'course')
+    ketsu_html = format_index_badge(h.get('血統連'), h.get('血統連順位'), 'sub')
+    tokei_k_html = format_index_badge(h.get('時計血'), h.get('時計血順位'), 'sub')
+    hanro_k_html = format_index_badge(h.get('坂路血'), h.get('坂路血順位'), 'sub')
+    hanro_c_html = format_index_badge(h.get('坂路調'), h.get('坂路調順位'), 'sub')
+    balance_html = format_index_badge(h.get('バランス'), h.get('バランス順位'), 'sub')
+    
+    # 坂路実測時計秒数ハイライト
+    if pd.notnull(h.get('坂路_4F')):
+        h_4f_val = float(h['坂路_4F'])
+        hanro_4f = f"<span class='highlight-han-fast4f'>{h_4f_val:.1f}s</span>" if h_4f_val <= 53.5 else f"{h_4f_val:.1f}s"
+    else:
+        hanro_4f = "-"
+
+    if pd.notnull(h.get('坂路_1F')):
+        h_1f_val = float(h['坂路_1F'])
+        if h_1f_val <= 12.0:
+            hanro_1f = f"<span class='highlight-han-fast1f-super'>⚡ {h_1f_val:.1f}s</span>"
+        elif h_1f_val <= 12.4:
+            hanro_1f = f"<span class='highlight-han-fast1f-good'>{h_1f_val:.1f}s</span>"
+        else:
+            hanro_1f = f"{h_1f_val:.1f}s"
+    else:
+        hanro_1f = "-"
+
+    # ★ 坂路6大区分バッジ表示
+    lap_type = str(h.get('坂路_ラップ型', '')).strip()
+    if lap_type == 'A3': lap_type_html = "<span class='highlight-han-a3'>【A3加速・11s台】</span>"
+    elif lap_type == 'A2': lap_type_html = "<span class='highlight-han-a2'>【A2加速・12s台】</span>"
+    elif lap_type == 'A1': lap_type_html = "<span class='highlight-han-a1'>【A1加速】</span>"
+    elif lap_type == 'B3': lap_type_html = "<span class='badge-style-other'>【B3減速】</span>"
+    elif lap_type == 'B2': lap_type_html = "<span class='badge-style-other'>【B2減速】</span>"
+    elif lap_type == 'B1': lap_type_html = "<span class='badge-style-other'>【B1減速】</span>"
+    elif h.get('is_complete_accel'): lap_type_html = "<span class='highlight-han-a2'>【完全加速】</span>"
+    else: lap_type_html = f"【{lap_type if lap_type else '-'}】"
+    
+    st.markdown(
+        f"<div class='horse-card'>"
+        f"<div class='horse-card-header'>"
+        f"<span class='race-badge-title'>{u_no}番</span>"
+        f"<span class='horse-card-title'>{h['馬名']}</span>"
+        f"<span style='color:#94a3b8; font-size:13.5px;'>（{h.get('人気','')}番人気 / {h.get('騎手','')} / {h.get('調教師','')} / 枠{int(h.get('枠番',8))}）</span>"
+        f"</div>"
+        f"<div style='margin-bottom: 8px;'>{badges_html}</div>"
+        f"<ul class='horse-card-list'>"
+        f"<li><strong>基本5大指数</strong>: F指数: {f_html} / S指数: {s_html} / Fup2: {fup_html} / ARM: {arms_html} / TUA: {tua_html}</li>"
+        f"<li><strong>コース・血統・バランス適性</strong>: バランス: {balance_html} / コース連: {course_html} / 血統連: {ketsu_html} / 時計血: {tokei_k_html} / 坂路血: {hanro_k_html} / 坂路調: {hanro_c_html}</li>"
+        f"<li><strong>調教実測ラップ</strong>: 坂路4F: {hanro_4f} - 終い1F: {hanro_1f} {lap_type_html}</li>"
+        f"<li><strong>血統＆クッション値</strong>: 父 {h.get('種牡馬','-')} / 当日クッション値帯 ({current_bin_name}: {current_band})</li>"
+        f"</ul>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
