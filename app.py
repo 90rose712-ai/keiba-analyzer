@@ -622,7 +622,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     df_main['total_horses'] = df_main.groupby('race_id')['馬番'].transform('count')
     df_main['枠番'] = df_main.apply(lambda r: get_jra_waku(r['馬番'], r['total_horses']), axis=1)
 
-    # 坂路実測CSV読み込み
     sakaro_patterns = [
         'data/出馬表_坂路*.csv', '出馬表_坂路*.csv',
         'data/坂路、検証用*.csv', '坂路、検証用*.csv',
@@ -647,7 +646,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         df_s_raw['坂路_Lap2'] = pd.to_numeric(df_s_raw[c_s_l2], errors='coerce')
         df_s_raw['坂路_Lap1'] = pd.to_numeric(df_s_raw[c_s_l1], errors='coerce')
 
-        # ★ 坂路6大区分（A1〜A3、B1〜B3）厳格判定関数
         def determine_sakaro_lap_type(r):
             t1 = r.get('坂路_4F')
             l1 = r.get('坂路_Lap1')
@@ -734,10 +732,21 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
 # ★ データ読み込み実行 ＆ 型安全性確保
 # ==============================================================================
 st.sidebar.markdown('### 📁 CSVデータ読み込み')
-with st.sidebar.expander('データ更新', expanded=False):
+with st.sidebar.expander('データ更新・ダウンロード', expanded=False):
     up_index = st.file_uploader('出馬表・全11指数 CSV', type=['csv'], key='up_index')
     up_sakaro = st.file_uploader('坂路調教実測 CSV', type=['csv'], key='up_sakaro')
     up_wood = st.file_uploader('ウッド調教 CSV', type=['csv'], key='up_wood')
+    
+    # ★ ご要望のダウンロードボタン機能
+    if os.path.exists('当日全指数統合_3.csv'):
+        with open('当日全指数統合_3.csv', 'rb') as f:
+            st.download_button(
+                label='📥 当日全指数統合_3.csv をダウンロード',
+                data=f,
+                file_name='当日全指数統合_3.csv',
+                mime='text/csv',
+                key='download_master_csv_3'
+            )
 
 df, race_date = load_and_merge_all(up_index, up_sakaro, up_wood)
 
