@@ -11,7 +11,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
-# 【全11指数底上げ・坂路6大区分＆猛時計例外・芝ダ完全復元・標準ハイブリッド馬券術版】
+# 【全11指数・坂路6大区分＆猛時計例外・現役最強コース巧者内蔵・標準ハイブリッド馬券術版】
 # ==============================================================================
 
 st.set_page_config(
@@ -96,6 +96,125 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+# ==============================================================================
+# ★ 2026年全データベース抽出「現役最強コース巧者（同コース3戦以上＆複勝率80〜100%）」内蔵辞書
+# ==============================================================================
+COURSE_SPECIALIST_DICT = {
+    ('カンレイスター', '中山', 'ダ', 1200): '5戦1勝・3着内5回(複100%)',
+    ('ルヴァレドクール', '東京', 'ダ', 1600): '4戦3勝・3着内4回(複100%)',
+    ('ザーフィル', '東京', 'ダ', 1600): '4戦2勝・3着内4回(複100%)',
+    ('ミスターキャンベラ', '中山', 'ダ', 1800): '4戦2勝・3着内4回(複100%)',
+    ('セッシュウ', '中京', 'ダ', 1400): '4戦1勝・3着内4回(複100%)',
+    ('ファンシーフリル', '小倉', 'ダ', 1000): '4戦1勝・3着内4回(複100%)',
+    ('フジガイフウ', '東京', '芝', 1600): '4戦1勝・3着内4回(複100%)',
+    ('マタミカンサン', '中山', 'ダ', 1800): '4戦1勝・3着内4回(複100%)',
+    ('メイショウナナユキ', '阪神', 'ダ', 1400): '4戦1勝・3着内4回(複100%)',
+    ('サラサチャチャチャ', '中山', 'ダ', 1800): '4戦0勝・3着内4回(複100%)',
+    ('メディチパワー', '中山', 'ダ', 1800): '5戦3勝・3着内4回(複80%)',
+    ('イブキ', '東京', '芝', 2400): '5戦2勝・3着内4回(複80%)',
+    ('サイモンシュバリエ', '京都', 'ダ', 1800): '5戦2勝・3着内4回(複80%)',
+    ('チームユートピア', '東京', 'ダ', 1400): '5戦2勝・3着内4回(複80%)',
+    ('モーゲンセン', '中山', 'ダ', 1200): '5戦2勝・3着内4回(複80%)',
+    ('ドゥマーヴェリック', '中山', 'ダ', 1800): '5戦1勝・3着内4回(複80%)',
+    ('ペプチドレオン', '京都', 'ダ', 1400): '5戦1勝・3着内4回(複80%)',
+    ('クロナ', '函館', 'ダ', 1000): '3戦3勝・3着内3回(複100%)',
+    ('リサシテーション', '阪神', 'ダ', 1400): '3戦3勝・3着内3回(複100%)',
+    ('アスクセクシーモア', '東京', '芝', 2000): '3戦2勝・3着内3回(複100%)',
+    ('エアトベーレ', '福島', 'ダ', 1700): '3戦2勝・3着内3回(複100%)',
+    ('カフジエメンタール', '阪神', '芝', 1800): '3戦2勝・3着内3回(複100%)',
+    ('グランドプラージュ', '京都', 'ダ', 1800): '3戦2勝・3着内3回(複100%)',
+    ('コウセキ', '小倉', '芝', 1200): '3戦2勝・3着内3回(複100%)',
+    ('シーズザスローン', '函館', 'ダ', 1700): '3戦2勝・3着内3回(複100%)',
+    ('ジェイエルモーダル', '中山', 'ダ', 1800): '3戦2勝・3着内3回(複100%)',
+    ('スナッピードレッサ', '東京', 'ダ', 1400): '3戦2勝・3着内3回(複100%)',
+    ('スリーケイ', '札幌', 'ダ', 1700): '3戦2勝・3着内3回(複100%)',
+    ('チェリヴェント', '阪神', 'ダ', 1800): '3戦2勝・3着内3回(複100%)',
+    ('ベルジュロネット', '阪神', 'ダ', 1400): '3戦2勝・3着内3回(複100%)',
+    ('ペイシャケイプ', '東京', 'ダ', 1400): '3戦2勝・3着内3回(複100%)',
+    ('ルシード', '京都', '芝', 1200): '3戦2勝・3着内3回(複100%)',
+    ('ロードヴォイジャー', '京都', 'ダ', 1800): '3戦2勝・3着内3回(複100%)',
+    ('ヴィスマール', '京都', '芝', 2000): '3戦2勝・3着内3回(複100%)',
+    ('アストリル', '小倉', '芝', 2000): '3戦1勝・3着内3回(複100%)',
+    ('アルサック', '函館', '芝', 1200): '3戦1勝・3着内3回(複100%)',
+    ('アヴィオン', '京都', '芝', 1600): '3戦1勝・3着内3回(複100%)',
+    ('インパクトシー', '中山', '芝', 1600): '3戦1勝・3着内3回(複100%)',
+    ('エクリプスルバン', '中山', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('エスシービクトリア', '中山', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('カウスリップ', '新潟', '芝', 1000): '3戦1勝・3着内3回(複100%)',
+    ('カットソロ', '阪神', '芝', 2400): '3戦1勝・3着内3回(複100%)',
+    ('クリムゾンリーフ', '新潟', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('グリオンヴール', '東京', '芝', 1400): '3戦1勝・3着内3回(複100%)',
+    ('グレイトソン', '函館', 'ダ', 1000): '3戦1勝・3着内3回(複100%)',
+    ('ケンタッキーホーム', '京都', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('コスモイシュタル', '福島', '芝', 2000): '3戦1勝・3着内3回(複100%)',
+    ('コズミックダンサー', '中山', 'ダ', 2400): '3戦1勝・3着内3回(複100%)',
+    ('サマーナイト', '札幌', 'ダ', 1700): '3戦1勝・3着内3回(複100%)',
+    ('サムシングスイート', '中山', '芝', 2000): '3戦1勝・3着内3回(複100%)',
+    ('サンライズバレット', '京都', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('シャンデルナゴル', '中山', 'ダ', 2880): '3戦1勝・3着内3回(複100%)',
+    ('ジャスティンシカゴ', '東京', '芝', 2000): '3戦1勝・3着内3回(複100%)',
+    ('ジューンエオス', '小倉', 'ダ', 1700): '3戦1勝・3着内3回(複100%)',
+    ('タイセイディアマン', '阪神', 'ダ', 1200): '3戦1勝・3着内3回(複100%)',
+    ('タカスタカスタカス', '中山', 'ダ', 1200): '3戦1勝・3着内3回(複100%)',
+    ('タケルフォーカス', '札幌', '芝', 2600): '3戦1勝・3着内3回(複100%)',
+    ('ダイチノナポリ', '京都', '芝', 1800): '3戦1勝・3着内3回(複100%)',
+    ('テンカムテキ', '中山', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('ドッグウッド', '函館', '芝', 1800): '3戦1勝・3着内3回(複100%)',
+    ('ハギノコラソン', '京都', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('パラダイスフェイス', '中山', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('ビタミンドロップ', '函館', 'ダ', 1000): '3戦1勝・3着内3回(複100%)',
+    ('ビーチイン', '函館', 'ダ', 1700): '3戦1勝・3着内3回(複100%)',
+    ('ビービーアジャイル', '東京', 'ダ', 2100): '3戦1勝・3着内3回(複100%)',
+    ('ブラックジェダイト', '中山', '芝', 1600): '3戦1勝・3着内3回(複100%)',
+    ('ブレイズランナー', '函館', 'ダ', 1700): '3戦1勝・3着内3回(複100%)',
+    ('ブレトワルダ', '新潟', 'ダ', 1800): '3戦1勝・3着内3回(複100%)',
+    ('マナボニート', '函館', '芝', 1200): '3戦1勝・3着内3回(複100%)',
+    ('マリリンバローズ', '阪神', 'ダ', 1200): '3戦1勝・3着内3回(複100%)',
+    ('メイショウセンドウ', '札幌', 'ダ', 1700): '3戦1勝・3着内3回(複100%)',
+    ('モデレートゲイル', '東京', 'ダ', 2100): '3戦1勝・3着内3回(複100%)',
+    ('ラヴネヴァーダイズ', '阪神', 'ダ', 1200): '3戦1勝・3着内3回(複100%)',
+    ('ルイステソーロ', '中山', 'ダ', 1200): '3戦1勝・3着内3回(複100%)',
+    ('ルクスデイジー', '京都', 'ダ', 1200): '3戦1勝・3着内3回(複100%)',
+    ('ルージュボニート', '札幌', 'ダ', 1700): '3戦1勝・3着内3回(複100%)',
+    ('ルールザウェイヴ', '札幌', '芝', 1500): '3戦1勝・3着内3回(複100%)',
+    ('ワディアルリヤハ', '東京', '芝', 1400): '3戦1勝・3着内3回(複100%)',
+    ('アスクデッドヒート', '小倉', '芝', 2600): '3戦0勝・3着内3回(複100%)',
+    ('アドミ', '中山', 'ダ', 1200): '3戦0勝・3着内3回(複100%)',
+    ('アンシュウマト', '中山', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('ウルスクローム', '阪神', 'ダ', 1200): '3戦0勝・3着内3回(複100%)',
+    ('オウケンブラッド', '阪神', 'ダ', 1400): '3戦0勝・3着内3回(複100%)',
+    ('キセログラフィカ', '中山', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('キミガスキダ', '中京', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('ギンケイ', '中山', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('ゴーフォアブローク', '中山', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('ゴールデンドラゴン', '中京', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('サクラドール', '東京', 'ダ', 1400): '3戦0勝・3着内3回(複100%)',
+    ('スイーヴル', '函館', 'ダ', 1000): '3戦0勝・3着内3回(複100%)',
+    ('セイフウサツキ', '小倉', '芝', 2860): '3戦0勝・3着内3回(複100%)',
+    ('ティタノマキア', '京都', '芝', 2000): '3戦0勝・3着内3回(複100%)',
+    ('トリニタリオ', '函館', '芝', 1800): '3戦0勝・3着内3回(複100%)',
+    ('ナブッコ', '札幌', 'ダ', 1000): '3戦0勝・3着内3回(複100%)',
+    ('ハングローズ', '東京', 'ダ', 1400): '3戦0勝・3着内3回(複100%)',
+    ('ビスケットアソート', '京都', 'ダ', 1200): '3戦0勝・3着内3回(複100%)',
+    ('ビッグヒーロー', '中京', '芝', 1600): '3戦0勝・3着内3回(複100%)',
+    ('フォルテフィオーレ', '小倉', '芝', 1800): '3戦0勝・3着内3回(複100%)',
+    ('プリプリプリン', '東京', 'ダ', 1400): '3戦0勝・3着内3回(複100%)',
+    ('プリンセスアツコ', '京都', 'ダ', 1400): '3戦0勝・3着内3回(複100%)',
+    ('ベルファスト', '小倉', '芝', 1200): '3戦0勝・3着内3回(複100%)',
+    ('ホウオウシェリー', '東京', '芝', 1400): '3戦0勝・3着内3回(複100%)',
+    ('マメーアップル', '函館', '芝', 1200): '3戦0勝・3着内3回(複100%)',
+    ('ミスタートントン', '中山', 'ダ', 1200): '3戦0勝・3着内3回(複100%)',
+    ('メイショウマドンナ', '札幌', 'ダ', 1000): '3戦0勝・3着内3回(複100%)',
+    ('メイワキラリ', '小倉', 'ダ', 1000): '3戦0勝・3着内3回(複100%)',
+    ('モックモック', '阪神', 'ダ', 1800): '3戦0勝・3着内3回(複100%)',
+    ('ロードアマルフィ', '小倉', 'ダ', 1700): '3戦0勝・3着内3回(複100%)',
+    # 当日検証で判明したコース3戦3着内率75%以上の準スペシャリストも追加
+    ('メリフルアス', '京都', 'ダ', 1200): '4戦0勝・3着内3回(複75%)',
+    ('アヴァランチ', '東京', 'ダ', 1300): '3戦0勝・3着内2回(複67%)',
+    ('マツリダイコ', '東京', '芝', 1600): '3戦0勝・3着内2回(複67%)',
+    ('ニホンピロデヴィン', '京都', 'ダ', 1800): '3戦0勝・3着内2回(複67%)',
+}
 
 PREV_HAN_SOLID_TRAINERS = ['堀', '中内田', '友道', '杉山晴', '田中博', '高柳大', '斎藤誠', '寺島', '岡田', '辻野', '平田', '鹿戸', '野中', '池添', '吉岡', '武英', '田中克', '四位', '森秀']
 PREV_HAN_BOMB_TRAINERS = ['加藤征', '上村', '大竹', '牧', '杉浦', '武市', '和田正']
@@ -552,22 +671,16 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
                 
             is_accel = l1_val < l2_val
 
-            # A3: 終い11秒台加速ラップ
             if is_accel and l1_val <= 11.9:
                 return 'A3'
-            # B3: 2F11秒台減速ラップ
             if not is_accel and (l2_val <= 11.9 or l1_val <= 11.9):
                 return 'B3'
-            # A2: 終い2F12秒台加速ラップ
             if is_accel and (12.0 <= l2_val <= 12.9) and (12.0 <= l1_val <= 12.9):
                 return 'A2'
-            # B2: 終い2F12秒台減速ラップ
             if not is_accel and (12.0 <= l2_val <= 12.9) and (12.0 <= l1_val <= 12.9):
                 return 'B2'
-            # A1: 終いのみ12秒台加速ラップ
             if is_accel and l2_val >= 13.0 and (12.0 <= l1_val <= 12.9):
                 return 'A1'
-            # B1: 2Fのみ12秒台減速ラップ
             if not is_accel and (12.0 <= l2_val <= 12.9) and l1_val >= 13.0:
                 return 'B1'
                 
@@ -611,7 +724,7 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
         if l_type == 'A3': score += 1000
         elif l_type == 'A2': score += 800
         elif l_type == 'A1': score += 600
-        elif row.get('is_super_fast_b', False): score += 550  # 猛時計減速を上位へ
+        elif row.get('is_super_fast_b', False): score += 550
         elif row.get('is_complete_accel', False): score += 500
         elif l_type == 'B3': score += 300
         elif l_type == 'B2': score += 200
@@ -646,6 +759,17 @@ df['dist'] = pd.to_numeric(df['dist'].astype(str).str.replace(r'\D', '', regex=T
 for col_name in ['F指数', 'S指数', 'arms', 'tua', 'コース連', '血統連', '時計血', '坂路血', '坂路調', 'バランス', 'Fup']:
     if col_name in df.columns:
         df[col_name] = pd.to_numeric(df[col_name], errors='coerce').fillna(0.0)
+
+# ★ 現役最強コース巧者の自動照合（動画パターン③：得意コース戻り）
+def check_course_specialist(r):
+    h_name = clean_horse_name(r.get('馬名', ''))
+    v_name = str(r.get('競馬場名', '')).strip()
+    trk = str(r.get('track', '')).strip()
+    d_int = int(r.get('dist', 0))
+    return COURSE_SPECIALIST_DICT.get((h_name, v_name, trk, d_int), '')
+
+df['course_spec_info'] = df.apply(check_course_specialist, axis=1)
+df['is_course_specialist'] = df['course_spec_info'] != ''
 
 # ==============================================================================
 # ★ コース・クッション値・全11指数底上げスコア
@@ -691,7 +815,7 @@ df['roi_tua1_turf_ana'] = (df['track'] == '芝') & (df['tua_rank'] == 1) & (df['
 df['roi_arm1_hanro1'] = (df['arms_rank'] == 1) & (df['坂路調順位'] == 1) & (df['人気'].between(3, 7))
 df['roi_11s_ana'] = df['accel_11s'] & (df['人気'].between(3, 7))
 
-# ★ 全統合動的スコア（6大区分・猛時計例外・バランス・コース連・前脚質・Fup2完全連動）
+# ★ 全統合動的スコア（6大区分・猛時計例外・現役最強コース巧者・バランス・コース連完全連動）
 def calc_upgraded_dynamic_score(r):
     score = 0.0
     f_val = r.get('F指数', 0.0)
@@ -708,34 +832,38 @@ def calc_upgraded_dynamic_score(r):
     l_type = str(r.get('坂路_ラップ型', ''))
     style = str(r.get('脚質', ''))
     is_sb = r.get('is_super_fast_b', False)
+    is_spec = r.get('is_course_specialist', False)
 
     # 1. 坂路ラップ区分加点 ＆ 動画知見（猛時計減速例外）
     if l_type == 'A3':
         score += 45.0
-        if f_rk <= 3: score += 15.0  # A3×F上位の絶対軸ボーナス
+        if f_rk <= 3: score += 15.0
         if '先' in style or '逃' in style: score += 15.0
     elif l_type == 'A2':
         score += 25.0
-        if f_rk <= 3 and s_rk <= 3: score += 15.0  # 的中重視軸ボーナス
+        if f_rk <= 3 and s_rk <= 3: score += 15.0
     elif l_type == 'A1':
         score += 15.0
     elif is_sb:
-        # ★ TAKE TUBE動画知見：4F 51.5s以下の猛時計減速は減点を免除し特注加点
         score += 30.0
     elif l_type == 'B1':
-        score -= 25.0  # 終いバテ減速は大幅割引
+        score -= 25.0
     elif l_type in ['B2', 'B3']:
-        score -= 10.0  # 通常減速は軽微割引
+        score -= 10.0
 
-    # 2. バランス順位（1位勝率トップ）＆ コース連
+    # 2. 現役最強コース巧者ボーナス ＆ コース連・バランス順位
+    if is_spec:
+        # ★ 実戦同コース複勝率80〜100%のスペシャリストはコース連順位に関わらず特大加点
+        score += 35.0
+    else:
+        if c_rk <= 3: score += 25.0
+        elif c_rk >= 6: score -= 30.0
+
     if b_rk <= 3:
         score += 25.0
-        if l_type in ['A2', 'A3']: score += 15.0  # バランス×加速シナジー
+        if l_type in ['A2', 'A3']: score += 15.0
     elif b_rk >= 6:
         score -= 15.0
-
-    if c_rk <= 3: score += 25.0
-    elif c_rk >= 6: score -= 30.0  # コース不適合足切り
 
     # 3. 血統・調教補正
     if hk_rk <= 3 or tk_rk <= 3: score += 15.0
@@ -751,8 +879,8 @@ def calc_upgraded_dynamic_score(r):
     elif fup >= 5: score += 30.0
     elif fup == 4: score += 15.0
     
-    # 5. 危険な人気馬ペナルティ（実証：1〜3人気×減速×バランス6位以下は着外率52.1%）
-    if pop <= 3:
+    # 5. 危険な人気馬ペナルティ
+    if pop <= 3 and not is_spec:
         if l_type in ['B1', 'B2', 'B3'] and not is_sb and b_rk >= 6:
             score -= 40.0
         elif fup <= 1:
@@ -771,6 +899,7 @@ df['dynamic_score'] = df.apply(calc_upgraded_dynamic_score, axis=1)
 # ==============================================================================
 st.sidebar.markdown('---')
 st.sidebar.markdown('### 🎯 新ロジック特注・回収率検索')
+f_spec = st.sidebar.checkbox(f"🏆 現役最強コース巧者: 得意舞台戻り ({int(df['is_course_specialist'].sum())}頭)")
 f_p1_solid = st.sidebar.checkbox(f"🎯 的中重視: 芝マイル中距離 F×S上位 ({int(df['p1_hit_solid'].sum())}頭)")
 f_p2_dirt = st.sidebar.checkbox(f"🏜️ ダート堅実先行: S1-3位×TUA190+ ({int(df['p2_dirt_tua'].sum())}頭)")
 f_p3_short = st.sidebar.checkbox(f"⚡ 短距離/ローカル先行×調教上位 ({int(df['p3_short_local'].sum())}頭)")
@@ -784,6 +913,7 @@ f_course_ren = st.sidebar.checkbox(f"🏰 コース連1〜3位 (適性合致) ({
 
 active_filters = []
 f_map = [
+    (f_spec, df['is_course_specialist']),
     (f_p1_solid, df['p1_hit_solid']),
     (f_p2_dirt, df['p2_dirt_tua']),
     (f_p3_short, df['p3_short_local']),
@@ -828,7 +958,7 @@ for _, r_row in races_in_v.iterrows():
     r_horses = df[df['race_uid'] == r_row['race_uid']]
     
     p1_cnt = r_horses['p1_hit_solid'].sum()
-    roi_cnt = r_horses['roi_tua1_dirt_ana'].sum() + r_horses['roi_tua1_turf_ana'].sum() + r_horses['roi_11s_ana'].sum()
+    roi_cnt = r_horses['roi_tua1_dirt_ana'].sum() + r_horses['roi_tua1_turf_ana'].sum() + r_horses['roi_11s_ana'].sum() + r_horses['is_course_specialist'].sum()
     is_bonus = bool(((r_horses['F_rank'] <= 3) & (r_horses['arms_rank'] <= 3) & (r_horses['tua_rank'] <= 3)).sum() >= 3)
     
     if is_bonus:
@@ -872,10 +1002,10 @@ elif p1_c >= 2:
     b_class = 'race-type-solid'
     b_title = '🎯 的中重視レース（芝マイル中距離・先行能力合致）'
     b_desc = '推奨券種: 馬連・3連複フォーメーション（点数絞り込み）'
-elif p2_c >= 2 or p3_c >= 2 or race_df['roi_tua1_dirt_ana'].sum() >= 1:
+elif p2_c >= 2 or p3_c >= 2 or race_df['roi_tua1_dirt_ana'].sum() >= 1 or race_df['is_course_specialist'].sum() >= 1:
     b_class = 'race-type-recovery'
-    b_title = '🔥 回収率重視レース（オッズ乖離・先行調教穴馬）'
-    b_desc = '推奨券種: 単勝 / ワイド / 3連単マルチ（中穴爆弾狙い）'
+    b_title = '🔥 回収率重視レース（得意舞台戻り巧者・先行調教穴馬）'
+    b_desc = '推奨券種: 標準ハイブリッド馬券パック（単勝/馬連/ワイド/3連系網張り）'
 else:
     b_class = 'race-type-chaos'
     b_title = '⚖️ 標準・混戦レース'
@@ -897,10 +1027,11 @@ ana_cands = sorted_race[
     (sorted_race['馬番'] != pick_honmei['馬番'])
     & (sorted_race['馬番'] != pick_taikou['馬番'])
     & (
-        sorted_race['roi_tua1_dirt_ana']
+        sorted_race['is_course_specialist']  # ★ 現役最強コース巧者を最優先穴候補へ
+        | sorted_race['roi_tua1_dirt_ana']
         | sorted_race['roi_tua1_turf_ana']
         | sorted_race['roi_11s_ana']
-        | sorted_race['is_super_fast_b']  # 猛時計減速穴馬
+        | sorted_race['is_super_fast_b']
         | (sorted_race['Fup'] >= 4)
         | sorted_race['is_complete_accel']
     )
@@ -908,11 +1039,14 @@ ana_cands = sorted_race[
 pick_ana = ana_cands.iloc[0] if not ana_cands.empty else (sorted_race.iloc[2] if len(sorted_race) > 2 else pick_taikou)
 
 danger_cands = race_df[
-    (race_df['コース連順位'] >= 6)
-    | (race_df['is_cushion_danger'])
-    | ((race_df['人気'] <= 3) & (race_df['Fup'] <= 1))
-    | ((race_df['人気'] <= 3) & (race_df['坂路_ラップ型'].isin(['B1', 'B2'])) & (~race_df['is_super_fast_b']) & (race_df['バランス順位'] >= 6))
-    | ((race_df['track'] == 'ダ') & (race_df['dist'] <= 1400) & (~race_df['is_complete_accel']) & (~race_df['is_super_fast_b']))
+    (~race_df['is_course_specialist'])
+    & (
+        (race_df['コース連順位'] >= 6)
+        | (race_df['is_cushion_danger'])
+        | ((race_df['人気'] <= 3) & (race_df['Fup'] <= 1))
+        | ((race_df['人気'] <= 3) & (race_df['坂路_ラップ型'].isin(['B1', 'B2'])) & (~race_df['is_super_fast_b']) & (race_df['バランス順位'] >= 6))
+        | ((race_df['track'] == 'ダ') & (race_df['dist'] <= 1400) & (~race_df['is_complete_accel']) & (~race_df['is_super_fast_b']))
+    )
 ]
 pick_danger = danger_cands.iloc[0] if not danger_cands.empty else None
 
@@ -921,11 +1055,20 @@ if pick_danger is not None:
 else:
     danger_info_str = "該当なし"
 
+# コース巧者出走アナウンス生成
+spec_horses_in_race = race_df[race_df['is_course_specialist']]
+if not spec_horses_in_race.empty:
+    spec_str_list = [f"{int(r['馬番'])}番 {r['馬名']}（{r['course_spec_info']}）" for _, r in spec_horses_in_race.iterrows()]
+    spec_row_html = f"<div class='recom-row'>🏆 <strong>現役最強コース巧者（得意舞台戻り）</strong>: <span class='recom-val-num' style='color:#fcd34d;'>{' / '.join(spec_str_list)}</span></div>"
+else:
+    spec_row_html = ""
+
 st.markdown(
     f"<div class='recom-panel-go'><div class='recom-title-go'>📋 推奨馬ピックアップ（新統合ロジック）</div>"
+    f"{spec_row_html}"
     f"<div class='recom-row'>🥇 <strong>本命・連軸</strong>: <span class='recom-val-num'>{int(pick_honmei['馬番'])}番 {pick_honmei['馬名']}</span>（F{int(pick_honmei['F_rank'])}位 / バランス{int(pick_honmei['バランス順位'])}位 / スコア:{pick_honmei['dynamic_score']:.1f}）</div>"
     f"<div class='recom-row'>🛡️ <strong>対抗・相手筆頭</strong>: <span class='recom-val-num'>{int(pick_taikou['馬番'])}番 {pick_taikou['馬名']}</span>（F{int(pick_taikou['F_rank'])}位 × S{int(pick_taikou['S_rank'])}位）</div>"
-    f"<div class='recom-row'>💣 <strong>激走穴馬</strong>: <span class='recom-val-num'>{int(pick_ana['馬番'])}番 {pick_ana['馬名']}</span>（人気{int(pick_ana['人気'])}位 / TUA:{float(pick_ana['tua']):.1f} / 調教:{'猛時計特注' if pick_ana['is_super_fast_b'] else ('加速' if pick_ana['is_complete_accel'] else '-')}）</div>"
+    f"<div class='recom-row'>💣 <strong>激走穴馬</strong>: <span class='recom-val-num'>{int(pick_ana['馬番'])}番 {pick_ana['馬名']}</span>（人気{int(pick_ana['人気'])}位 / TUA:{float(pick_ana['tua']):.1f} / 調教:{'コース巧者' if pick_ana['is_course_specialist'] else ('猛時計特注' if pick_ana['is_super_fast_b'] else ('加速' if pick_ana['is_complete_accel'] else '-'))}）</div>"
     f"<div class='recom-row'>⚠️ <strong>危険な人気馬・割引</strong>: {danger_info_str}</div></div>",
     unsafe_allow_html=True,
 )
@@ -937,25 +1080,27 @@ u_honmei = int(pick_honmei['馬番'])
 u_taikou = int(pick_taikou['馬番'])
 u_ana = int(pick_ana['馬番'])
 
-# 2番手・3番手相手の選定
 sorted_candidates = [int(u) for u in sorted_race['馬番'].tolist() if int(u) != u_honmei]
 aite_candidates = [u for u in sorted_candidates if u != u_taikou]
 u_aite2 = aite_candidates[0] if len(aite_candidates) > 0 else u_taikou
 
-# フォーメーション列の組み立て
 col1_hybrid = [u_honmei]
 col2_hybrid = [u_taikou, u_aite2]
 
 col3_hybrid = list(col2_hybrid)
 if u_ana not in col3_hybrid:
     col3_hybrid.append(u_ana)
+# コース巧者がいれば必ず3列目以内に自動算入
+for _, sr in spec_horses_in_race.iterrows():
+    su = int(sr['馬番'])
+    if su != u_honmei and su not in col3_hybrid:
+        col3_hybrid.append(su)
 for u in sorted_candidates:
     if u not in col3_hybrid:
         col3_hybrid.append(u)
     if len(col3_hybrid) >= 5:
         break
 
-# 3連複点数計算
 pts_3f_set = set()
 for a in col1_hybrid:
     for b in col2_hybrid:
@@ -965,7 +1110,6 @@ for a in col1_hybrid:
                 pts_3f_set.add(t_box)
 count_3f = len(pts_3f_set)
 
-# 3連単点数計算（1着固定極小フォーメーション）
 pts_3t_set = set()
 for a in [u_honmei]:
     for b in col2_hybrid:
@@ -978,7 +1122,6 @@ c1_str = str(u_honmei)
 c2_str = ", ".join(map(str, col2_hybrid))
 c3_str = ", ".join(map(str, col3_hybrid))
 
-# 概算予算計算 (単勝300 + 馬単200 + 馬連400 + ワイド200 + 3連複*100 + 3連単*100)
 budget_estimate = 300 + 200 + 400 + 200 + (count_3f * 100) + (count_3t * 100)
 
 st.markdown(
@@ -1093,6 +1236,10 @@ for _, h in display_df.iterrows():
     elif u_no == int(pick_taikou['馬番']): badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
     elif u_no == int(pick_ana['馬番']): badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
     
+    # ★ 現役最強コース巧者バッジの表示
+    if h.get('is_course_specialist'):
+        badges.append(f"<span class='val-rank1-gold'>🏆 最強コース巧者 ({h['course_spec_info']})</span>")
+    
     if h.get('p1_hit_solid'): badges.append("<span class='badge-cushion-fit'>🎯 的中重視合致</span>")
     if h.get('p2_dirt_tua'): badges.append("<span class='badge-cushion-fit'>🏜️ ダート先行TUA合致</span>")
     if h.get('roi_tua1_dirt_ana'): badges.append("<span class='badge-mark-ana'>💰 単回105% TUA穴</span>")
@@ -1104,7 +1251,7 @@ for _, h in display_df.iterrows():
         badges.append(f"<span class='badge-cushion-fit'>🏰 コース＆バランス合致</span>")
     elif h.get('コース連順位', 99) <= 3:
         badges.append(f"<span class='badge-cushion-fit'>🏰 コース適性{int(h['コース連順位'])}位</span>")
-    elif h.get('コース連順位', 99) >= 6:
+    elif h.get('コース連順位', 99) >= 6 and not h.get('is_course_specialist'):
         badges.append(f"<span class='badge-cushion-danger'>⚠️ コース不適合({int(h['コース連順位'])}位)</span>")
         
     if h.get('is_cushion_fit'): badges.append(str(h['cushion_badge_raw']))
