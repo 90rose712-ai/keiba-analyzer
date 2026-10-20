@@ -11,7 +11,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr 完全統合Webアプリケーション
-# 【全11指数底上げ＆色付け・坂路6大区分＆猛時計例外・全指数ソート・的中/回収判定・3連単マルチ版】
+# 【全11指数底上げ＆色付け・坂路6大区分＆猛時計例外・芝ダ完全復元・全指数ソート・3連単マルチ版】
 # ==============================================================================
 
 st.set_page_config(
@@ -288,7 +288,7 @@ def evaluate_sire_cushion(sire_name, venue, dist_str, band_str):
     return ""
 
 # ==============================================================================
-# ★ データロード＆結合エンジン（Fup自動フォールバック＋型安全性確保）
+# ★ データロード＆結合エンジン（芝ダート完全復元・Fup自動補正・型安全性確保）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
@@ -311,16 +311,30 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     if not df_raw.empty and '場所R' in df_raw.columns:
         for _, row in df_raw.iterrows():
             race_id = str(row.get('場所R', '')).strip()
-            dist = row.get('距離', 1600)
+            dist_val = row.get('距離', 1600)
             umaban = row.get('馬番', 99)
             horse = clean_horse_name(row.get('馬名', ''))
             trainer = clean_horse_name(row.get('調教師', ''))
             jockey = clean_horse_name(row.get('騎手', ''))
             pop = row.get('人気順位', 99)
-            c_marker = row.get('C', '')
+            raw_c = str(row.get('C', '')).strip()
             mark = row.get('印', '')
+
+            # ★ 芝・ダート（track）の正確な復元：統合CSVの「C」列から取得
+            if 'ダ' in raw_c:
+                track = 'ダ'
+                c_marker = ''
+            elif '芝' in raw_c:
+                track = '芝'
+                c_marker = ''
+            else:
+                dist_tmp = int(re.sub(r'\D', '', str(dist_val))) if re.sub(r'\D', '', str(dist_val)).isdigit() else 1600
+                track = 'ダ' if dist_tmp in [1150, 1300, 1700, 1900, 2100] else '芝'
+                c_marker = raw_c if raw_c not in ['nan', 'None', ''] else ''
+
+            dist_int = int(re.sub(r'\D', '', str(dist_val))) if re.sub(r'\D', '', str(dist_val)).isdigit() else 1600
             
-            # ★ Fup2の数値取得（列名で取れない、または0点の場合はCSV内の予備列から直接自動判定）
+            # ★ Fup2数値の取得（列名で取れない・0点の場合はCSV内の予備列から直接自動判定）
             fup = pd.to_numeric(row.get('Fup2'), errors='coerce')
             fup_rank = pd.to_numeric(row.get('Fup2順位'), errors='coerce')
             
@@ -365,8 +379,6 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             raw_style = row.get('前脚質', '')
 
             final_style = resolve_running_style(raw_style, '', s_rank, f_rank, s_val)
-            dist_int = int(re.sub(r'\D', '', str(dist))) if re.sub(r'\D', '', str(dist)).isdigit() else 1600
-            track = 'ダ' if dist_int in [1150, 1300, 1700, 1900, 2100] else '芝'
 
             if horse:
                 records.append({
@@ -423,8 +435,8 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             if n < 8 or parts[0] in ['場所', '場所R', 'レースID', 'race_id']: continue
 
             race_id = parts[0]
-            track = parts[1] if n > 1 else '芝'
-            dist = parts[2] if n > 2 else '1600'
+            track_raw = str(parts[1]).strip() if n > 1 else '芝'
+            dist_val = parts[2] if n > 2 else '1600'
             umaban = parts[3] if n > 3 else '99'
             horse_raw = parts[4] if n > 4 else ''
             c_marker = str(parts[5]).strip() if n > 5 else ''
@@ -433,6 +445,8 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
             pop = parts[8] if n > 8 else '99'
             mark = parts[9] if n > 9 else ''
             
+            track = 'ダ' if 'ダ' in track_raw else '芝'
+
             fup = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0
             fup_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
             
@@ -452,9 +466,11 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
 
             final_style = resolve_running_style(raw_style_full, raw_style_short, s_rank, f_rank, s_val)
             horse = clean_horse_name(horse_raw)
+            dist_int = int(re.sub(r'\D', '', str(dist_val))) if re.sub(r'\D', '', str(dist_val)).isdigit() else 1600
+
             if horse:
                 records.append({
-                    'race_id': race_id, 'track': track, 'dist': dist,
+                    'race_id': race_id, 'track': track, 'dist': dist_int,
                     '馬番': int(umaban) if str(umaban).isdigit() else 99,
                     '馬名': horse, 'C馬': c_marker, '印': str(mark).strip(),
                     '調教師': clean_horse_name(trainer), '騎手': clean_horse_name(jockey),
@@ -1010,113 +1026,4 @@ def format_index_badge(val, rank, metric_type):
         elif metric_type == 'tua': return f"<span class='val-tua-top'>{v_str}</span> ({r_int}位)"
         elif metric_type == 'course': return f"<span class='val-course-top'>{v_str}</span> ({r_int}位)"
         else: return f"<span class='val-sub-top'>{v_str}</span> ({r_int}位)"
-    return f"<span class='val-normal'>{v_str}</span> ({r_int}位)"
-
-def format_fup_badge(fup_val, fup_rank):
-    val_int = int(fup_val) if pd.notnull(fup_val) else 0
-    rk_int = int(fup_rank) if pd.notnull(fup_rank) else 99
-    if val_int == 7: return f"<span class='val-rank1-gold'>{val_int}点</span> (1位)"
-    elif val_int in [5, 6]: return f"<span class='val-f-top'>{val_int}点</span> ({rk_int}位)"
-    elif val_int == 4: return f"<span class='val-arms-top'>{val_int}点</span> ({rk_int}位)"
-    return f"<span class='val-normal'>{val_int}点</span> ({rk_int}位)"
-
-for _, h in display_df.iterrows():
-    u_no = int(h['馬番'])
-    style_badge = get_running_style_badge(h.get('脚質', ''))
-    
-    badges = [style_badge]
-    
-    # 印バッジ（GTV印）の追加表示
-    raw_mark = str(h.get('印', '')).strip()
-    if raw_mark and raw_mark not in ['nan', 'None', '', '-', '－']:
-        badges.append(f"<span class='badge-mark-gtv'>印: {raw_mark}</span>")
-    
-    # C馬判定バッジの追加表示
-    c_m = str(h.get('C馬', '')).strip()
-    if c_m and c_m not in ['nan', 'None', '', '-', '－']:
-        badges.append(f"<span class='badge-mark-c'>{c_m}</span>")
-    
-    # 本命・対抗・穴特注バッジ（潰れ防止済）
-    if u_no == int(pick_honmei['馬番']): badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
-    elif u_no == int(pick_taikou['馬番']): badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
-    elif u_no == int(pick_ana['馬番']): badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
-    
-    if h.get('p1_hit_solid'): badges.append("<span class='badge-cushion-fit'>🎯 的中重視合致</span>")
-    if h.get('p2_dirt_tua'): badges.append("<span class='badge-cushion-fit'>🏜️ ダート先行TUA合致</span>")
-    if h.get('roi_tua1_dirt_ana'): badges.append("<span class='badge-mark-ana'>💰 単回105% TUA穴</span>")
-    if h.get('roi_11s_ana'): badges.append("<span class='badge-mark-ana'>🔥 終い11s中穴</span>")
-    if h.get('is_super_fast_b'): badges.append("<span class='badge-mark-gtv'>🔥 猛時計減速(特注)</span>")
-    elif h.get('is_complete_accel'): badges.append("<span class='badge-accel-on'>⚡ 坂路完全加速</span>")
-    
-    if h.get('コース連順位', 99) <= 3 and h.get('バランス順位', 99) <= 3:
-        badges.append(f"<span class='badge-cushion-fit'>🏰 コース＆バランス合致</span>")
-    elif h.get('コース連順位', 99) <= 3:
-        badges.append(f"<span class='badge-cushion-fit'>🏰 コース適性{int(h['コース連順位'])}位</span>")
-    elif h.get('コース連順位', 99) >= 6:
-        badges.append(f"<span class='badge-cushion-danger'>⚠️ コース不適合({int(h['コース連順位'])}位)</span>")
-        
-    if h.get('is_cushion_fit'): badges.append(str(h['cushion_badge_raw']))
-    if h.get('is_cushion_danger'): badges.append(str(h['cushion_badge_raw']))
-
-    badges_html = " ".join([b for b in badges if b])
-    
-    # 指数ハイライトフォーマット生成
-    f_html = format_index_badge(h.get('F指数'), h.get('F_rank'), 'F')
-    s_html = format_index_badge(h.get('S指数'), h.get('S_rank'), 'S')
-    arms_html = format_index_badge(h.get('arms'), h.get('arms_rank'), 'arms')
-    tua_html = format_index_badge(h.get('tua'), h.get('tua_rank'), 'tua')
-    fup_html = format_fup_badge(h.get('Fup'), h.get('Fup_rank'))
-    
-    course_html = format_index_badge(h.get('コース連'), h.get('コース連順位'), 'course')
-    ketsu_html = format_index_badge(h.get('血統連'), h.get('血統連順位'), 'sub')
-    tokei_k_html = format_index_badge(h.get('時計血'), h.get('時計血順位'), 'sub')
-    hanro_k_html = format_index_badge(h.get('坂路血'), h.get('坂路血順位'), 'sub')
-    hanro_c_html = format_index_badge(h.get('坂路調'), h.get('坂路調順位'), 'sub')
-    balance_html = format_index_badge(h.get('バランス'), h.get('バランス順位'), 'sub')
-    
-    # 坂路実測時計秒数ハイライト
-    if pd.notnull(h.get('坂路_4F')):
-        h_4f_val = float(h['坂路_4F'])
-        hanro_4f = f"<span class='highlight-han-fast4f'>{h_4f_val:.1f}s</span>" if h_4f_val <= 53.5 else f"{h_4f_val:.1f}s"
-    else:
-        hanro_4f = "-"
-
-    if pd.notnull(h.get('坂路_1F')):
-        h_1f_val = float(h['坂路_1F'])
-        if h_1f_val <= 12.0:
-            hanro_1f = f"<span class='highlight-han-fast1f-super'>⚡ {h_1f_val:.1f}s</span>"
-        elif h_1f_val <= 12.4:
-            hanro_1f = f"<span class='highlight-han-fast1f-good'>{h_1f_val:.1f}s</span>"
-        else:
-            hanro_1f = f"{h_1f_val:.1f}s"
-    else:
-        hanro_1f = "-"
-
-    # ★ 坂路6大区分バッジ表示
-    lap_type = str(h.get('坂路_ラップ型', '')).strip()
-    if lap_type == 'A3': lap_type_html = "<span class='highlight-han-a3'>【A3加速・11s台】</span>"
-    elif lap_type == 'A2': lap_type_html = "<span class='highlight-han-a2'>【A2加速・12s台】</span>"
-    elif lap_type == 'A1': lap_type_html = "<span class='highlight-han-a1'>【A1加速】</span>"
-    elif lap_type == 'B3': lap_type_html = "<span class='badge-style-other'>【B3減速】</span>"
-    elif lap_type == 'B2': lap_type_html = "<span class='badge-style-other'>【B2減速】</span>"
-    elif lap_type == 'B1': lap_type_html = "<span class='badge-style-other'>【B1減速】</span>"
-    elif h.get('is_complete_accel'): lap_type_html = "<span class='highlight-han-a2'>【完全加速】</span>"
-    else: lap_type_html = f"【{lap_type if lap_type else '-'}】"
-    
-    st.markdown(
-        f"<div class='horse-card'>"
-        f"<div class='horse-card-header'>"
-        f"<span class='race-badge-title'>{u_no}番</span>"
-        f"<span class='horse-card-title'>{h['馬名']}</span>"
-        f"<span style='color:#94a3b8; font-size:13.5px;'>（{h.get('人気','')}番人気 / {h.get('騎手','')} / {h.get('調教師','')} / 枠{int(h.get('枠番',8))}）</span>"
-        f"</div>"
-        f"<div style='margin-bottom: 8px;'>{badges_html}</div>"
-        f"<ul class='horse-card-list'>"
-        f"<li><strong>基本5大指数</strong>: F指数: {f_html} / S指数: {s_html} / Fup2: {fup_html} / ARM: {arms_html} / TUA: {tua_html}</li>"
-        f"<li><strong>コース・血統・バランス適性</strong>: バランス: {balance_html} / コース連: {course_html} / 血統連: {ketsu_html} / 時計血: {tokei_k_html} / 坂路血: {hanro_k_html} / 坂路調: {hanro_c_html}</li>"
-        f"<li><strong>調教実測ラップ</strong>: 坂路4F: {hanro_4f} - 終い1F: {hanro_1f} {lap_type_html}</li>"
-        f"<li><strong>血統＆クッション値</strong>: 父 {h.get('種牡馬','-')} / 当日クッション値帯 ({current_bin_name}: {current_band})</li>"
-        f"</ul>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    return f
