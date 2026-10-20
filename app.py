@@ -97,9 +97,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# ==============================================================================
-# ★ 2026年全データベース抽出「現役最強コース巧者（同コース3戦以上＆複勝率80〜100%）」内蔵辞書
-# ==============================================================================
 COURSE_SPECIALIST_DICT = {
     ('カンレイスター', '中山', 'ダ', 1200): '5戦1勝・3着内5回(複100%)',
     ('ルヴァレドクール', '東京', 'ダ', 1600): '4戦3勝・3着内4回(複100%)',
@@ -279,7 +276,7 @@ def read_csv_robust(file_obj, candidate_patterns):
         if matched: src = max(matched, key=os.path.getmtime)
     if src is None: return pd.DataFrame()
 
-    encodings = ['utf-8', 'utf-8-sig', 'cp932', 'shift-jis']
+    encodings = ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']
     for enc in encodings:
         try:
             if hasattr(src, 'seek'): src.seek(0)
@@ -318,7 +315,7 @@ def extract_date_from_source(source_obj, candidate_patterns, lines):
             newest = max(matched, key=os.path.getmtime)
             return datetime.date.fromtimestamp(os.path.getmtime(newest))
 
-    return datetime.date.today()
+    return datetime.date(2026, 10, 14)
 
 def get_jra_waku(umaban, total_horses):
     if total_horses <= 8: return umaban
@@ -402,11 +399,12 @@ def evaluate_sire_cushion(sire_name, venue, dist_str, band_str):
     return ""
 
 # ==============================================================================
-# ★ データロード＆結合エンジン（芝ダート完全復元・Fup自動補正・型安全性確保）
+# ★ データロード＆結合エンジン（当日全指数統合_3.csv ＆ 分割CSV自動対応）
 # ==============================================================================
 def load_and_merge_all(f_index, f_sakaro, f_wood):
     index_patterns = [
-        'data/当日全指数統合*.csv', '当日全指数統合*.csv',
+        '当日全指数統合_3.csv', 'data/当日全指数統合_3.csv',
+        '当日全指数統合.csv', 'data/当日全指数統合.csv',
         'data/2026_全11指数統合_出馬表*.csv', '2026_全11指数統合_出馬表*.csv',
         'data/出馬表_指数*.csv', '出馬表_指数*.csv', 'data/*指数*.csv', '*指数*.csv',
         'data/出馬表*.csv', '出馬表*.csv'
@@ -422,6 +420,16 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
     
     df_raw = read_csv_robust(index_src, index_patterns)
     
+    venue_dict = {
+        '東': '東京', '中': '中山', '京': '京都', '阪': '阪神', '名': '中京',
+        '小': '小倉', '新': '新潟', '福': '福島', '函': '函館', '札': '札幌',
+    }
+
+    def parse_race(rid):
+        match = re.match(r'([^\d]+)(\d+)', str(rid))
+        if match: return venue_dict.get(match.group(1), match.group(1)), int(match.group(2))
+        return 'その他', 99
+
     if not df_raw.empty and '場所R' in df_raw.columns:
         for _, row in df_raw.iterrows():
             race_id = str(row.get('場所R', '')).strip()
@@ -524,97 +532,9 @@ def load_and_merge_all(f_index, f_sakaro, f_wood):
                     'バランス': balance_val if not np.isnan(balance_val) else 0.0,
                     'バランス順位': int(balance_rank) if not np.isnan(balance_rank) else 99,
                 })
-    elif index_src is not None:
-        for enc in ['cp932', 'shift-jis', 'utf-8-sig', 'utf-8']:
-            try:
-                if isinstance(index_src, str):
-                    with open(index_src, 'r', encoding=enc, errors='ignore') as f:
-                        lines = [l.strip() for l in f if l.strip()]
-                else:
-                    index_src.seek(0)
-                    content = index_src.read()
-                    if isinstance(content, bytes):
-                        lines = [l.strip() for l in content.decode(enc, errors='ignore').splitlines() if l.strip()]
-                    else:
-                        lines = [l.strip() for l in content.splitlines() if l.strip()]
-                if lines: break
-            except Exception: continue
-
-        reader = csv.reader(lines)
-        for parts in reader:
-            n = len(parts)
-            if n < 8 or parts[0] in ['場所', '場所R', 'レースID', 'race_id']: continue
-
-            race_id = parts[0]
-            track_raw = str(parts[1]).strip() if n > 1 else '芝'
-            dist_val = parts[2] if n > 2 else '1600'
-            umaban = parts[3] if n > 3 else '99'
-            horse_raw = parts[4] if n > 4 else ''
-            c_marker = str(parts[5]).strip() if n > 5 else ''
-            trainer = parts[6] if n > 6 else ''
-            jockey = parts[7] if n > 7 else ''
-            pop = parts[8] if n > 8 else '99'
-            mark = parts[9] if n > 9 else ''
-            
-            track = 'ダ' if 'ダ' in track_raw else '芝'
-
-            fup = pd.to_numeric(parts[12], errors='coerce') if n > 12 else 0
-            fup_rank = pd.to_numeric(parts[13], errors='coerce') if n > 13 else 99
-            
-            s_val = 0.0
-            s_rank = 99
-            f_val = pd.to_numeric(parts[14], errors='coerce') if n > 14 else 0.0
-            f_rank = pd.to_numeric(parts[15], errors='coerce') if n > 15 else 99
-            arms_val = pd.to_numeric(parts[16], errors='coerce') if n > 16 else 0.0
-            arms_rank = pd.to_numeric(parts[17], errors='coerce') if n > 17 else 99
-            tua_val = pd.to_numeric(parts[18], errors='coerce') if n > 18 else 0.0
-            tua_rank = pd.to_numeric(parts[19], errors='coerce') if n > 19 else 99
-            finish = parts[20] if n > 20 else None
-            sire = parts[21] if n > 21 else ''
-
-            raw_style_short = str(parts[22]).strip() if n > 22 else ''
-            raw_style_full = str(parts[23]).strip() if n > 23 else ''
-
-            final_style = resolve_running_style(raw_style_full, raw_style_short, s_rank, f_rank, s_val)
-            horse = clean_horse_name(horse_raw)
-            dist_int = int(re.sub(r'\D', '', str(dist_val))) if re.sub(r'\D', '', str(dist_val)).isdigit() else 1600
-
-            if horse:
-                records.append({
-                    'race_id': race_id, 'track': track, 'dist': dist_int,
-                    '馬番': int(umaban) if str(umaban).isdigit() else 99,
-                    '馬名': horse, 'C馬': c_marker, '印': str(mark).strip(),
-                    '調教師': clean_horse_name(trainer), '騎手': clean_horse_name(jockey),
-                    '種牡馬': str(sire).strip(),
-                    '人気': int(pop) if str(pop).isdigit() else 99,
-                    '着順': finish, '脚質': final_style,
-                    'Fup': fup if not np.isnan(fup) else 0,
-                    'Fup_rank': int(fup_rank) if not np.isnan(fup_rank) else 99,
-                    'S指数': s_val if not np.isnan(s_val) else 0.0,
-                    'S_rank': int(s_rank) if not np.isnan(s_rank) else 99,
-                    'F指数': f_val if not np.isnan(f_val) else 0.0,
-                    'F_rank': int(f_rank) if not np.isnan(f_rank) else 99,
-                    'arms': arms_val if not np.isnan(arms_val) else 0.0,
-                    'arms_rank': int(arms_rank) if not np.isnan(arms_rank) else 99,
-                    'tua': tua_val if not np.isnan(tua_val) else 0.0,
-                    'tua_rank': int(tua_rank) if not np.isnan(tua_rank) else 99,
-                    '坂路調': 0.0, '坂路調順位': 99, 'コース連': 0.0, 'コース連順位': 99,
-                    '血統連': 0.0, '血統連順位': 99, '時計血': 0.0, '時計血順位': 99,
-                    '坂路血': 0.0, '坂路血順位': 99, 'バランス': 0.0, 'バランス順位': 99
-                })
 
     df_main = pd.DataFrame(records)
-    if df_main.empty: return pd.DataFrame(), datetime.date.today()
-
-    venue_dict = {
-        '東': '東京', '中': '中山', '京': '京都', '阪': '阪神', '名': '中京',
-        '小': '小倉', '新': '新潟', '福': '福島', '函': '函館', '札': '札幌',
-    }
-
-    def parse_race(rid):
-        match = re.match(r'([^\d]+)(\d+)', str(rid))
-        if match: return venue_dict.get(match.group(1), match.group(1)), int(match.group(2))
-        return 'その他', 99
+    if df_main.empty: return pd.DataFrame(), datetime.date(2026, 10, 14)
 
     df_main[['競馬場名', 'R番号']] = df_main['race_id'].apply(lambda x: pd.Series(parse_race(x)))
     df_main['race_uid'] = df_main['race_id']
@@ -737,7 +657,6 @@ with st.sidebar.expander('データ更新・ダウンロード', expanded=False)
     up_sakaro = st.file_uploader('坂路調教実測 CSV', type=['csv'], key='up_sakaro')
     up_wood = st.file_uploader('ウッド調教 CSV', type=['csv'], key='up_wood')
     
-    # ★ ご要望のダウンロードボタン機能
     if os.path.exists('当日全指数統合_3.csv'):
         with open('当日全指数統合_3.csv', 'rb') as f:
             st.download_button(
@@ -775,10 +694,10 @@ df['is_course_specialist'] = df['course_spec_info'] != ''
 st.sidebar.markdown('### 芝馬場状態')
 turf_condition = st.sidebar.selectbox('芝馬場状態', ['良', '稍重', '重', '不良'], index=0, label_visibility='collapsed')
 
-venue_sort_order = ['東京', '中山', '京都', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌']
+venue_sort_order = ['京都', '中山', '東京', '阪神', '中京', '小倉', '新潟', '福島', '函館', '札幌']
 existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()]
 if 'active_venue' not in st.session_state or st.session_state['active_venue'] not in existing_venues:
-    st.session_state['active_venue'] = existing_venues[0] if existing_venues else '東京'
+    st.session_state['active_venue'] = existing_venues[0] if existing_venues else '京都'
 
 default_cushions = {
     '札幌': 7.5, '函館': 7.4, '中京': 9.6, '新潟': 9.3, '東京': 9.3,
