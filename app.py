@@ -9,8 +9,8 @@ import pandas as pd
 import streamlit as st
 
 # ==============================================================================
-# 競馬予想10 クッション値Vr - 完全統合Webアプリケーション
-# 黄金マスター仕様準拠版（全38列マスター＆クッション値データブック完全連動）
+# 競馬予想10 クッション値Vr - 完全統合Webアプリケーション（黄金マスター完全版）
+# 全42列マスターCSV読込・ノートブック6選・厩舎勝負パターン・高度ソート対応
 # ==============================================================================
 
 st.set_page_config(
@@ -25,20 +25,9 @@ st.set_page_config(
 st.markdown(
     """
 <style>
-    /* スマホ操作最適化：セレクトボックス選択時にソフトウェアキーボードが立ち上がるのを完全防止 */
     div[data-baseweb="select"] input {
         inputmode: none !important;
         pointer-events: none !important;
-    }
-    
-    .metric-container {
-        display: flex;
-        justify-content: space-around;
-        background-color: #161b22;
-        padding: 14px;
-        border-radius: 10px;
-        margin-bottom: 18px;
-        border: 1px solid #30363d;
     }
     .date-header-badge {
         display: inline-flex;
@@ -53,8 +42,6 @@ st.markdown(
         font-weight: bold;
         margin-bottom: 12px;
     }
-    
-    /* レース判定バナー */
     .race-type-banner {
         padding: 12px 18px;
         border-radius: 8px;
@@ -86,8 +73,6 @@ st.markdown(
         color: #e5e7eb;
         border: 1px solid #4b5563;
     }
-    
-    /* 推奨馬パネル ＆ 馬券パックパネル */
     .recom-panel-go {
         background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
         border: 2px solid #10b981;
@@ -121,8 +106,6 @@ st.markdown(
         font-size: 15.5px;
         letter-spacing: 1px;
     }
-    
-    /* 出走馬カルテ */
     .horse-card {
         background-color: #161e2e;
         border-left: 5px solid #238636;
@@ -169,104 +152,26 @@ st.markdown(
         color: #58a6ff;
         font-weight: bold;
     }
-    
-    /* バッジ縦潰れ防止・可変パディング */
     .badge-mark-honmei {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        display: inline-flex; align-items: center; justify-content: center;
         background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-        color: #ffffff;
-        font-size: 12.5px;
-        font-weight: 900;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #fca5a5;
-        margin-right: 6px;
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; margin-right: 6px;
     }
     .badge-mark-taikou {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        display: inline-flex; align-items: center; justify-content: center;
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        color: #ffffff;
-        font-size: 12.5px;
-        font-weight: 900;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #93c5fd;
-        margin-right: 6px;
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 6px;
     }
     .badge-mark-ana {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
+        display: inline-flex; align-items: center; justify-content: center;
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-        color: #ffffff;
-        font-size: 12.5px;
-        font-weight: 900;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #fde68a;
-        margin-right: 6px;
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px;
     }
-    .badge-mark-gtv {
-        display: inline-flex;
-        align-items: center;
-        background-color: #374151;
-        color: #fbbf24;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 6px;
-        border-radius: 4px;
-        border: 1px solid #d97706;
-    }
-    .badge-cushion-fit {
-        display: inline-flex;
-        align-items: center;
-        background-color: #064e3b;
-        color: #6ee7b7;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #10b981;
-    }
-    .badge-cushion-danger {
-        display: inline-flex;
-        align-items: center;
-        background-color: #7f1d1d;
-        color: #fca5a5;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #ef4444;
-    }
-    .badge-accel-on {
-        display: inline-flex;
-        align-items: center;
-        background-color: #1e3a8a;
-        color: #93c5fd;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #3b82f6;
-    }
-    .badge-rescued {
-        display: inline-flex;
-        align-items: center;
-        background-color: #581c87;
-        color: #f0abfc;
-        font-weight: bold;
-        font-size: 12px;
-        padding: 2px 8px;
-        border-radius: 4px;
-        border: 1px solid #c084fc;
-    }
-    
-    /* 指数カラーハイライト */
+    .badge-cushion-fit { display: inline-flex; align-items: center; background-color: #064e3b; color: #6ee7b7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
+    .badge-cushion-danger { display: inline-flex; align-items: center; background-color: #7f1d1d; color: #fca5a5; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #ef4444; }
+    .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
+    .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
+    .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     .val-rank1-gold { color: #1a1000; background-color: #fcd34d; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #f59e0b; }
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
@@ -277,13 +182,12 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+
 # ------------------------------------------------------------------------------
-# クッション値データブック（2020-2026）完全連動マトリクス
+# クッション値データブック（2020-2026）連動判定関数
 # ------------------------------------------------------------------------------
-# 5区分判定関数
 def get_cushion_category(cushion_val, venue_name):
   c_val = float(cushion_val)
-  # 札幌・函館の場内相対区分
   if venue_name == '札幌':
     if c_val <= 7.3:
       return '場内低<=7.3'
@@ -299,7 +203,6 @@ def get_cushion_category(cushion_val, venue_name):
     else:
       return '場内中7.3-7.4'
 
-  # 全国5区分
   if c_val <= 8.5:
     return '<=8.5低'
   elif c_val <= 9.4:
@@ -312,419 +215,69 @@ def get_cushion_category(cushion_val, venue_name):
     return '>=10.5 超高'
 
 
-# 最重要・狙い目＆危険マトリクス（データブック上位20抜粋）
 CUSHION_DATA_BOOK = {
-    (
-        '阪神',
-        '芝',
-        1800,
-        'キズナ',
-        '9.5-9.9 標準高',
-    ): (
+    ('阪神', '芝', 1800, 'キズナ', '9.5-9.9 標準高'): (
         '最重要',
-        'N56 勝19.6% 複41.1% 単421 複172',
+        'N56 勝19.6% 複41.1% 単421',
     ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'エピファネイア',
-        '9.5-9.9 標準高',
-    ): (
+    ('東京', '芝', 1600, 'エピファネイア', '9.5-9.9 標準高'): (
         '最重要',
-        'N98 勝13.3% 複39.8% 単277 複111',
+        'N98 勝13.3% 複39.8% 単277',
     ),
-    (
-        '東京',
-        '芝',
-        1400,
-        'モーリス',
-        '9.5-9.9 標準高',
-    ): (
+    ('東京', '芝', 1400, 'モーリス', '9.5-9.9 標準高'): (
         '最重要',
-        'N69 勝10.1% 複29.0% 単408 複160',
+        'N69 勝10.1% 複29.0% 単408',
     ),
-    (
-        '東京',
-        '芝',
-        1800,
-        'ディープインパクト',
-        '9.5-9.9 標準高',
-    ): (
+    ('東京', '芝', 1800, 'ディープインパクト', '9.5-9.9 標準高'): (
         '最重要',
-        'N57 勝15.8% 複38.6% 単228 複156',
+        'N57 勝15.8% 複38.6% 単228',
     ),
-    (
-        '東京',
-        '芝',
-        2000,
-        'キズナ',
-        '8.6-9.4 やや低',
-    ): (
+    ('東京', '芝', 2000, 'キズナ', '8.6-9.4 やや低'): (
         '最重要',
-        'N66 勝19.7% 複42.4% 単200 複121',
+        'N66 勝19.7% 複42.4% 単200',
     ),
-    (
-        '中京',
-        '芝',
-        2000,
-        'ディープインパクト',
-        '8.6-9.4 やや低',
-    ): (
+    ('中京', '芝', 2000, 'ディープインパクト', '8.6-9.4 やや低'): (
         '最重要',
-        'N61 勝18.0% 複42.6% 単178 複92',
+        'N61 勝18.0% 複42.6% 単178',
     ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'イスラボニータ',
-        '8.6-9.4 やや低',
-    ): (
+    ('小倉', '芝', 1200, 'ダイワメジャー', '9.5-9.9 標準高'): (
         '最重要',
-        'N76 勝10.5% 複30.3% 単350 複120',
+        'N66 勝13.6% 複30.3% 単173',
     ),
-    (
-        '東京',
-        '芝',
-        2000,
-        'エピファネイア',
-        '8.6-9.4 やや低',
-    ): (
+    ('函館', '芝', 1800, 'キズナ', '<=8.5低'): (
         '最重要',
-        'N85 勝15.3% 複42.4% 単149 複84',
+        'N62 勝17.7% 複38.7% 単143',
     ),
-    (
-        '函館',
-        '芝',
-        1800,
-        'キズナ',
-        '<=8.5低',
-    ): (
+    ('札幌', '芝', 2000, 'オルフェーヴル', '<=8.5低'): (
         '最重要',
-        'N62 勝17.7% 複38.7% 単143 複93',
+        'N57 勝15.8% 複35.1% 単136',
     ),
-    (
-        '小倉',
-        '芝',
-        1200,
-        'ダイワメジャー',
-        '9.5-9.9 標準高',
-    ): (
-        '最重要',
-        'N66 勝13.6% 複30.3% 単173 複111',
-    ),
-    (
-        '札幌',
-        '芝',
-        2000,
-        'オルフェーヴル',
-        '<=8.5低',
-    ): (
-        '最重要',
-        'N57 勝15.8% 複35.1% 単136 複145',
-    ),
-    (
-        '東京',
-        '芝',
-        1400,
-        'ロードカナロア',
-        '8.6-9.4 やや低',
-    ): (
-        '最重要',
-        'N154 勝15.6% 複32.5% 単123 複100',
-    ),
-    (
-        '阪神',
-        '芝',
-        1600,
-        'ルーラーシップ',
-        '8.6-9.4 やや低',
-    ): (
-        '最重要',
-        'N50 勝20.0% 複30.0% 単156 複89',
-    ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'モーリス',
-        '9.5-9.9 標準高',
-    ): (
-        '最重要',
-        'N72 勝11.1% 複37.5% 単100 複122',
-    ),
-    (
-        '阪神',
-        '芝',
-        2000,
-        'キズナ',
-        '8.6-9.4 やや低',
-    ): (
-        '最重要',
-        'N85 勝11.8% 複41.2% 単152 複107',
-    ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'スクリーンヒーロー',
-        '8.6-9.4 やや低',
-    ): (
-        '最重要',
-        'N71 勝9.9% 複35.2% 単72 複179',
-    ),
-    (
-        '小倉',
-        '芝',
-        1200,
-        'ビッグアーサー',
-        '8.6-9.4 やや低',
-    ): (
-        '最重要',
-        'N123 勝12.2% 複30.9% 単131 複101',
-    ),
-    (
-        '中京',
-        '芝',
-        1600,
-        'ロードカナロア',
-        '10.0-10.4高',
-    ): (
-        '最重要',
-        'N61 勝14.8% 複32.8% 単133 複79',
-    ),
-    (
-        '福島',
-        '芝',
-        1200,
-        'ビッグアーサー',
-        '8.6-9.4 やや低',
-    ): (
-        '最重要',
-        'N121 勝13.2% 複33.1% 単87 複102',
-    ),
-    (
-        '札幌',
-        '芝',
-        1200,
-        'ロードカナロア',
-        '<=8.5低',
-    ): (
-        '最重要',
-        'N100 勝15.0% 複33.0% 単121 複71',
-    ),
-    # 危険側
-    (
-        '中山',
-        '芝',
-        2000,
-        'ダノンバラード',
-        '9.5-9.9 標準高',
-    ): (
+    ('中山', '芝', 2000, 'ダノンバラード', '9.5-9.9 標準高'): (
         '危険',
         'N30 複0.0%',
     ),
-    (
-        '東京',
-        '芝',
-        2000,
-        'ルーラーシップ',
-        '9.5-9.9 標準高',
-    ): (
+    ('東京', '芝', 2000, 'ルーラーシップ', '9.5-9.9 標準高'): (
         '危険',
         'N33 複9.1%',
     ),
-    (
-        '小倉',
-        '芝',
-        1200,
-        'ジャスタウェイ',
-        '8.6-9.4 やや低',
-    ): (
+    ('小倉', '芝', 1200, 'ジャスタウェイ', '8.6-9.4 やや低'): (
         '危険',
         'N35 複2.9%',
     ),
-    (
-        '東京',
-        '芝',
-        1400,
-        'シルバーステート',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N43 複4.7%',
-    ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'ゴールドシップ',
-        '8.6-9.4 やや低',
-    ): (
+    ('東京', '芝', 1600, 'ゴールドシップ', '8.6-9.4 やや低'): (
         '危険',
         'N44 複4.5%',
     ),
-    (
-        '小倉',
-        '芝',
-        1200,
-        'ヴィクトワールピサ',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N42 複4.8%',
-    ),
-    (
-        '東京',
-        '芝',
-        1800,
-        'ルーラーシップ',
-        '9.5-9.9 標準高',
-    ): (
-        '危険',
-        'N38 複10.5%',
-    ),
-    (
-        '阪神',
-        '芝',
-        2000,
-        'ゴールドシップ',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N40 複10.0%',
-    ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'エイシンフラッシュ',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N41 複7.3%',
-    ),
-    (
-        '東京',
-        '芝',
-        2000,
-        'オルフェーヴル',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N38 複13.2%',
-    ),
-    (
-        '福島',
-        '芝',
-        2000,
-        'ルーラーシップ',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N43 複4.7%',
-    ),
-    (
-        '新潟',
-        '芝',
-        1400,
-        'リオンディーズ',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N30 複6.7%',
-    ),
-    (
-        '東京',
-        '芝',
-        2400,
-        'ゴールドシップ',
-        '9.5-9.9 標準高',
-    ): (
-        '危険',
-        'N36 複11.1%',
-    ),
-    (
-        '小倉',
-        '芝',
-        1800,
-        'ルーラーシップ',
-        '9.5-9.9 標準高',
-    ): (
-        '危険',
-        'N30 複10.0%',
-    ),
-    (
-        '阪神',
-        '芝',
-        1800,
-        'ハービンジャー',
-        '9.5-9.9 標準高',
-    ): (
-        '危険',
-        'N30 複10.0%',
-    ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'サトノクラウン',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N31 複9.7%',
-    ),
-    (
-        '福島',
-        '芝',
-        1200,
-        'マツリダゴッホ',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N34 複5.9%',
-    ),
-    (
-        '東京',
-        '芝',
-        1600,
-        'シルバーステート',
-        '9.5-9.9 標準高',
-    ): (
-        '危険',
-        'N45 複8.9%',
-    ),
-    (
-        '福島',
-        '芝',
-        1200,
-        'カレンブラックヒル',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N31 複9.7%',
-    ),
-    (
-        '中京',
-        '芝',
-        2000,
-        'オルフェーヴル',
-        '8.6-9.4 やや低',
-    ): (
-        '危険',
-        'N33 複15.2%',
-    ),
 }
 
-# 現役最強コース巧者辞書（同コース3戦以上＆複勝率80〜100%）
 COURSE_SPECIALIST_DICT = {
     ('カンレイスター', '中山', 'ダ', 1200): '5戦1勝・3着内5回(複100%)',
     ('ルヴァレドクール', '東京', 'ダ', 1600): '4戦3勝・3着内4回(複100%)',
 }
 
+
 # ------------------------------------------------------------------------------
-# データ読込＆クリーニング関数
+# データ読込関数（全42列対応）
 # ------------------------------------------------------------------------------
 def clean_str(val):
   if pd.isnull(val):
@@ -740,7 +293,6 @@ def clean_str(val):
 
 
 def read_csv_robust():
-  # 最優先で最新統合マスターを検索
   candidates = [
       '当日全指数統合.csv',
       '当日全指数統合10.18.csv',
@@ -756,7 +308,7 @@ def read_csv_robust():
     for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
       try:
         df = pd.read_csv(newest, encoding=enc)
-        if not df.empty and df.shape[1] >= 30:
+        if not df.empty and df.shape[1] >= 38:
           return df, newest
       except Exception:
         continue
@@ -764,98 +316,107 @@ def read_csv_robust():
 
 
 # ------------------------------------------------------------------------------
-# 坂路調教ラップ判定（厳格な6大区分定義）
-# ------------------------------------------------------------------------------
-def get_sakaro_profile(lap4, lap3, lap2, lap1, total4f):
-  """坂路終い2F（Lap2, Lap1）から厳格な6大区分（A1〜A3, B1〜B3）を判定"""
-  try:
-    l2 = float(lap2)
-    l1 = float(lap1)
-    tot = float(total4f)
-    if tot > 56.0 or l1 > 13.0:
-      return '判定対象外（軽負荷）'
-
-    is_accel = l1 < l2
-    is_decel = l1 >= l2
-
-    # A3 / B3
-    if is_accel and l1 <= 11.9:
-      return 'A3（終い11秒台加速）'
-    if is_decel and l2 <= 11.9:
-      if tot <= 51.5:
-        return 'B3（猛時計例外・勝負仕上）'
-      return 'B3（2F目11秒台減速）'
-
-    # A2 / B2
-    if is_accel and (12.0 <= l2 <= 12.9) and (12.0 <= l1 <= 12.9):
-      return 'A2（2F連続12秒台加速）'
-    if is_decel and (12.0 <= l2 <= 12.9) and (12.0 <= l1 <= 12.9):
-      if tot <= 51.5:
-        return 'B2（猛時計例外・勝負仕上）'
-      return 'B2（2F連続12秒台減速）'
-
-    # A1 / B1
-    if is_accel and l2 >= 13.0 and (12.0 <= l1 <= 12.9):
-      return 'A1（終いのみ12秒台加速）'
-    if is_decel and (12.0 <= l2 <= 12.9) and l1 >= 13.0:
-      return 'B1（2Fのみ12秒台減速）'
-
-    return '一般ラップ'
-  except Exception:
-    return '未判定'
-
-
-# ------------------------------------------------------------------------------
-# 23〜38列目加点 ＆ コア指数連動救済ロジック
+# 動的スコアリング ＆ フィルタリング関数（極秘ノートブック6選 ＆ 厩舎黄金パターン）
 # ------------------------------------------------------------------------------
 def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category):
   score = 0.0
 
-  f_val = r.get('F', 0.0)
-  f_rk = r.get('F順位', 99)
-  fup = r.get('Fup2', 0)
-  arm_val = r.get('ARM', 0.0)
-  arm_rk = r.get('ARM順位', 99)
-  tua_val = r.get('TUA', 0.0)
-  tua_rk = r.get('TUA順位', 99)
-  s_rk = r.get('S順位', 99)
-  pop = r.get('人気順位', 99)
-  trainer = r.get('調教師', '')
-  sire = r.get('種牡馬', '')
-  h_name = r.get('馬名', '')
+  f_val = float(pd.to_numeric(r.get('F', 0.0), errors='coerce') or 0.0)
+  f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
+  fup = int(pd.to_numeric(r.get('Fup2', 0), errors='coerce') or 0)
+  arm_val = float(pd.to_numeric(r.get('ARM', 0.0), errors='coerce') or 0.0)
+  arm_rk = int(pd.to_numeric(r.get('ARM順位', 99), errors='coerce') or 99)
+  tua_val = float(pd.to_numeric(r.get('TUA', 0.0), errors='coerce') or 0.0)
+  tua_rk = int(pd.to_numeric(r.get('TUA順位', 99), errors='coerce') or 99)
+  s_val = float(pd.to_numeric(r.get('S', 0.0), errors='coerce') or 0.0)
+  s_rk = int(pd.to_numeric(r.get('S順位', 99), errors='coerce') or 99)
+  pop = int(pd.to_numeric(r.get('人気順位', 99), errors='coerce') or 99)
 
-  hc_rk = r.get('坂路調順位', 99)
-  hk_rk = r.get('坂路血順位', 99)
-  tk_rk = r.get('時計血順位', 99)
-  c_rk = r.get('コース連順位', 99)
-  k_rk = r.get('血統連順位', 99)
-  b_rk = r.get('バランス順位', 99)
+  trainer = clean_str(r.get('調教師', ''))
+  sire = clean_str(r.get('種牡馬', ''))
+  h_name = clean_str(r.get('馬名', ''))
+  track_change = clean_str(r.get('芝ダート変わり', ''))
+  interval = str(r.get('間隔', ''))
+  weight = float(
+      pd.to_numeric(
+          str(r.get('前場体重', '480')).replace('kg', ''), errors='coerce'
+      )
+      or 480.0
+  )
 
-  # コース巧者判定
+  hc_rk = int(pd.to_numeric(r.get('坂路調順位', 99), errors='coerce') or 99)
+  hk_rk = int(pd.to_numeric(r.get('坂路血順位', 99), errors='coerce') or 99)
+  tk_rk = int(pd.to_numeric(r.get('時計血順位', 99), errors='coerce') or 99)
+  c_rk = int(pd.to_numeric(r.get('コース連順位', 99), errors='coerce') or 99)
+  k_rk = int(pd.to_numeric(r.get('血統連順位', 99), errors='coerce') or 99)
+  b_rk = int(pd.to_numeric(r.get('バランス順位', 99), errors='coerce') or 99)
+
   is_spec = (h_name, venue_name, track_type, dist_val) in COURSE_SPECIALIST_DICT
 
-  # ① コア指数の基本加点
+  nb_hits = []
+  stable_hits = []
+
+  # ① 極秘ノートブック6選判定
+  if track_type == 'ダ' and s_rk == 1 and weight >= 480:
+    score += 40.0
+    nb_hits.append('🐎 ダートで食う(S1位・大型)')
+
+  is_long_rest = interval.isdigit() and int(interval) >= 12
+  if is_long_rest:
+    score += 30.0
+    nb_hits.append('🔥 Nなごり(休み明け特注)')
+
+  if arm_rk == 1 and fup >= 6:
+    score += 45.0
+    nb_hits.append('✨ ARMS×FUP(黄金クロス)')
+
+  if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8:
+    score += 35.0
+    nb_hits.append('💎 TUAダート特注')
+
+  if arm_rk <= 3:
+    score += 20.0
+    nb_hits.append('🌲 Ｃ馬・調教特注')
+
+  if track_change == '芝→ダ' and tua_rk <= 3:
+    score += 25.0
+    nb_hits.append('🔄 芝→ダ激走特注')
+
+  # ② 主要厩舎の黄金勝負パターン判定
+  if '藤原英昭' in trainer or '藤原' in trainer:
+    score += 25.0
+    stable_hits.append('厩舎: 藤原英昭（CW馬なり・仕上がり鉄板）')
+  if '杉山晴紀' in trainer or '杉山' in trainer:
+    score += 25.0
+    stable_hits.append('厩舎: 杉山晴紀（坂路終い11秒台加速）')
+  if '矢作芳人' in trainer or '矢作' in trainer:
+    score += 25.0
+    stable_hits.append('厩舎: 矢作芳人（坂路A2加速・連闘/中1週）')
+  if '中内田充正' in trainer or '中内田' in trainer:
+    if f_rk == 1:
+      score += 30.0
+    else:
+      score += 20.0
+    stable_hits.append('厩舎: 中内田充正（CW単走馬なり・勝率抜群）')
+  if '木村哲也' in trainer or '木村' in trainer:
+    score += 25.0
+    stable_hits.append('厩舎: 木村哲也（南W併せ強め・外厩帰り）')
+  if '堀宣行' in trainer or '堀' in trainer:
+    score += 20.0
+    stable_hits.append('厩舎: 堀宣行（南W馬なり・上積み勝負）')
+  if '友道康夫' in trainer or '友道' in trainer:
+    score += 20.0
+    stable_hits.append('厩舎: 友道康夫（芝併せ長距離信頼）')
+
+  # コア指数・調教基本加点
   if f_rk == 1:
     score += 50.0
   elif f_rk <= 3:
-    score += 30.0
-
-  if s_rk <= 3:
     score += 30.0
   if fup == 7:
     score += 45.0
   elif fup >= 5:
     score += 30.0
-  elif fup == 4:
-    score += 15.0
-
-  # ② 23〜38列目の加点ロジック
-  if hc_rk <= 3:
-    score += 15.0
-  if hk_rk <= 3 or tk_rk <= 3:
-    score += 15.0
-  if k_rk <= 3:
-    score += 15.0
   if c_rk <= 3:
     score += 25.0
   if b_rk <= 3:
@@ -863,41 +424,6 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
   if is_spec:
     score += 35.0
 
-  # 回収率特注パターン加点
-  if arm_rk == 1 and hc_rk == 1 and (3 <= pop <= 7):
-    score += 25.0
-  if tua_rk == 1 and hc_rk <= 3 and (4 <= pop <= 8) and track_type == '芝':
-    score += 30.0
-
-  # 厩舎黄金パターン特大加点（藤原・杉山・矢作・中内田・木村など）
-  is_stable_gold = False
-  if '藤原' in trainer:
-    score += 20.0
-    is_stable_gold = True
-  if '杉山' in trainer:
-    score += 20.0
-    is_stable_gold = True
-  if '矢作' in trainer:
-    score += 20.0
-    is_stable_gold = True
-  if '中内田' in trainer and f_rk == 1:
-    score += 25.0
-    is_stable_gold = True
-  if '木村' in trainer and fup >= 5:
-    score += 20.0
-    is_stable_gold = True
-
-  # クッション値バイアス加点
-  c_key = (venue_name, track_type, dist_val, sire, c_category)
-  if c_key in CUSHION_DATA_BOOK:
-    judg, _ = CUSHION_DATA_BOOK[c_key]
-    if judg in ['最重要', '狙い目']:
-      score += 35.0
-    elif judg == '回収妙味':
-      score += 20.0
-
-  # ③ 主要指数によるフェイルセーフ救済規定
-  # 【SSS級・絶対神域（F65以上・ARM120・TUA200）】新基準
   is_sss = (f_val >= 65.0) and (arm_val >= 120.0) and (tua_val >= 200.0)
   is_quad_crown = (
       (f_rk <= 3) and (arm_rk <= 3) and (tua_rk <= 3) and (fup >= 5)
@@ -912,11 +438,11 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
       or is_solid_axis
       or is_kakugen
       or is_spec
-      or is_stable_gold
+      or len(nb_hits) > 0
+      or len(stable_hits) > 0
       or is_f65_top
   )
 
-  # ④ 減点処理（救済馬は減点を全免除）
   if not is_rescued:
     if c_rk >= 6:
       score -= 30.0
@@ -924,12 +450,8 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
       score -= 15.0
     if pop <= 3 and fup <= 1:
       score -= 35.0
-    if c_key in CUSHION_DATA_BOOK:
-      judg, _ = CUSHION_DATA_BOOK[c_key]
-      if judg == '危険':
-        score -= 50.0
 
-  return score, is_rescued, is_sss
+  return score, is_rescued, is_sss, nb_hits, stable_hits
 
 
 # ------------------------------------------------------------------------------
@@ -940,13 +462,13 @@ def main():
   df_raw, loaded_filename = read_csv_robust()
 
   uploaded_file = st.sidebar.file_uploader(
-      '出馬表・全38列マスターCSVを指定', type=['csv']
+      '全42列マスターCSVを指定', type=['csv']
   )
   if uploaded_file is not None:
     for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
       try:
         df_raw = pd.read_csv(uploaded_file, encoding=enc)
-        if not df_raw.empty:
+        if not df_raw.empty and df_raw.shape[1] >= 38:
           loaded_filename = uploaded_file.name
           break
       except Exception:
@@ -955,14 +477,26 @@ def main():
   if df_raw.empty:
     st.markdown(
         "<div class='race-type-banner race-type-normal'>⚠️"
-        ' CSVデータが読み込まれていません。サイドバーから「当日全指数統合.csv」を指定するか、作業フォルダに配置してください。</div>',
+        ' 全42列マスターCSVが読み込まれていません。サイドバーから「当日全指数統合.csv」を指定してください。</div>',
         unsafe_allow_html=True,
     )
     st.stop()
 
-  st.sidebar.success(f'✅ 読込成功: {loaded_filename}')
+  st.sidebar.success(f'✅ 読込成功: {loaded_filename} (全{len(df_raw)}頭)')
 
-  # クッション値＆芝馬場設定サイドバー
+  # サイドバー：極秘ノートブック6選 狙い目チェックBOXフィルター
+  st.sidebar.markdown('---')
+  st.sidebar.markdown('### 🎯 極秘ノートブック6選 狙い目フィルター')
+  filter_dart_eat = st.sidebar.checkbox(
+      '🐎 ダートで食う（S1位・大型馬・外枠）'
+  )
+  filter_n_agari = st.sidebar.checkbox('🔥 Nなごり（休み明けA3・馬体重増）')
+  filter_arms_fup = st.sidebar.checkbox('✨ ARMS×FUP（ARM1位・Fup6-7点）')
+  filter_tua_dirt = st.sidebar.checkbox('💎 TUAダート特注（TUA190超・S上位）')
+  filter_c_uma = st.sidebar.checkbox('🌲 Ｃ馬・調教特注（ARM上位）')
+  filter_turf_dirt = st.sidebar.checkbox('🔄 芝→ダート変わり特注')
+
+  # 馬場設定
   st.sidebar.markdown('---')
   st.sidebar.markdown('### 🌿 馬場・クッション値設定')
   track_cond = st.sidebar.selectbox('芝馬場状態', ['良', '稍重', '重', '不良'], index=0)
@@ -975,7 +509,6 @@ def main():
       format='%.1f',
   )
 
-  # データ標準化
   venue_dict = {
       '東': '東京',
       '中': '中山',
@@ -1028,8 +561,11 @@ def main():
     b_rk = int(pd.to_numeric(row.get('バランス順位', 99), errors='coerce') or 99)
 
     sire = clean_str(row.get('種牡馬', ''))
+    track_change = clean_str(row.get('芝ダート変わり', ''))
     run_style = clean_str(row.get('前走脚質', ''))
     pass_style = clean_str(row.get('前走決手', ''))
+    interval = clean_str(row.get('間隔', ''))
+    weight_val = clean_str(row.get('前場体重', '480'))
     race_date = clean_str(row.get('日付', '10.18'))
 
     match_v = re.match(r'([^\d]+)(\d+)', race_id)
@@ -1070,8 +606,11 @@ def main():
           'コース連順位': c_rk,
           '血統連順位': k_rk,
           'バランス順位': b_rk,
+          '芝ダート変わり': track_change,
           '前走脚質': run_style,
           '前走決手': pass_style,
+          '間隔': interval,
+          '前場体重': weight_val,
           '日付': race_date,
       })
 
@@ -1080,14 +619,12 @@ def main():
     st.error('解析可能な有効データが存在しません。')
     st.stop()
 
-  # メイン画面ヘッダー
   st.markdown(
       f"<div class='date-header-badge'>📅 開催日: 2026年{df['日付'].iloc[0]} |"
       ' JRAデータ解析エンジン「競馬予想10 クッション値Vr」</div>',
       unsafe_allow_html=True,
   )
 
-  # 開催場ラジオボタン
   venue_sort_order = [
       '東京',
       '中山',
@@ -1107,41 +644,95 @@ def main():
       '開催場選択', options=existing_venues, horizontal=True
   )
 
-  # レース選択
+  # ------------------------------------------------------------------------------
+  # レース選択ソート：1Rから順番に表示
+  # ------------------------------------------------------------------------------
   v_df = df[df['競馬場名'] == chosen_venue]
+
+
+  def extract_race_number(uid):
+    m = re.search(r'\d+', str(uid))
+    return int(m.group()) if m else 99
+
+
   races_in_v = v_df[['race_uid', 'race_id', 'track', 'dist']].drop_duplicates(
       'race_uid'
   )
+  races_sorted = sorted(
+      races_in_v.to_dict('records'), key=lambda x: extract_race_number(x['race_uid'])
+  )
+
   race_options = {
       r['race_uid']: f"{r['race_uid']} ({r['track']}{r['dist']}m)"
-      for _, r in races_in_v.iterrows()
+      for r in races_sorted
   }
   selected_race_uid = st.selectbox(
-      'レース選択',
+      'レース選択（1R〜順次）',
       options=list(race_options.keys()),
       format_func=lambda x: race_options[x],
   )
 
   race_df = df[df['race_uid'] == selected_race_uid].copy()
-
-  # クッション区分判定
   c_cat = get_cushion_category(cushion_val, chosen_venue)
 
-  # 動的スコアリング計算
-  scores, rescued_flags, sss_flags = [], [], []
+  scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list = (
+      [],
+      [],
+      [],
+      [],
+      [],
+  )
   for _, r in race_df.iterrows():
-    sc, res, sss = calc_upgraded_dynamic_score(
+    sc, res, sss, nb, stbl = calc_upgraded_dynamic_score(
         r, chosen_venue, r['track'], r['dist'], c_cat
     )
     scores.append(sc)
     rescued_flags.append(res)
     sss_flags.append(sss)
+    nb_hits_list.append(nb)
+    stable_hits_list.append(stbl)
 
   race_df['dynamic_score'] = scores
   race_df['is_rescued'] = rescued_flags
   race_df['is_sss'] = sss_flags
+  race_df['nb_hits'] = nb_hits_list
+  race_df['stable_hits'] = stable_hits_list
 
-  # レース判定バナー
+  if filter_dart_eat:
+    race_df = race_df[
+        race_df['nb_hits'].apply(
+            lambda x: any('ダートで食う' in item for item in x)
+        )
+    ]
+  if filter_n_agari:
+    race_df = race_df[
+        race_df['nb_hits'].apply(lambda x: any('Nなごり' in item for item in x))
+    ]
+  if filter_arms_fup:
+    race_df = race_df[
+        race_df['nb_hits'].apply(lambda x: any('ARMS×FUP' in item for item in x))
+    ]
+  if filter_tua_dirt:
+    race_df = race_df[
+        race_df['nb_hits'].apply(
+            lambda x: any('TUAダート特注' in item for item in x)
+        )
+    ]
+  if filter_c_uma:
+    race_df = race_df[
+        race_df['nb_hits'].apply(lambda x: any('Ｃ馬' in item for item in x))
+    ]
+  if filter_turf_dirt:
+    race_df = race_df[
+        race_df['nb_hits'].apply(
+            lambda x: any('芝→ダ' in item for item in x)
+        )
+    ]
+
+  if race_df.empty:
+    st.warning('選択されたノートブック条件に一致する出走馬がいません。')
+    st.stop()
+
   has_bonus = (
       (race_df['F順位'] <= 3) & (race_df['ARM順位'] <= 3) & (race_df['TUA順位'] <= 3)
   ).sum() >= 3
@@ -1166,7 +757,7 @@ def main():
   )
 
   # ============================================================================
-  # 【標準ハイブリッド馬券パック】YouTube解説・F指数65以上完全連動仕様
+  # 【標準ハイブリッド馬券パック】YouTube解説・F65連動仕様
   # ============================================================================
   f65_horses = race_df[race_df['F'] >= 65.0].sort_values('F', ascending=False)
   has_f65 = len(f65_horses) > 0
@@ -1180,14 +771,12 @@ def main():
     )
     honmei = f65_horses.iloc[0]
     honmei_num = int(honmei['馬番'])
-
     opponents = race_df[race_df['馬番'] != honmei_num].copy()
     taikou = opponents.sort_values(
         ['F順位', 'ARM順位', 'TUA順位', 'dynamic_score'],
         ascending=[True, True, True, False],
     ).iloc[0]
     taikou_num = int(taikou['馬番'])
-
     second_row = list(
         set(
             opponents.sort_values('F順位').head(2)['馬番'].tolist()
@@ -1202,7 +791,6 @@ def main():
             + opponents.sort_values('バランス順位').head(2)['馬番'].tolist()
         )
     )
-
     ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(
         ['ARM順位', 'TUA順位', 'dynamic_score'],
         ascending=[True, True, False],
@@ -1213,21 +801,18 @@ def main():
         else opponents.iloc[-1]
     )
     ana_num = int(ana['馬番'])
-
   else:
     mode_name = '🔥 モードB：単勝期待値軸 × F指数相手補完モード'
     mode_desc = (
-        '単勝期待値馬（ARMS/坂路A3/Fup7）を軸にし、相手2列目に好走率約70%のF指数1〜3位を完全固定する構成'
+        '単勝期待値馬を軸にし、相手2列目に好走率約70%のF指数1〜3位を完全固定する構成'
     )
     honmei = race_df.sort_values(
         ['dynamic_score', 'Fup2', 'ARM順位'], ascending=[False, False, True]
     ).iloc[0]
     honmei_num = int(honmei['馬番'])
-
     second_row = [n for n in f_top3_nums if n != honmei_num]
     taikou_num = second_row[0] if second_row else f_top3_nums[0]
     taikou = race_df[race_df['馬番'] == taikou_num].iloc[0]
-
     opponents = race_df[race_df['馬番'] != honmei_num].copy()
     third_row = list(
         set(
@@ -1236,7 +821,6 @@ def main():
             + opponents.sort_values('コース連順位').head(2)['馬番'].tolist()
         )
     )
-
     ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(
         ['ARM順位', 'TUA順位', 'dynamic_score'],
         ascending=[True, True, False],
@@ -1248,7 +832,6 @@ def main():
     )
     ana_num = int(ana['馬番'])
 
-  # 推奨馬ピックアップパネル表示
   st.markdown(
       f"""
     <div class='recom-panel-go'>
@@ -1262,7 +845,6 @@ def main():
       unsafe_allow_html=True,
   )
 
-  # 標準ハイブリッド馬券パック パネル
   sec_nums_str = ', '.join(map(str, sorted(second_row)))
   third_nums_str = ', '.join(map(str, sorted(third_row)))
 
@@ -1271,10 +853,10 @@ def main():
     <div class='recom-block'>
         <h4 style='color: #60a5fa; margin-top: 0;'>🎯 標準ハイブリッド馬券パック フォーメーション</h4>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
-            <li><strong>【第1の網：主軸回収】</strong> 単勝: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ／ 馬単: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num} → {taikou_num}</span>（相手筆頭裏抑え: {taikou_num} → {honmei_num}）</li>
+            <li><strong>【第1の網：主軸回収】</strong> 単勝: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ／ 馬単: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num} → {taikou_num}</span></li>
             <li><strong>【第2の網：連対確保】</strong> 馬連: <span style='color: #38bdf8; font-weight: bold;'>{honmei_num} - {sec_nums_str}</span> ／ ワイド: <span style='color: #f472b6; font-weight: bold;'>{honmei_num} - {ana_num}</span></li>
             <li><strong>【第3の網：中配当網】</strong> 3連複F: <span style='color: #34d399; font-weight: bold;'>{honmei_num}</span> ＝ <span style='color: #38bdf8;'>{sec_nums_str}</span> ＝ <span style='color: #a78bfa;'>{third_nums_str}</span></li>
-            <li><strong>【第4の網：高配当万馬券】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ⇄ <span style='color: #38bdf8;'>{taikou_num}</span> → <span style='color: #a78bfa;'>{third_nums_str}</span>（推奨裏表）</li>
+            <li><strong>【第4の網：高配当万馬券】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ⇄ <span style='color: #38bdf8;'>{taikou_num}</span> → <span style='color: #a78bfa;'>{third_nums_str}</span></li>
         </ul>
     </div>
     """,
@@ -1282,17 +864,53 @@ def main():
   )
 
   # ============================================================================
-  # 出走馬詳細カルテ一覧
+  # 出走馬情報欄の直上：指数ソート ＆ 調教総合指数順ソート機能
   # ============================================================================
   st.markdown('### 🏇 出走馬詳細カルテ')
 
-  sorted_df = race_df.sort_values('dynamic_score', ascending=False)
+  sort_col1, sort_col2 = st.columns(2)
+  with sort_col1:
+    sort_criterion = st.selectbox(
+        '📊 並び替え基準（指数・総合）',
+        [
+            '総合動的評価スコア順',
+            'F指数 降順',
+            'ARM指数 降順',
+            'TUA指数 降順',
+            'S指数 降順',
+            'Fup2点数 降順',
+            '馬番順',
+        ],
+        index=0,
+    )
+
+  if sort_criterion == '総合動的評価スコア順':
+    sorted_df = race_df.sort_values('dynamic_score', ascending=False)
+  elif sort_criterion == 'F指数 降順':
+    sorted_df = race_df.sort_values(
+        ['F', 'F順位'], ascending=[False, True]
+    )
+  elif sort_criterion == 'ARM指数 降順':
+    sorted_df = race_df.sort_values(
+        ['ARM', 'ARM順位'], ascending=[False, True]
+    )
+  elif sort_criterion == 'TUA指数 降順':
+    sorted_df = race_df.sort_values(
+        ['TUA', 'TUA順位'], ascending=[False, True]
+    )
+  elif sort_criterion == 'S指数 降順':
+    sorted_df = race_df.sort_values(['S', 'S順位'], ascending=[False, True])
+  elif sort_criterion == 'Fup2点数 降順':
+    sorted_df = race_df.sort_values(
+        ['Fup2', 'Fup2順位'], ascending=[False, True]
+    )
+  else:
+    sorted_df = race_df.sort_values('馬番', ascending=True)
 
   for _, h in sorted_df.iterrows():
     u_no = int(h['馬番'])
     badges = []
 
-    # マークバッジ
     if u_no == honmei_num:
       badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
     elif u_no == taikou_num:
@@ -1300,23 +918,21 @@ def main():
     elif u_no == ana_num:
       badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
 
-    # フェイルセーフ救済バッジ
     if h['is_rescued']:
       badges.append(
           "<span class='badge-rescued'>🛡️ コア指数救済（減点免除）</span>"
       )
 
-    # クッション値バイアス照合
-    c_key = (
-        chosen_venue,
-        h['track'],
-        h['dist'],
-        h['種牡馬'],
-        c_cat,
-    )
+    for nb in h['nb_hits']:
+      badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
+
+    for stbl in h['stable_hits']:
+      badges.append(f"<span class='badge-stable-hit'>{stbl}</span>")
+
+    c_key = (chosen_venue, h['track'], h['dist'], h['種牡馬'], c_cat)
     if c_key in CUSHION_DATA_BOOK:
       judg, stat_txt = CUSHION_DATA_BOOK[c_key]
-      if judg in ['最重要', '狙い目']:
+      if judg == '最重要':
         badges.append(
             f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>"
         )
@@ -1325,7 +941,6 @@ def main():
             f"<span class='badge-cushion-danger'>⚠️ クッション危険: {h['種牡馬']} ({stat_txt})</span>"
         )
 
-    # 指数ハイライト用スタイル
     f_style = 'val-f-top' if h['F順位'] <= 3 else ''
     s_style = 'val-s-top' if h['S順位'] <= 3 else ''
     arm_style = 'val-arms-top' if h['ARM順位'] <= 3 else ''
@@ -1352,7 +967,7 @@ def main():
                     坂路調: {h['坂路調順位']}位 / 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位 / 
                     コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位
                 </li>
-                <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）</li>
+                <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ 芝ダ変: {h['芝ダート変わり']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
             </ul>
         </div>
