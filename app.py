@@ -10,7 +10,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr - 完全統合Webアプリケーション（黄金マスター完全版）
-# 全42列マスターCSV読込・ノートブック6選・厩舎勝負パターン・高度ソート対応
+# 全42列マスターCSV読込・複合指数フィルター・厩舎勝負パターン・高度ソート対応
 # ==============================================================================
 
 st.set_page_config(
@@ -183,9 +183,6 @@ st.markdown(
 )
 
 
-# ------------------------------------------------------------------------------
-# クッション値データブック（2020-2026）連動判定関数
-# ------------------------------------------------------------------------------
 def get_cushion_category(cushion_val, venue_name):
   c_val = float(cushion_val)
   if venue_name == '札幌':
@@ -276,9 +273,6 @@ COURSE_SPECIALIST_DICT = {
 }
 
 
-# ------------------------------------------------------------------------------
-# データ読込関数（全42列対応）
-# ------------------------------------------------------------------------------
 def clean_str(val):
   if pd.isnull(val):
     return ''
@@ -315,9 +309,6 @@ def read_csv_robust():
   return pd.DataFrame(), ''
 
 
-# ------------------------------------------------------------------------------
-# 動的スコアリング ＆ フィルタリング関数（極秘ノートブック6選 ＆ 厩舎黄金パターン）
-# ------------------------------------------------------------------------------
 def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category):
   score = 0.0
 
@@ -356,7 +347,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
   nb_hits = []
   stable_hits = []
 
-  # ① 極秘ノートブック6選判定
+  # ノートブック6選
   if track_type == 'ダ' and s_rk == 1 and weight >= 480:
     score += 40.0
     nb_hits.append('🐎 ダートで食う(S1位・大型)')
@@ -382,33 +373,30 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
     score += 25.0
     nb_hits.append('🔄 芝→ダ激走特注')
 
-  # ② 主要厩舎の黄金勝負パターン判定
-  if '藤原英昭' in trainer or '藤原' in trainer:
+  # 厩舎勝負パターン
+  if '藤原' in trainer:
     score += 25.0
-    stable_hits.append('厩舎: 藤原英昭（CW馬なり・仕上がり鉄板）')
-  if '杉山晴紀' in trainer or '杉山' in trainer:
+    stable_hits.append('厩舎: 藤原英昭（CW仕上がり鉄板）')
+  if '杉山' in trainer:
     score += 25.0
     stable_hits.append('厩舎: 杉山晴紀（坂路終い11秒台加速）')
-  if '矢作芳人' in trainer or '矢作' in trainer:
+  if '矢作' in trainer:
     score += 25.0
     stable_hits.append('厩舎: 矢作芳人（坂路A2加速・連闘/中1週）')
-  if '中内田充正' in trainer or '中内田' in trainer:
-    if f_rk == 1:
-      score += 30.0
-    else:
-      score += 20.0
+  if '中内田' in trainer:
+    score += 30.0 if f_rk == 1 else 20.0
     stable_hits.append('厩舎: 中内田充正（CW単走馬なり・勝率抜群）')
-  if '木村哲也' in trainer or '木村' in trainer:
+  if '木村' in trainer:
     score += 25.0
     stable_hits.append('厩舎: 木村哲也（南W併せ強め・外厩帰り）')
-  if '堀宣行' in trainer or '堀' in trainer:
+  if '堀宣行' in trainer:
     score += 20.0
     stable_hits.append('厩舎: 堀宣行（南W馬なり・上積み勝負）')
-  if '友道康夫' in trainer or '友道' in trainer:
+  if '友道' in trainer:
     score += 20.0
     stable_hits.append('厩舎: 友道康夫（芝併せ長距離信頼）')
 
-  # コア指数・調教基本加点
+  # 基本指数加点
   if f_rk == 1:
     score += 50.0
   elif f_rk <= 3:
@@ -454,9 +442,6 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
   return score, is_rescued, is_sss, nb_hits, stable_hits
 
 
-# ------------------------------------------------------------------------------
-# メインアプリケーション制御
-# ------------------------------------------------------------------------------
 def main():
   st.sidebar.markdown('## 📂 CSVデータ読込管理')
   df_raw, loaded_filename = read_csv_robust()
@@ -484,31 +469,7 @@ def main():
 
   st.sidebar.success(f'✅ 読込成功: {loaded_filename} (全{len(df_raw)}頭)')
 
-  # サイドバー：極秘ノートブック6選 狙い目チェックBOXフィルター
-  st.sidebar.markdown('---')
-  st.sidebar.markdown('### 🎯 極秘ノートブック6選 狙い目フィルター')
-  filter_dart_eat = st.sidebar.checkbox(
-      '🐎 ダートで食う（S1位・大型馬・外枠）'
-  )
-  filter_n_agari = st.sidebar.checkbox('🔥 Nなごり（休み明けA3・馬体重増）')
-  filter_arms_fup = st.sidebar.checkbox('✨ ARMS×FUP（ARM1位・Fup6-7点）')
-  filter_tua_dirt = st.sidebar.checkbox('💎 TUAダート特注（TUA190超・S上位）')
-  filter_c_uma = st.sidebar.checkbox('🌲 Ｃ馬・調教特注（ARM上位）')
-  filter_turf_dirt = st.sidebar.checkbox('🔄 芝→ダート変わり特注')
-
-  # 馬場設定
-  st.sidebar.markdown('---')
-  st.sidebar.markdown('### 🌿 馬場・クッション値設定')
-  track_cond = st.sidebar.selectbox('芝馬場状態', ['良', '稍重', '重', '不良'], index=0)
-  cushion_val = st.sidebar.slider(
-      '当日クッション値',
-      min_value=6.0,
-      max_value=12.5,
-      value=9.5,
-      step=0.1,
-      format='%.1f',
-  )
-
+  # データ標準化（全42列対応）
   venue_dict = {
       '東': '東京',
       '中': '中山',
@@ -619,6 +580,144 @@ def main():
     st.error('解析可能な有効データが存在しません。')
     st.stop()
 
+  # 全データに対して事前にスコアとノートブック・厩舎判定を計算し、全レースの該当馬を常時把握
+  all_scores, all_rescued, all_sss, all_nb, all_stbl = [], [], [], [], []
+  c_dummy_cat = '9.5-9.9 標準高'
+  for _, r in df.iterrows():
+    sc, res, sss, nb, stbl = calc_upgraded_dynamic_score(
+        r, r['競馬場名'], r['track'], r['dist'], c_dummy_cat
+    )
+    all_scores.append(sc)
+    all_rescued.append(res)
+    all_sss.append(sss)
+    all_nb.append(nb)
+    all_stbl.append(stbl)
+
+  df['dynamic_score'] = all_scores
+  df['is_rescued'] = all_rescued
+  df['is_sss'] = all_sss
+  df['nb_hits'] = all_nb
+  df['stable_hits'] = all_stbl
+
+  # ------------------------------------------------------------------------------
+  # サイドバー：複合指数フィルター ＆ 狙い目チェックBOX（どのレースに該当馬がいるか表示）
+  # ------------------------------------------------------------------------------
+  st.sidebar.markdown('---')
+  st.sidebar.markdown('### 🎯 複合指数 ＆ ノートブック検索')
+
+  # 複合条件（F, Fup, ARM, TUAの掛け合わせ）
+  filter_cross_arms_fup = st.sidebar.checkbox(
+      '✨ 【黄金クロス】ARM1位 ✕ Fup6-7点'
+  )
+  filter_cross_f_tua = st.sidebar.checkbox(
+      '🔥 【高確率軸】F上位(1-3位) ✕ TUA上位(1-3位)'
+  )
+  filter_cross_f65_arm = st.sidebar.checkbox(
+      '👑 【絶対神域】F≧65 ＋ ARM≧120 ＋ TUA≧200'
+  )
+
+  st.sidebar.markdown('#### 個別狙い目フィルター')
+  filter_dart_eat = st.sidebar.checkbox(
+      '🐎 ダートで食う（S1位・大型馬・外枠）'
+  )
+  filter_n_agari = st.sidebar.checkbox('🔥 Nなごり（休み明けA3・馬体重増）')
+  filter_tua_dirt = st.sidebar.checkbox('💎 TUAダート特注（TUA190超・S上位）')
+  filter_c_uma = st.sidebar.checkbox('🌲 Ｃ馬・調教特注（ARM上位）')
+  filter_turf_dirt = st.sidebar.checkbox('🔄 芝→ダート変わり特注')
+
+  # どのレースに該当馬がいるかを動的に判定してサイドバーにリスト表示する関数
+  def get_matching_races_info(condition_func, condition_name):
+    matched_rows = df[df.apply(condition_func, axis=1)]
+    if matched_rows.empty:
+      return f'*{condition_name}*: 該当馬なし'
+    races = (
+        matched_rows['競馬場名']
+        + matched_rows['race_id'].astype(str)
+        + ' ('
+        + matched_rows['馬番'].astype(str)
+        + '番 '
+        + matched_rows['馬名']
+        + ')'
+    )
+    return f'**{condition_name}** ({len(matched_rows)}頭):\n' + '\n'.join(
+        [f'- {r}' for r in races.tolist()]
+    )
+
+  # チェックボックスがONのものについて、該当レースをサイドバーに分かりやすく表示
+  active_filters = []
+  if filter_cross_arms_fup:
+    active_filters.append(
+        (lambda r: r['ARM順位'] == 1 and r['Fup2'] >= 6, '✨ ARM1位×Fup6-7点')
+    )
+  if filter_cross_f_tua:
+    active_filters.append(
+        (lambda r: r['F順位'] <= 3 and r['TUA順位'] <= 3, '🔥 F上位×TUA上位')
+    )
+  if filter_cross_f65_arm:
+    active_filters.append(
+        (
+            lambda r: r['F'] >= 65.0
+            and r['ARM'] >= 120.0
+            and r['TUA'] >= 200.0,
+            '👑 F65+ARM120+TUA200',
+        )
+    )
+  if filter_dart_eat:
+    active_filters.append(
+        (
+            lambda r: r['track'] == 'ダ'
+            and r['S順位'] == 1
+            and float(str(r['前場体重']).replace('kg', '') or 480) >= 480,
+            '🐎 ダートで食う',
+        )
+    )
+  if filter_n_agari:
+    active_filters.append(
+        (
+            lambda r: str(r['間隔']).isdigit()
+            and int(r['間隔']) >= 12
+            and any('Nなごり' in x for x in r['nb_hits']),
+            '🔥 Nなごり',
+        )
+    )
+  if filter_tua_dirt:
+    active_filters.append(
+        (
+            lambda r: r['track'] == 'ダ'
+            and r['TUA'] >= 190.0
+            and r['TUA順位'] <= 3
+            and r['S順位'] <= 8,
+            '💎 TUAダート特注',
+        )
+    )
+  if filter_c_uma:
+    active_filters.append(
+        (lambda r: r['ARM順位'] <= 3, '🌲 Ｃ馬・調教特注')
+    )
+  if filter_turf_dirt:
+    active_filters.append(
+        (lambda r: r['芝ダート変わり'] == '芝→ダ', '🔄 芝→ダート変わり')
+    )
+
+  if active_filters:
+    st.sidebar.markdown('---')
+    st.sidebar.markdown('### 📍 該当馬がいるレース一覧')
+    for func, name in active_filters:
+      st.sidebar.info(get_matching_races_info(func, name))
+
+  # 馬場設定
+  st.sidebar.markdown('---')
+  st.sidebar.markdown('### 🌿 馬場・クッション値設定')
+  track_cond = st.sidebar.selectbox('芝馬場状態', ['良', '稍重', '重', '不良'], index=0)
+  cushion_val = st.sidebar.slider(
+      '当日クッション値',
+      min_value=6.0,
+      max_value=12.5,
+      value=9.5,
+      step=0.1,
+      format='%.1f',
+  )
+
   st.markdown(
       f"<div class='date-header-badge'>📅 開催日: 2026年{df['日付'].iloc[0]} |"
       ' JRAデータ解析エンジン「競馬予想10 クッション値Vr」</div>',
@@ -675,6 +774,7 @@ def main():
   race_df = df[df['race_uid'] == selected_race_uid].copy()
   c_cat = get_cushion_category(cushion_val, chosen_venue)
 
+  # 選択レースのスコア再計算（クッション値連動）
   scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list = (
       [],
       [],
@@ -698,65 +798,12 @@ def main():
   race_df['nb_hits'] = nb_hits_list
   race_df['stable_hits'] = stable_hits_list
 
-  if filter_dart_eat:
-    race_df = race_df[
-        race_df['nb_hits'].apply(
-            lambda x: any('ダートで食う' in item for item in x)
-        )
-    ]
-  if filter_n_agari:
-    race_df = race_df[
-        race_df['nb_hits'].apply(lambda x: any('Nなごり' in item for item in x))
-    ]
-  if filter_arms_fup:
-    race_df = race_df[
-        race_df['nb_hits'].apply(lambda x: any('ARMS×FUP' in item for item in x))
-    ]
-  if filter_tua_dirt:
-    race_df = race_df[
-        race_df['nb_hits'].apply(
-            lambda x: any('TUAダート特注' in item for item in x)
-        )
-    ]
-  if filter_c_uma:
-    race_df = race_df[
-        race_df['nb_hits'].apply(lambda x: any('Ｃ馬' in item for item in x))
-    ]
-  if filter_turf_dirt:
-    race_df = race_df[
-        race_df['nb_hits'].apply(
-            lambda x: any('芝→ダ' in item for item in x)
-        )
-    ]
-
-  # フィルタ結果が0頭になった場合の安全防御（エラー回避のフォールバック）
-  if race_df.empty:
-    st.warning(
-        '⚠️'
-        ' 選択されたノートブック条件に一致する出走馬がこのレースにはいません（全出走馬を表示します）。'
-    )
-    race_df = df[df['race_uid'] == selected_race_uid].copy()
-    scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list = (
-        [],
-        [],
-        [],
-        [],
-        [],
-    )
-    for _, r in race_df.iterrows():
-      sc, res, sss, nb, stbl = calc_upgraded_dynamic_score(
-          r, chosen_venue, r['track'], r['dist'], c_cat
-      )
-      scores.append(sc)
-      rescued_flags.append(res)
-      sss_flags.append(sss)
-      nb_hits_list.append(nb)
-      stable_hits_list.append(stbl)
-    race_df['dynamic_score'] = scores
-    race_df['is_rescued'] = rescued_flags
-    race_df['is_sss'] = sss_flags
-    race_df['nb_hits'] = nb_hits_list
-    race_df['stable_hits'] = stable_hits_list
+  # サイドバーチェックボックスによるレース内フィルタリング適用
+  for func, _ in active_filters:
+    matched_in_race = race_df[race_df.apply(func, axis=1)]
+    if not matched_in_race.empty:
+      # 該当馬がいる場合はスコアを大幅にブースト
+      race_df.loc[race_df.apply(func, axis=1), 'dynamic_score'] += 100.0
 
   has_bonus = (
       (race_df['F順位'] <= 3) & (race_df['ARM順位'] <= 3) & (race_df['TUA順位'] <= 3)
