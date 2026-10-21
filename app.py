@@ -729,9 +729,34 @@ def main():
         )
     ]
 
+  # フィルタ結果が0頭になった場合の安全防御（エラー回避のフォールバック）
   if race_df.empty:
-    st.warning('選択されたノートブック条件に一致する出走馬がいません。')
-    st.stop()
+    st.warning(
+        '⚠️'
+        ' 選択されたノートブック条件に一致する出走馬がこのレースにはいません（全出走馬を表示します）。'
+    )
+    race_df = df[df['race_uid'] == selected_race_uid].copy()
+    scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list = (
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+    for _, r in race_df.iterrows():
+      sc, res, sss, nb, stbl = calc_upgraded_dynamic_score(
+          r, chosen_venue, r['track'], r['dist'], c_cat
+      )
+      scores.append(sc)
+      rescued_flags.append(res)
+      sss_flags.append(sss)
+      nb_hits_list.append(nb)
+      stable_hits_list.append(stbl)
+    race_df['dynamic_score'] = scores
+    race_df['is_rescued'] = rescued_flags
+    race_df['is_sss'] = sss_flags
+    race_df['nb_hits'] = nb_hits_list
+    race_df['stable_hits'] = stable_hits_list
 
   has_bonus = (
       (race_df['F順位'] <= 3) & (race_df['ARM順位'] <= 3) & (race_df['TUA順位'] <= 3)
