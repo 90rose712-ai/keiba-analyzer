@@ -290,8 +290,6 @@ def read_csv_robust():
   candidates = [
       '当日全指数統合.csv',
       '当日全指数統合10.18.csv',
-      '10.18全指数統合シート - 全指数統合.csv',
-      'データ統合.csv',
       'data/当日全指数統合.csv',
       '*全指数統合*.csv',
   ]
@@ -948,6 +946,7 @@ def main():
   elif sort_criterion == '調教順（坂路調順位 昇順）':
     sorted_df = race_df.sort_values('坂路調順位', ascending=True)
   elif sort_criterion == '脚質順（前走脚質別）':
+    # 逃げ -> 先行 -> 中団 -> 後方の順に並び替え
     style_order = {'逃': 1, '先': 2, '中': 3, '後': 4}
     race_df['style_rank'] = (
         race_df['前走脚質'].map(style_order).fillna(99)
@@ -997,6 +996,7 @@ def main():
     arm_style = 'val-arms-top' if h['ARM順位'] <= 3 else ''
     tua_style = 'val-tua-top' if h['TUA順位'] <= 3 else ''
 
+    # 調教タイム情報の文字列（空でなければ表示）
     choukyou_str = (
         f"調教タイム/内容: <strong>{h['坂路調']}</strong> (順位{h['坂路調順位']})"
         if h['坂路調']
