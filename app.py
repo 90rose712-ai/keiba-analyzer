@@ -173,16 +173,16 @@ st.markdown(
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     
-    /* 芝ダート変わりカラーバッジ */
+    /* 芝ダート変わりカラーバッジ（強調表示） */
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
-    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #b45309; color: #fef3c7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f59e0b; }
-    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1e40af; color: #dbeafe; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; }
-    .badge-track-first { display: inline-flex; align-items: center; background-color: #065f46; color: #a7f3d0; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
+    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
+    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
+    .badge-track-first { display: inline-flex; align-items: center; background-color: #047857; color: #ecfdf5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #34d399; }
 
     /* Fupスコアカラーハイライト */
-    .fup-badge-top { background: #dc2626; color: #ffffff; font-weight: 900; padding: 1px 6px; border-radius: 4px; border: 1px solid #fca5a5; }
-    .fup-badge-mid { background: #d97706; color: #ffffff; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
-    .fup-badge-low { background: #374151; color: #9ca3af; padding: 1px 6px; border-radius: 4px; }
+    .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
+    .fup-badge-mid { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13px; }
+    .fup-badge-low { background: #374151; color: #9ca3af; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
 
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
@@ -958,7 +958,7 @@ def main():
             f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>"
         )
 
-    # 芝ダート変りのカラーバッジ判定
+    # 芝ダート変わりカラーバッジ判定
     tc = h['芝ダート変わり']
     if '芝→ダ' in tc:
       tc_badge = f"<span class='badge-track-turf2dirt'>🔄 {tc}</span>"
@@ -969,12 +969,18 @@ def main():
     else:
       tc_badge = f"<span class='badge-track-same'>🔹 {tc}</span>"
 
-    # Fupスコアのカラーバッジ判定
+    # Fupスコアカラーバッジ判定
     fup_val = h['Fup2']
     if fup_val >= 7:
-      fup_badge = f"<span class='fup-badge-top'>⚡ {fup_val}点 (順位{h['Fup2順位']})</span>"
+      fup_badge = (
+          f"<span class='fup-badge-top'>⚡ {fup_val}点"
+          f" (順位{h['Fup2順位']})</span>"
+      )
     elif fup_val >= 5:
-      fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{h['Fup2順位']})</span>"
+      fup_badge = (
+          f"<span class='fup-badge-mid'>🔥 {fup_val}点"
+          f" (順位{h['Fup2順位']})</span>"
+      )
     else:
       fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{h['Fup2順位']})</span>"
 
@@ -1019,3 +1025,4 @@ def main():
 
 if __name__ == '__main__':
   main()
+```[cite: 13, 14, 17]
