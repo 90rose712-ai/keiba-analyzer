@@ -282,7 +282,7 @@ def clean_str(val):
       .replace('*', '')
       .replace('$', '')
       .replace(' ', '')
-      .replace('　', '')
+      .replace(' ', '')
   )
 
 
@@ -290,6 +290,7 @@ def read_csv_robust():
   candidates = [
       '当日全指数統合.csv',
       '当日全指数統合10.18.csv',
+      '10.18全指数統合シート - 全指数統合.csv',
       'data/当日全指数統合.csv',
       '*全指数統合*.csv',
   ]
