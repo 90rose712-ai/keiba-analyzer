@@ -10,7 +10,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr - 完全統合Webアプリケーション（黄金マスター完全版）
-# 全42列マスターCSV読込・調教タイム表示・調教順/脚質順ソート完全対応
+# 全42列マスターCSV読込・複合指数フィルター（該当レース自動検出）・高度ソート対応
 # ==============================================================================
 
 st.set_page_config(
@@ -347,6 +347,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
   nb_hits = []
   stable_hits = []
 
+  # ノートブック6選
   if track_type == 'ダ' and s_rk == 1 and weight >= 480:
     score += 40.0
     nb_hits.append('🐎 ダートで食う(S1位・大型)')
@@ -372,6 +373,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
     score += 25.0
     nb_hits.append('🔄 芝→ダ激走特注')
 
+  # 厩舎勝負パターン
   if '藤原' in trainer:
     score += 25.0
     stable_hits.append('厩舎: 藤原英昭（CW仕上がり鉄板）')
@@ -394,6 +396,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
     score += 20.0
     stable_hits.append('厩舎: 友道康夫（芝併せ長距離信頼）')
 
+  # 基本指数加点
   if f_rk == 1:
     score += 50.0
   elif f_rk <= 3:
@@ -510,7 +513,6 @@ def main():
     s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
     s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-    sakaro_chou = clean_str(row.get('坂路調', ''))
     hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
     hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
     tk_rk = int(pd.to_numeric(row.get('時計血順位', 99), errors='coerce') or 99)
@@ -558,7 +560,6 @@ def main():
           'TUA順位': tua_rk,
           'S': s_val,
           'S順位': s_rk,
-          '坂路調': sakaro_chou,
           '坂路調順位': hc_rk,
           '坂路血順位': hk_rk,
           '時計血順位': tk_rk,
@@ -578,6 +579,7 @@ def main():
     st.error('解析可能な有効データが存在しません。')
     st.stop()
 
+  # 全データスコアリング
   all_scores, all_rescued, all_sss, all_nb, all_stbl = [], [], [], [], []
   c_dummy_cat = '9.5-9.9 標準高'
   for _, r in df.iterrows():
@@ -602,6 +604,7 @@ def main():
   st.sidebar.markdown('---')
   st.sidebar.markdown('### 🎯 高確率・高回収 複合指数検索')
 
+  # ユーザー要望のF, Fup, ARM, TUAとそのかけあわせ検索
   filter_cross_arms_fup = st.sidebar.checkbox(
       '✨ 【黄金クロス】ARM1位 ✕ Fup6-7点'
   )
@@ -621,7 +624,7 @@ def main():
   filter_arm1 = st.sidebar.checkbox('⭐ ARM 1位（高回収率ホース）')
   filter_tua1 = st.sidebar.checkbox('🚀 TUA 1位（ダート適性馬）')
 
-
+  # どのレースに該当馬がいるかを判定してサイドバーに分かりやすく表示する関数
   def get_matching_races_info(condition_func, condition_name):
     matched_rows = df[df.apply(condition_func, axis=1)]
     if matched_rows.empty:
@@ -638,7 +641,6 @@ def main():
     return f'**{condition_name}** ({len(matched_rows)}頭):\n' + '\n'.join(
         [f'- {r}' for r in races.tolist()]
     )
-
 
   active_filters = []
   if filter_cross_arms_fup:
@@ -768,6 +770,7 @@ def main():
   race_df['nb_hits'] = nb_hits_list
   race_df['stable_hits'] = stable_hits_list
 
+  # チェックボックスに一致する馬はスコアブースト
   for func, _ in active_filters:
     matched_in_race = race_df[race_df.apply(func, axis=1)]
     if not matched_in_race.empty:
@@ -796,6 +799,9 @@ def main():
       unsafe_allow_html=True,
   )
 
+  # ============================================================================
+  # 【標準ハイブリッド馬券パック】YouTube解説・F65連動仕様
+  # ============================================================================
   f65_horses = race_df[race_df['F'] >= 65.0].sort_values('F', ascending=False)
   has_f65 = len(f65_horses) > 0
   f_top3 = race_df.sort_values('F順位').head(3)
@@ -901,14 +907,14 @@ def main():
   )
 
   # ============================================================================
-  # 出走馬情報欄の直上：指数ソート ＆ 調教順 ＆ 脚質順ソート機能
+  # 出走馬情報欄の直上：指数ソート ＆ 調教総合指数順ソート機能
   # ============================================================================
   st.markdown('### 🏇 出走馬詳細カルテ')
 
   sort_col1, sort_col2 = st.columns(2)
   with sort_col1:
     sort_criterion = st.selectbox(
-        '📊 並び替え基準（指数・調教・脚質）',
+        '📊 並び替え基準（指数・総合）',
         [
             '総合動的評価スコア順',
             'F指数 降順',
@@ -916,8 +922,6 @@ def main():
             'TUA指数 降順',
             'S指数 降順',
             'Fup2点数 降順',
-            '調教順（坂路調順位 昇順）',
-            '脚質順（前走脚質別）',
             '馬番順',
         ],
         index=0,
@@ -942,17 +946,6 @@ def main():
   elif sort_criterion == 'Fup2点数 降順':
     sorted_df = race_df.sort_values(
         ['Fup2', 'Fup2順位'], ascending=[False, True]
-    )
-  elif sort_criterion == '調教順（坂路調順位 昇順）':
-    sorted_df = race_df.sort_values('坂路調順位', ascending=True)
-  elif sort_criterion == '脚質順（前走脚質別）':
-    # 逃げ -> 先行 -> 中団 -> 後方の順に並び替え
-    style_order = {'逃': 1, '先': 2, '中': 3, '後': 4}
-    race_df['style_rank'] = (
-        race_df['前走脚質'].map(style_order).fillna(99)
-    )
-    sorted_df = race_df.sort_values(
-        ['style_rank', '馬番'], ascending=[True, True]
     )
   else:
     sorted_df = race_df.sort_values('馬番', ascending=True)
@@ -996,13 +989,6 @@ def main():
     arm_style = 'val-arms-top' if h['ARM順位'] <= 3 else ''
     tua_style = 'val-tua-top' if h['TUA順位'] <= 3 else ''
 
-    # 調教タイム情報の文字列（空でなければ表示）
-    choukyou_str = (
-        f"調教タイム/内容: <strong>{h['坂路調']}</strong> (順位{h['坂路調順位']})"
-        if h['坂路調']
-        else f"坂路調順位: {h['坂路調順位']}位"
-    )
-
     st.markdown(
         f"""
         <div class='horse-card'>
@@ -1020,8 +1006,10 @@ def main():
                     TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
                     S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
                 </li>
-                <li><strong>調教データ</strong>: {choukyou_str} ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
-                <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位</li>
+                <li><strong>適性・補正順位</strong>: 
+                    坂路調: {h['坂路調順位']}位 / 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位 / 
+                    コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位
+                </li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ 芝ダ変: {h['芝ダート変わり']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
             </ul>
