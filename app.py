@@ -8,22 +8,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-# ==============================================================================
-# 競馬予想10 クッション値Vr - 完全統合Webアプリケーション（黄金マスター完全版）
-# 全42列マスターCSV読込・調教タイム表示・調教/脚質順ソート・芝ダ変＆Fupカラー対応
-# ==============================================================================
-
 st.set_page_config(
-    page_title='競馬予想10 クッション値Vr - 完全統合システム',
-    layout='wide',
-    initial_sidebar_state='expanded',
+    page_title="競馬予想10 クッション値Vr - 完全統合システム",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
-# ------------------------------------------------------------------------------
-# 黄金マスター CSS スタイル定義（スマホ操作最適化・バッジ縦潰れ防止・カラーハイライト）
-# ------------------------------------------------------------------------------
-st.markdown(
-    """
+st.markdown("""
 <style>
     div[data-baseweb="select"] input {
         inputmode: none !important;
@@ -172,13 +163,11 @@ st.markdown(
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     
-    /* 芝ダート変わり・ダート芝変わりカラーバッジ（強調表示） */
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
     .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
     .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
     .badge-track-first { display: inline-flex; align-items: center; background-color: #047857; color: #ecfdf5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #34d399; }
 
-    /* Fup1位・高得点カラーハイライト */
     .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
     .fup-badge-mid { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; font-size: 13px; }
