@@ -168,20 +168,20 @@ st.markdown(
         color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px;
     }
     .badge-cushion-fit { display: inline-flex; align-items: center; background-color: #064e3b; color: #6ee7b7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
-    .badge-cushion-danger { display: inline-flex; align-items: center; background-color: #7f1d1d; color: #fca5a5; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #ef4444; }
     .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     
-    /* 芝ダート変わりカラーバッジ（強調表示） */
+    /* 芝ダート変わり・ダート芝変わりカラーバッジ（強調表示） */
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
     .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
     .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
     .badge-track-first { display: inline-flex; align-items: center; background-color: #047857; color: #ecfdf5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #34d399; }
 
-    /* Fupスコアカラーハイライト */
+    /* Fup1位・高得点カラーハイライト */
+    .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
-    .fup-badge-mid { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #ffffff; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13px; }
+    .fup-badge-mid { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; font-size: 13px; }
     .fup-badge-low { background: #374151; color: #9ca3af; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
 
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
@@ -351,9 +351,9 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
   if arm_rk <= 3:
     score += 20.0
     nb_hits.append('🌲 Ｃ馬・調教特注')
-  if track_change == '芝→ダ' and tua_rk <= 3:
+  if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
     score += 25.0
-    nb_hits.append('🔄 芝→ダ激走特注')
+    nb_hits.append('🔄 トラック変わり激走特注')
 
   if '藤原' in trainer:
     score += 25.0
@@ -958,31 +958,35 @@ def main():
             f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>"
         )
 
-    # 芝ダート変わりカラーバッジ判定
+    # 芝ダート変わり・ダート芝変わりカラーバッジ判定
     tc = h['芝ダート変わり']
-    if '芝→ダ' in tc:
+    if '芝→ダ' in tc or 'ダ→芝' in tc:
       tc_badge = f"<span class='badge-track-turf2dirt'>🔄 {tc}</span>"
-    elif 'ダ→芝' in tc:
-      tc_badge = f"<span class='badge-track-dirt2turf'>🔄 {tc}</span>"
     elif '初出走' in tc:
       tc_badge = f"<span class='badge-track-first'>🆕 {tc}</span>"
     else:
       tc_badge = f"<span class='badge-track-same'>🔹 {tc}</span>"
 
-    # Fupスコアカラーバッジ判定
+    # Fup1位（順位1）および高得点カラーハイライト判定
     fup_val = h['Fup2']
-    if fup_val >= 7:
+    fup_rk = h['Fup2順位']
+    if fup_rk == 1:
+      fup_badge = (
+          f"<span class='fup-badge-rank1'>👑 {fup_val}点"
+          f" (順位{fup_rk})</span>"
+      )
+    elif fup_val >= 7:
       fup_badge = (
           f"<span class='fup-badge-top'>⚡ {fup_val}点"
-          f" (順位{h['Fup2順位']})</span>"
+          f" (順位{fup_rk})</span>"
       )
     elif fup_val >= 5:
       fup_badge = (
           f"<span class='fup-badge-mid'>🔥 {fup_val}点"
-          f" (順位{h['Fup2順位']})</span>"
+          f" (順位{fup_rk})</span>"
       )
     else:
-      fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{h['Fup2順位']})</span>"
+      fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{fup_rk})</span>"
 
     f_style = 'val-f-top' if h['F順位'] <= 3 else ''
     s_style = 'val-s-top' if h['S順位'] <= 3 else ''
@@ -1025,4 +1029,3 @@ def main():
 
 if __name__ == '__main__':
   main()
-```[cite: 13, 14, 17]
