@@ -10,7 +10,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr - 完全統合Webアプリケーション（黄金マスター完全版）
-# 全42列マスターCSV読込・調教タイム表示・調教順/脚質順ソート・芝ダ変カラー対応
+# 全42列マスターCSV読込・調教タイム表示・調教/脚質順ソート・芝ダ変＆Fupカラー対応
 # ==============================================================================
 
 st.set_page_config(
@@ -20,7 +20,7 @@ st.set_page_config(
 )
 
 # ------------------------------------------------------------------------------
-# 黄金マスター CSS スタイル定義（スマホ操作最適化・バッジ縦潰れ防止）
+# 黄金マスター CSS スタイル定義（スマホ操作最適化・バッジ縦潰れ防止・カラーハイライト）
 # ------------------------------------------------------------------------------
 st.markdown(
     """
@@ -173,11 +173,16 @@ st.markdown(
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     
-    /* 芝ダート変わりバッジの色分け */
+    /* 芝ダート変わりカラーバッジ */
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
     .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #b45309; color: #fef3c7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f59e0b; }
     .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1e40af; color: #dbeafe; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; }
     .badge-track-first { display: inline-flex; align-items: center; background-color: #065f46; color: #a7f3d0; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
+
+    /* Fupスコアカラーハイライト */
+    .fup-badge-top { background: #dc2626; color: #ffffff; font-weight: 900; padding: 1px 6px; border-radius: 4px; border: 1px solid #fca5a5; }
+    .fup-badge-mid { background: #d97706; color: #ffffff; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
+    .fup-badge-low { background: #374151; color: #9ca3af; padding: 1px 6px; border-radius: 4px; }
 
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
@@ -964,6 +969,15 @@ def main():
     else:
       tc_badge = f"<span class='badge-track-same'>🔹 {tc}</span>"
 
+    # Fupスコアのカラーバッジ判定
+    fup_val = h['Fup2']
+    if fup_val >= 7:
+      fup_badge = f"<span class='fup-badge-top'>⚡ {fup_val}点 (順位{h['Fup2順位']})</span>"
+    elif fup_val >= 5:
+      fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{h['Fup2順位']})</span>"
+    else:
+      fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{h['Fup2順位']})</span>"
+
     f_style = 'val-f-top' if h['F順位'] <= 3 else ''
     s_style = 'val-s-top' if h['S順位'] <= 3 else ''
     arm_style = 'val-arms-top' if h['ARM順位'] <= 3 else ''
@@ -987,7 +1001,7 @@ def main():
             <ul class='horse-card-list'>
                 <li><strong>主要5大指数</strong>: 
                     F指数: <span class='{f_style}'>{h['F']}</span> (順位{h['F順位']}) / 
-                    Fup2: <strong>{h['Fup2']}点</strong> (順位{h['Fup2順位']}) / 
+                    Fup2: {fup_badge} / 
                     ARM: <span class='{arm_style}'>{h['ARM']}</span> (順位{h['ARM順位']}) / 
                     TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
                     S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
