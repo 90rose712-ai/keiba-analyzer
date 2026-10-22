@@ -10,7 +10,7 @@ import streamlit as st
 
 # ==============================================================================
 # 競馬予想10 クッション値Vr - 完全統合Webアプリケーション（黄金マスター完全版）
-# 全42列マスターCSV読込・調教タイム表示・調教順/脚質順ソート完全対応
+# 全42列マスターCSV読込・調教タイム表示・調教順/脚質順ソート・芝ダ変カラー対応
 # ==============================================================================
 
 st.set_page_config(
@@ -172,7 +172,13 @@ st.markdown(
     .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
-    .val-rank1-gold { color: #1a1000; background-color: #fcd34d; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #f59e0b; }
+    
+    /* 芝ダート変わりバッジの色分け */
+    .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
+    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #b45309; color: #fef3c7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f59e0b; }
+    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1e40af; color: #dbeafe; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; }
+    .badge-track-first { display: inline-flex; align-items: center; background-color: #065f46; color: #a7f3d0; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
+
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
     .val-arms-top { color: #083344; background-color: #38bdf8; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #0284c7; }
@@ -249,22 +255,6 @@ CUSHION_DATA_BOOK = {
         '最重要',
         'N57 勝15.8% 複35.1% 単136',
     ),
-    ('中山', '芝', 2000, 'ダノンバラード', '9.5-9.9 標準高'): (
-        '危険',
-        'N30 複0.0%',
-    ),
-    ('東京', '芝', 2000, 'ルーラーシップ', '9.5-9.9 標準高'): (
-        '危険',
-        'N33 複9.1%',
-    ),
-    ('小倉', '芝', 1200, 'ジャスタウェイ', '8.6-9.4 やや低'): (
-        '危険',
-        'N35 複2.9%',
-    ),
-    ('東京', '芝', 1600, 'ゴールドシップ', '8.6-9.4 やや低'): (
-        '危険',
-        'N44 複4.5%',
-    ),
 }
 
 COURSE_SPECIALIST_DICT = {
@@ -313,7 +303,6 @@ def read_csv_robust():
 
 def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category):
   score = 0.0
-
   f_val = float(pd.to_numeric(r.get('F', 0.0), errors='coerce') or 0.0)
   f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
   fup = int(pd.to_numeric(r.get('Fup2', 0), errors='coerce') or 0)
@@ -337,39 +326,26 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
       or 480.0
   )
 
-  hc_rk = int(pd.to_numeric(r.get('坂路調順位', 99), errors='coerce') or 99)
-  hk_rk = int(pd.to_numeric(r.get('坂路血順位', 99), errors='coerce') or 99)
-  tk_rk = int(pd.to_numeric(r.get('時計血順位', 99), errors='coerce') or 99)
   c_rk = int(pd.to_numeric(r.get('コース連順位', 99), errors='coerce') or 99)
-  k_rk = int(pd.to_numeric(r.get('血統連順位', 99), errors='coerce') or 99)
   b_rk = int(pd.to_numeric(r.get('バランス順位', 99), errors='coerce') or 99)
-
   is_spec = (h_name, venue_name, track_type, dist_val) in COURSE_SPECIALIST_DICT
 
-  nb_hits = []
-  stable_hits = []
-
+  nb_hits, stable_hits = [], []
   if track_type == 'ダ' and s_rk == 1 and weight >= 480:
     score += 40.0
     nb_hits.append('🐎 ダートで食う(S1位・大型)')
-
-  is_long_rest = interval.isdigit() and int(interval) >= 12
-  if is_long_rest:
+  if interval.isdigit() and int(interval) >= 12:
     score += 30.0
     nb_hits.append('🔥 Nなごり(休み明け特注)')
-
   if arm_rk == 1 and fup >= 6:
     score += 45.0
     nb_hits.append('✨ ARMS×FUP(黄金クロス)')
-
   if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8:
     score += 35.0
     nb_hits.append('💎 TUAダート特注')
-
   if arm_rk <= 3:
     score += 20.0
     nb_hits.append('🌲 Ｃ馬・調教特注')
-
   if track_change == '芝→ダ' and tua_rk <= 3:
     score += 25.0
     nb_hits.append('🔄 芝→ダ激走特注')
@@ -389,7 +365,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
   if '木村' in trainer:
     score += 25.0
     stable_hits.append('厩舎: 木村哲也（南W併せ強め・外厩帰り）')
-  if '堀宣行' in trainer:
+  if '堀' in trainer:
     score += 20.0
     stable_hits.append('厩舎: 堀宣行（南W馬なり・上積み勝負）')
   if '友道' in trainer:
@@ -429,7 +405,6 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
       or len(stable_hits) > 0
       or is_f65_top
   )
-
   if not is_rescued:
     if c_rk >= 6:
       score -= 30.0
@@ -461,7 +436,7 @@ def main():
   if df_raw.empty:
     st.markdown(
         "<div class='race-type-banner race-type-normal'>⚠️"
-        ' 全42列マスターCSVが読み込まれていません。サイドバーから「当日全指数統合.csv」を指定してください。</div>',
+        ' 全42列マスターCSVが見つかりません。「当日全指数統合10.18.csv」をアップロードしてください。</div>',
         unsafe_allow_html=True,
     )
     st.stop()
@@ -480,7 +455,6 @@ def main():
       '函': '函館',
       '札': '札幌',
   }
-
   records = []
   for _, row in df_raw.iterrows():
     race_id = clean_str(row.get('場所R', ''))
@@ -598,12 +572,8 @@ def main():
   df['nb_hits'] = all_nb
   df['stable_hits'] = all_stbl
 
-  # ------------------------------------------------------------------------------
-  # サイドバー：複合指数フィルター ＆ チェックボックス（どのレースに該当馬がいるか表示）
-  # ------------------------------------------------------------------------------
   st.sidebar.markdown('---')
   st.sidebar.markdown('### 🎯 高確率・高回収 複合指数検索')
-
   filter_cross_arms_fup = st.sidebar.checkbox(
       '✨ 【黄金クロス】ARM1位 ✕ Fup6-7点'
   )
@@ -623,7 +593,6 @@ def main():
   filter_arm1 = st.sidebar.checkbox('⭐ ARM 1位（高回収率ホース）')
   filter_tua1 = st.sidebar.checkbox('🚀 TUA 1位（ダート適性馬）')
 
-
   def get_matching_races_info(condition_func, condition_name):
     matched_rows = df[df.apply(condition_func, axis=1)]
     if matched_rows.empty:
@@ -640,7 +609,6 @@ def main():
     return f'**{condition_name}** ({len(matched_rows)}頭):\n' + '\n'.join(
         [f'- {r}' for r in races.tolist()]
     )
-
 
   active_filters = []
   if filter_cross_arms_fup:
@@ -716,9 +684,6 @@ def main():
       '開催場選択', options=existing_venues, horizontal=True
   )
 
-  # ------------------------------------------------------------------------------
-  # レース選択ソート：1Rから順番に表示
-  # ------------------------------------------------------------------------------
   v_df = df[df['競馬場名'] == chosen_venue]
 
 
@@ -987,10 +952,17 @@ def main():
         badges.append(
             f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>"
         )
-      elif judg == '危険':
-        badges.append(
-            f"<span class='badge-cushion-danger'>⚠️ クッション危険: {h['種牡馬']} ({stat_txt})</span>"
-        )
+
+    # 芝ダート変りのカラーバッジ判定
+    tc = h['芝ダート変わり']
+    if '芝→ダ' in tc:
+      tc_badge = f"<span class='badge-track-turf2dirt'>🔄 {tc}</span>"
+    elif 'ダ→芝' in tc:
+      tc_badge = f"<span class='badge-track-dirt2turf'>🔄 {tc}</span>"
+    elif '初出走' in tc:
+      tc_badge = f"<span class='badge-track-first'>🆕 {tc}</span>"
+    else:
+      tc_badge = f"<span class='badge-track-same'>🔹 {tc}</span>"
 
     f_style = 'val-f-top' if h['F順位'] <= 3 else ''
     s_style = 'val-s-top' if h['S順位'] <= 3 else ''
@@ -1022,7 +994,7 @@ def main():
                 </li>
                 <li><strong>調教データ</strong>: {choukyou_str} ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
                 <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位</li>
-                <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ 芝ダ変: {h['芝ダート変わり']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
+                <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {tc_badge} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
             </ul>
         </div>
