@@ -170,8 +170,8 @@ st.markdown("""
     .badge-quad-synergy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; box-shadow: 0 0 8px rgba(220, 38, 38, 0.5); margin-right: 4px; }
 
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
-    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; }
-    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; }
+    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
+    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
     .badge-track-first { display: inline-flex; align-items: center; background-color: #047857; color: #ecfdf5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #34d399; }
 
     .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
@@ -357,7 +357,8 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        sakaro_chou = clean_str(row.get('坂路調', ''))
+        # 坂路調（調教データ）を柔軟に取得（もし別の列名ならフォールバック）
+        sakaro_chou = clean_str(row.get('坂路調', row.get('調教', row.get('ウッド', ''))))
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
         hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
         tk_rk = int(pd.to_numeric(row.get('時計血順位', 99), errors='coerce') or 99)
@@ -527,7 +528,7 @@ def main():
             ⭐ <strong>【F × ARM交差馬（絶対能力 ＋ 高回収）】</strong>: {f_arm_str}<br>
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
-            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「Z（穴馬）」選定に全集中する構成。
+            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の推奨「Z（穴馬）」選定に全集中する構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>[厳選Z馬]</span></li>
@@ -615,7 +616,7 @@ def main():
         badges = []
         if u_no == honmei_num: badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
-        elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特News</span>")
+        elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
 
         # シナジーバッジの付与
         is_as = h['F順位'] <= 3 and h['S順位'] <= 3
