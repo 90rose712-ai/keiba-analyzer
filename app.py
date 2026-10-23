@@ -163,6 +163,9 @@ st.markdown("""
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     
+    /* F&S重複（AS交差馬）専用バッジ */
+    .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #a78bfa; box-shadow: 0 0 10px rgba(139, 92, 246, 0.5); margin-right: 6px; }
+
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
     .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
     .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
@@ -489,22 +492,30 @@ def main():
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
     # ============================================================================
-    # 新規追加：第3の馬券パターン（AS交差・Z特化フォーメーション）の集計・表示
+    # 第3の馬券パターン（AS交差・Z特化フォーメーション）の集計・表示
     # ============================================================================
-    f_top3_nums = race_df.sort_values('F順位').head(3)['馬番'].tolist()
-    s_top3_nums = race_df.sort_values('S順位').head(3)['馬番'].tolist()
+    f_top3_df = race_df.sort_values('F順位').head(3)
+    s_top3_df = race_df.sort_values('S順位').head(3)
+    f_top3_nums = f_top3_df['馬番'].tolist()
+    s_top3_nums = s_top3_df['馬番'].tolist()
     a_group_nums = sorted(list(set(f_top3_nums + s_top3_nums)))
-    a_group_str = ", ".join(map(str, a_group_nums))
+    
+    # FとSが重なっている馬（AS交差馬）を特定
+    as_intersect_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums)))
+    
+    a_group_str = ", ".join([f"<strong>{n}</strong>" if n in as_intersect_nums else str(n) for n in a_group_nums])
+    as_intersect_str = ", ".join(map(str, as_intersect_nums)) if as_intersect_nums else "なし"
 
     st.markdown(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
         <h4 style='color: #60a5fa; margin-top: 0;'>🎯 第3の馬券パターン：AS交差 ＆ Z特化フォーメーション</h4>
         <div style='font-size: 13.5px; color: #cbd5e1; margin-bottom: 8px;'>
-            <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: <span style='color: #34d399; font-weight: bold;'>{a_group_str}番</span> (計{len(a_group_nums)}頭)<br>
+            <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: {a_group_str}番 (計{len(a_group_nums)}頭)<br>
+            ⭐ <strong>【F・S両方上位（AS交差馬）】</strong>: <span style='color: #a78bfa; font-weight: bold;'>{as_intersect_str}番</span><br>
             ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「Z（穴馬）」選定に全集中する構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
-            <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{a_group_str}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{a_group_str}</span> → <span style='color: #38bdf8; font-weight: bold;'>[厳選Z馬]</span></li>
+            <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>[厳選Z馬]</span></li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -591,6 +602,10 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
 
+        # FとSが両方上位（1〜3位）ならAS交差馬バッジを付与
+        if h['F順位'] <= 3 and h['S順位'] <= 3:
+            badges.append("<span class='badge-as-intersect'>👑 AS交差馬 (F&S両方上位)</span>")
+
         if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ コア指数救済（減点免除）</span>")
         for nb in h['nb_hits']: badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
         for stbl in h['stable_hits']: badges.append(f"<span class='badge-stable-hit'>{stbl}</span>")
@@ -632,7 +647,7 @@ def main():
         <div class='horse-card'>
             <div class='horse-card-header'>
                 <span class='race-badge-title'>{u_no}番</span>
-                <span class='horse-card-title'>{h['馬名']}</span>
+                <span class='horse-card-title'>{h['馬番']}番 {h['馬名']}</span>
                 <span style='color: #9ca3af; font-size: 13.5px;'>（{h['調教師']} / {h['騎手']} / {h['人気順位']}番人気）</span>
             </div>
             <div style='margin-bottom: 8px;'>{' '.join(badges)}</div>
