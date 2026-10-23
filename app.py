@@ -488,10 +488,29 @@ def main():
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
+    # ============================================================================
+    # 新規追加：第3の馬券パターン（AS交差・Z特化フォーメーション）の集計・表示
+    # ============================================================================
+    f_top3_nums = race_df.sort_values('F順位').head(3)['馬番'].tolist()
+    s_top3_nums = race_df.sort_values('S順位').head(3)['馬番'].tolist()
+    a_group_nums = sorted(list(set(f_top3_nums + s_top3_nums)))
+    a_group_str = ", ".join(map(str, a_group_nums))
+
+    st.markdown(f"""
+    <div class='recom-block' style='border: 2px solid #3b82f6;'>
+        <h4 style='color: #60a5fa; margin-top: 0;'>🎯 第3の馬券パターン：AS交差 ＆ Z特化フォーメーション</h4>
+        <div style='font-size: 13.5px; color: #cbd5e1; margin-bottom: 8px;'>
+            <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: <span style='color: #34d399; font-weight: bold;'>{a_group_str}番</span> (計{len(a_group_nums)}頭)<br>
+            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「Z（穴馬）」選定に全集中する構成。
+        </div>
+        <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
+            <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{a_group_str}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{a_group_str}</span> → <span style='color: #38bdf8; font-weight: bold;'>[厳選Z馬]</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+
     f65_horses = race_df[race_df['F'] >= 65.0].sort_values('F', ascending=False)
     has_f65 = len(f65_horses) > 0
-    f_top3 = race_df.sort_values('F順位').head(3)
-    f_top3_nums = f_top3['馬番'].tolist()
 
     if has_f65:
         mode_name = "👑 モードA：F指数65以上【絶対主役モード】"
