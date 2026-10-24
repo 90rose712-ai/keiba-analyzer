@@ -357,8 +357,13 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        # 坂路調（調教データ）を柔軟に取得（もし別の列名ならフォールバック）
-        sakaro_chou = clean_str(row.get('坂路調', row.get('調教', row.get('ウッド', ''))))
+        # 坂路調（調教タイム）の柔軟な取得ロジック（数値や空欄の場合のフォールバック対応）
+        raw_sakaro = row.get('坂路調', '')
+        sakaro_chou = clean_str(raw_sakaro if pd.notnull(raw_sakaro) and str(raw_sakaro).strip() != '' else '')
+        if not sakaro_chou or sakaro_chou.isdigit():
+            # もし数値や空欄であれば、他の調教関連データやタイム文字列があればそれを活用、なければ順位等から補完
+            sakaro_chou = clean_str(str(row.get('調教', row.get('ウッド', ''))))
+
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
         hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
         tk_rk = int(pd.to_numeric(row.get('時計血順位', 99), errors='coerce') or 99)
@@ -666,7 +671,12 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-        choukyou_str = f"調教タイム/内容: <strong>{h['坂路調']}</strong> (順位{h['坂路調順位']})" if h['坂路調'] else f"坂路調順位: {h['坂路調順位']}位"
+        # 調教タイム/内容の表示（空欄や数値の場合の自動補完・表示保証）
+        choukyou_raw = h['坂路調']
+        if not choukyou_raw or str(choukyou_raw).isdigit() or str(choukyou_raw).strip() == '':
+            choukyou_str = f"坂路調順位: {h['坂路調順位']}位（タイムデータ参照）"
+        else:
+            choukyou_str = f"調教タイム/内容: <strong>{choukyou_raw}</strong> (順位{h['坂路調順位']})"
 
         st.markdown(f"""
         <div class='horse-card'>
