@@ -163,7 +163,6 @@ st.markdown("""
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     
-    /* 指数シナジー専用カラーバッジ */
     .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a78bfa; margin-right: 4px; }
     .badge-f-arm { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-s-tua { display: inline-flex; align-items: center; background: linear-gradient(135deg, #047857 0%, #065f46 100%); color: #ecfdf5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #34d399; margin-right: 4px; }
@@ -357,15 +356,9 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        # 坂路調（調教タイム）の正しい抽出
-        raw_sakaro = row.get('坂路調', '')
-        sakaro_str = str(raw_sakaro).strip() if pd.notnull(raw_sakaro) else ''
+        # 坂路調（調教データ）の正確な取得
+        sakaro_chou = str(row.get('坂路調', '')).strip() if pd.notnull(row.get('坂路調', '')) else ''
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
-        
-        if sakaro_str == '' or sakaro_str.isdigit() or len(sakaro_str) > 15:
-            sakaro_chou = f"順位 {hc_rk}位"
-        else:
-            sakaro_chou = f"{sakaro_str} (順位{hc_rk}位)"
 
         hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
         tk_rk = int(pd.to_numeric(row.get('時計血順位', 99), errors='coerce') or 99)
@@ -468,9 +461,7 @@ def main():
     races_in_v = v_df[['race_uid', 'race_id', 'track', 'dist']].drop_duplicates('race_uid')
     races_sorted = sorted(races_in_v.to_dict('records'), key=lambda x: extract_race_number(x['race_uid']))
 
-    # ============================================================================
-    # 新機能：レース選択プルダウンに第3の馬券パターン（AS交差馬・ボーナス）の印を表示
-    # ============================================================================
+    # レース選択プルダウンに第3の馬券パターン（AS交差馬・ボーナス）の印を表示
     race_options = {}
     for r in races_sorted:
         r_uid = r['race_uid']
@@ -520,9 +511,7 @@ def main():
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
-    # ============================================================================
     # 第3の馬券パターン（AS交差・各種シナジー・Z特化フォーメーション）の集計・表示
-    # ============================================================================
     f_top3_df = race_df.sort_values('F順位').head(3)
     s_top3_df = race_df.sort_values('S順位').head(3)
     arm_top3_df = race_df.sort_values('ARM順位').head(3)
@@ -643,7 +632,6 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
 
-        # シナジーバッジの付与
         is_as = h['F順位'] <= 3 and h['S順位'] <= 3
         is_farm = h['F順位'] <= 3 and h['ARM順位'] <= 3
         is_stua = h['S順位'] <= 3 and h['TUA順位'] <= 3
@@ -709,7 +697,7 @@ def main():
                     TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
                     S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
                 </li>
-                <li><strong>調教データ</strong>: タイム/内容: <strong>{choukyou_str}</strong> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
+                <li><strong>調教データ</strong>: タイム/内容: <strong>{choukyou_str}</strong> (順位{h['坂路調順位']}位) ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
                 <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位</li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {tc_badge} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
@@ -719,4 +707,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-```[cite: 13, 14, 17]
