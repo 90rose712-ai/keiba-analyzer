@@ -357,16 +357,17 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        # 坂路調（調教タイム）の厳格な抽出ロジック（数値や内部コードの場合は順位等から適切に表示）
+        # 坂路調（調教タイム）の確実な取得とフォーマット整形
         raw_sakaro = row.get('坂路調', '')
         sakaro_str = str(raw_sakaro).strip() if pd.notnull(raw_sakaro) else ''
-        if sakaro_str == '' or sakaro_str.isdigit() or len(sakaro_str) > 15:
-            # もし数値や長すぎるコード、空欄であれば、分かりやすく「順位ベース計測」または調教順位を表示
-            sakaro_chou = f"坂路調順位 {int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)}位"
-        else:
-            sakaro_chou = sakaro_str
-
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
+        
+        if sakaro_str == '' or sakaro_str.isdigit() or len(sakaro_str) > 15:
+            # もし数値や空欄であれば順位情報をわかりやすく表示
+            sakaro_chou = f"坂路調順位 {hc_rk}位"
+        else:
+            sakaro_chou = f"{sakaro_str} (順位{hc_rk}位)"
+
         hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
         tk_rk = int(pd.to_numeric(row.get('時計血順位', 99), errors='coerce') or 99)
         c_rk = int(pd.to_numeric(row.get('コース連順位', 99), errors='coerce') or 99)
@@ -503,7 +504,7 @@ def main():
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
     # ============================================================================
-    # 第3の馬券パターン（AS交差・各種シナジー・Z特型フォーメーション）の集計・表示
+    # 第3の馬券パターン（AS交差・各種シナジー・Z特化フォーメーション）の集計・表示
     # ============================================================================
     f_top3_df = race_df.sort_values('F順位').head(3)
     s_top3_df = race_df.sort_values('S順位').head(3)
@@ -673,7 +674,7 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-        choukyou_str = f"調教データ/内容: <strong>{h['坂路調']}</strong> (順位{h['坂路調順位']}位)"
+        choukyou_str = h['坂路調']
 
         st.markdown(f"""
         <div class='horse-card'>
@@ -691,7 +692,7 @@ def main():
                     TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
                     S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
                 </li>
-                <li><strong>調教データ</strong>: {choukyou_str} ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
+                <li><strong>調教データ</strong>: 坂路調/内容: <strong>{choukyou_str}</strong> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
                 <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位</li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {tc_badge} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
