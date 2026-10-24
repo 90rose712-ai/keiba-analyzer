@@ -357,14 +357,13 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        # 坂路調（調教タイム）の確実な取得とフォーマット整形
+        # 坂路調（調教タイム）の正しい抽出
         raw_sakaro = row.get('坂路調', '')
         sakaro_str = str(raw_sakaro).strip() if pd.notnull(raw_sakaro) else ''
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
         
         if sakaro_str == '' or sakaro_str.isdigit() or len(sakaro_str) > 15:
-            # もし数値や空欄であれば順位情報をわかりやすく表示
-            sakaro_chou = f"坂路調順位 {hc_rk}位"
+            sakaro_chou = f"順位 {hc_rk}位"
         else:
             sakaro_chou = f"{sakaro_str} (順位{hc_rk}位)"
 
@@ -469,7 +468,25 @@ def main():
     races_in_v = v_df[['race_uid', 'race_id', 'track', 'dist']].drop_duplicates('race_uid')
     races_sorted = sorted(races_in_v.to_dict('records'), key=lambda x: extract_race_number(x['race_uid']))
 
-    race_options = {r['race_uid']: f"{r['race_uid']} ({r['track']}{r['dist']}m)" for r in races_sorted}
+    # ============================================================================
+    # 新機能：レース選択プルダウンに第3の馬券パターン（AS交差馬・ボーナス）の印を表示
+    # ============================================================================
+    race_options = {}
+    for r in races_sorted:
+        r_uid = r['race_uid']
+        r_subset = v_df[v_df['race_uid'] == r_uid]
+        as_count = ((r_subset['F順位'] <= 3) & (r_subset['S順位'] <= 3)).sum()
+        is_bon = ((r_subset['F順位'] <= 3) & (r_subset['ARM順位'] <= 3) & (r_subset['TUA順位'] <= 3)).sum() >= 3
+
+        if is_bon:
+            icon_str = " 👑[ボーナス]"
+        elif as_count > 0:
+            icon_str = f" 🔥[AS交差:{as_count}頭]"
+        else:
+            icon_str = " 📌"
+
+        race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){icon_str}"
+
     selected_race_uid = st.selectbox("レース選択（1R〜順次）", options=list(race_options.keys()), format_func=lambda x: race_options[x])
 
     race_df = df[df['race_uid'] == selected_race_uid].copy()
@@ -692,7 +709,7 @@ def main():
                     TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
                     S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
                 </li>
-                <li><strong>調教データ</strong>: 坂路調/内容: <strong>{choukyou_str}</strong> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
+                <li><strong>調教データ</strong>: タイム/内容: <strong>{choukyou_str}</strong> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
                 <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位</li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {tc_badge} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
@@ -702,3 +719,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```[cite: 13, 14, 17]
