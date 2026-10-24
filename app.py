@@ -168,9 +168,12 @@ st.markdown("""
     .badge-s-tua { display: inline-flex; align-items: center; background: linear-gradient(135deg, #047857 0%, #065f46 100%); color: #ecfdf5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #34d399; margin-right: 4px; }
     .badge-quad-synergy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; box-shadow: 0 0 8px rgba(220, 38, 38, 0.5); margin-right: 4px; }
 
+    /* 芝→ダ(S上位特注)専用発光バッジ */
+    .badge-track-s-turf2dirt { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #7c2d12 100%); color: #fef3c7; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fde68a; box-shadow: 0 0 10px rgba(245, 158, 11, 0.6); margin-right: 4px; }
+
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
-    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; box-shadow: 0 0 8px rgba(249, 115, 22, 0.4); }
-    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; box-shadow: 0 0 8px rgba(59, 130, 246, 0.4); }
+    .badge-track-turf2dirt { display: inline-flex; align-items: center; background-color: #c2410c; color: #ffedd5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fb923c; }
+    .badge-track-dirt2turf { display: inline-flex; align-items: center; background-color: #1d4ed8; color: #eff6ff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #60a5fa; }
     .badge-track-first { display: inline-flex; align-items: center; background-color: #047857; color: #ecfdf5; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #34d399; }
 
     .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
@@ -224,7 +227,7 @@ def clean_str(val):
     return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
 def read_csv_robust():
-    candidates = ["当日全指数統合10.18.csv", "当日全指数統合.csv", "データ統合.csv", "*全指数統合*.csv"]
+    candidates = ["10.24全指数統合シート - 全指数統合.csv", "当日全指数統合10.18.csv", "当日全指数統合.csv", "データ統合.csv", "*全指数統合*.csv"]
     all_found = []
     for c in candidates:
         all_found.extend(glob.glob(c))
@@ -277,13 +280,13 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 25.0; nb_hits.append("🔄 トラック変わり激走特注")
 
-    if '藤原' in trainer: score += 25.0; stable_hits.append("厩舎: 藤原英昭（CW仕上がり鉄板）")
-    if '杉山' in trainer: score += 25.0; stable_hits.append("厩舎: 杉山晴紀（坂路終い11秒台加速）")
-    if '矢作' in trainer: score += 25.0; stable_hits.append("厩舎: 矢作芳人（坂路A2加速・連闘/中1週）")
-    if '中内田' in trainer: score += (30.0 if f_rk == 1 else 20.0); stable_hits.append("厩舎: 中内田充正（CW単走馬なり・勝率抜群）")
-    if '木村' in trainer: score += 25.0; stable_hits.append("厩舎: 木村哲也（南W併せ強め・外厩帰り）")
-    if '堀' in trainer: score += 20.0; stable_hits.append("厩舎: 堀宣行（南W馬なり・上積み勝負）")
-    if '友道' in trainer: score += 20.0; stable_hits.append("厩舎: 友道康夫（芝併せ長距離信頼）")
+    if '藤原' in trainer: score += 25.0; stable_hits.append("厩舎: 藤原英昭")
+    if '杉山' in trainer: score += 25.0; stable_hits.append("厩舎: 杉山晴紀")
+    if '矢作' in trainer: score += 25.0; stable_hits.append("厩舎: 矢作芳人")
+    if '中内田' in trainer: score += (30.0 if f_rk == 1 else 20.0); stable_hits.append("厩舎: 中内田充正")
+    if '木村' in trainer: score += 25.0; stable_hits.append("厩舎: 木村哲也")
+    if '堀' in trainer: score += 20.0; stable_hits.append("厩舎: 堀宣行")
+    if '友道' in trainer: score += 20.0; stable_hits.append("厩舎: 友道康夫")
 
     if f_rk == 1: score += 50.0
     elif f_rk <= 3: score += 30.0
@@ -323,7 +326,7 @@ def main():
                 continue
 
     if df_raw.empty:
-        st.markdown("<div class='race-type-banner race-type-normal'>⚠️ 全42列マスターCSVが見つかりません。「当日全指数統合10.18.csv」をアップロードしてください。</div>", unsafe_allow_html=True)
+        st.markdown("<div class='race-type-banner race-type-normal'>⚠️ 全42列マスターCSVが見つかりません。サイドバーからCSVを指定してください。</div>", unsafe_allow_html=True)
         st.stop()
 
     st.sidebar.success(f"✅ 読込成功: {loaded_filename} (全{len(df_raw)}頭)")
@@ -356,7 +359,6 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        # 坂路調（調教データ）の正確な取得
         sakaro_chou = str(row.get('坂路調', '')).strip() if pd.notnull(row.get('坂路調', '')) else ''
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
 
@@ -372,7 +374,7 @@ def main():
         pass_style = clean_str(row.get('前走決手', ''))
         interval = clean_str(row.get('間隔', ''))
         weight_val = clean_str(row.get('前場体重', '480'))
-        race_date = clean_str(row.get('日付', '10.18'))
+        race_date = clean_str(row.get('日付', '10.24'))
 
         match_v = re.match(r'([^\d]+)(\d+)', race_id)
         v_name = venue_dict.get(match_v.group(1), match_v.group(1)) if match_v else "東京"
@@ -461,7 +463,6 @@ def main():
     races_in_v = v_df[['race_uid', 'race_id', 'track', 'dist']].drop_duplicates('race_uid')
     races_sorted = sorted(races_in_v.to_dict('records'), key=lambda x: extract_race_number(x['race_uid']))
 
-    # レース選択プルダウンに第3の馬券パターン（AS交差馬・ボーナス）の印を表示
     race_options = {}
     for r in races_sorted:
         r_uid = r['race_uid']
@@ -511,7 +512,7 @@ def main():
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
-    # 第3の馬券パターン（AS交差・各種シナジー・Z特化フォーメーション）の集計・表示
+    # 第3の馬券パターン（AS交差・各種シナジー・Z特化フォーメーション）の集計・自動Z抽出表示
     f_top3_df = race_df.sort_values('F順位').head(3)
     s_top3_df = race_df.sort_values('S順位').head(3)
     arm_top3_df = race_df.sort_values('ARM順位').head(3)
@@ -519,8 +520,8 @@ def main():
 
     f_top3_nums = f_top3_df['馬番'].tolist()
     s_top3_nums = s_top3_df['馬番'].tolist()
-    arm_top3_nums = arm_top3_df['馬番'].tolist()
-    tua_top3_nums = tua_top3_df['馬番'].tolist()
+    arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in arm_top3_df else []
+    tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in tua_top3_df else []
 
     a_group_nums = sorted(list(set(f_top3_nums + s_top3_nums)))
     as_intersect_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums)))
@@ -528,10 +529,17 @@ def main():
     s_tua_nums = sorted(list(set(s_top3_nums) & set(tua_top3_nums)))
     quad_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums) & set(arm_top3_nums) & set(tua_top3_nums)))
 
+    # 自動Z抽出（A群以外の馬のうち、調教順・コース連・バランス等で上位の馬）
+    z_candidates = race_df[~race_df['馬番'].isin(a_group_nums)].sort_values(
+        ['坂路調順位', 'コース連順位', 'バランス順位'], ascending=[True, True, True]
+    )
+    z_nums = z_candidates.head(3)['馬番'].tolist()
+
     as_str = ", ".join([f"<strong>{n}番</strong>" for n in as_intersect_nums]) if as_intersect_nums else "なし"
     f_arm_str = ", ".join([f"<strong>{n}番</strong>" for n in f_arm_nums]) if f_arm_nums else "なし"
     s_tua_str = ", ".join([f"<strong>{n}番</strong>" for n in s_tua_nums]) if s_tua_nums else "なし"
     quad_str = ", ".join([f"<strong>{n}番</strong>" for n in quad_nums]) if quad_nums else "なし"
+    z_str = ", ".join([f"<strong>{n}番</strong>" for n in z_nums]) if z_nums else "なし"
 
     st.markdown(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
@@ -542,10 +550,11 @@ def main():
             ⭐ <strong>【F × ARM交差馬（絶対能力 ＋ 高回収）】</strong>: {f_arm_str}<br>
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
-            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「Z（穴馬）」選定に全集中する構成。
+            🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span><br>
+            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「厳選Z馬」選定に全集中する構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
-            <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>[厳選Z馬]</span></li>
+            <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span></li>
         </ul>
     </div>
     """, unsafe_allow_html=True)
@@ -644,6 +653,12 @@ def main():
             if is_farm: badges.append("<span class='badge-f-arm'>⭐ F×ARM特注</span>")
             if is_stua: badges.append("<span class='badge-s-tua'>🚀 S×TUA特注</span>")
 
+        # 芝→ダ変わり × S指数上位の専用特注バッジ
+        tc_raw = str(h['芝ダート変わり'])
+        s_rk_val = int(pd.to_numeric(h['S順位'], errors='coerce') or 99)
+        if '芝→ダ' in tc_raw and s_rk_val <= 3:
+            badges.append("<span class='badge-track-s-turf2dirt'>🔄 芝→ダ(S上位特注🔥)</span>")
+
         if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ コア指数救済（減点免除）</span>")
         for nb in h['nb_hits']: badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
         for stbl in h['stable_hits']: badges.append(f"<span class='badge-stable-hit'>{stbl}</span>")
@@ -654,7 +669,9 @@ def main():
             if judg == '最重要': badges.append(f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>")
 
         tc = h['芝ダート変わり']
-        if '芝→ダ' in tc:
+        if '芝→ダ' in tc and s_rk_val <= 3:
+            tc_badge = f"<span class='badge-track-s-turf2dirt'>🔄 芝→ダ(S上位特注)</span>"
+        elif '芝→ダ' in tc:
             tc_badge = f"<span class='badge-track-turf2dirt'>🔄 {tc}</span>"
         elif 'ダ→芝' in tc:
             tc_badge = f"<span class='badge-track-dirt2turf'>🔄 {tc}</span>"
