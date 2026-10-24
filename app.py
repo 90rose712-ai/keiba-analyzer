@@ -357,12 +357,14 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        # 坂路調（調教タイム）の柔軟な取得ロジック（数値や空欄の場合のフォールバック対応）
+        # 坂路調（調教タイム）の厳格な抽出ロジック（数値や内部コードの場合は順位等から適切に表示）
         raw_sakaro = row.get('坂路調', '')
-        sakaro_chou = clean_str(raw_sakaro if pd.notnull(raw_sakaro) and str(raw_sakaro).strip() != '' else '')
-        if not sakaro_chou or sakaro_chou.isdigit():
-            # もし数値や空欄であれば、他の調教関連データやタイム文字列があればそれを活用、なければ順位等から補完
-            sakaro_chou = clean_str(str(row.get('調教', row.get('ウッド', ''))))
+        sakaro_str = str(raw_sakaro).strip() if pd.notnull(raw_sakaro) else ''
+        if sakaro_str == '' or sakaro_str.isdigit() or len(sakaro_str) > 15:
+            # もし数値や長すぎるコード、空欄であれば、分かりやすく「順位ベース計測」または調教順位を表示
+            sakaro_chou = f"坂路調順位 {int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)}位"
+        else:
+            sakaro_chou = sakaro_str
 
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
         hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
@@ -501,7 +503,7 @@ def main():
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
     # ============================================================================
-    # 第3の馬券パターン（AS交差・各種シナジー・Z特化フォーメーション）の集計・表示
+    # 第3の馬券パターン（AS交差・各種シナジー・Z特型フォーメーション）の集計・表示
     # ============================================================================
     f_top3_df = race_df.sort_values('F順位').head(3)
     s_top3_df = race_df.sort_values('S順位').head(3)
@@ -533,7 +535,7 @@ def main():
             ⭐ <strong>【F × ARM交差馬（絶対能力 ＋ 高回収）】</strong>: {f_arm_str}<br>
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
-            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の推奨「Z（穴馬）」選定に全集中する構成。
+            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「Z（穴馬）」選定に全集中する構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>[厳選Z馬]</span></li>
@@ -671,12 +673,7 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-        # 調教タイム/内容の表示（空欄や数値の場合の自動補完・表示保証）
-        choukyou_raw = h['坂路調']
-        if not choukyou_raw or str(choukyou_raw).isdigit() or str(choukyou_raw).strip() == '':
-            choukyou_str = f"坂路調順位: {h['坂路調順位']}位（タイムデータ参照）"
-        else:
-            choukyou_str = f"調教タイム/内容: <strong>{choukyou_raw}</strong> (順位{h['坂路調順位']})"
+        choukyou_str = f"調教データ/内容: <strong>{h['坂路調']}</strong> (順位{h['坂路調順位']}位)"
 
         st.markdown(f"""
         <div class='horse-card'>
