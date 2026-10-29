@@ -167,7 +167,6 @@ st.markdown("""
     .badge-f-arm { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-s-tua { display: inline-flex; align-items: center; background: linear-gradient(135deg, #047857 0%, #065f46 100%); color: #ecfdf5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #34d399; margin-right: 4px; }
     .badge-quad-synergy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; box-shadow: 0 0 8px rgba(220, 38, 38, 0.5); margin-right: 4px; }
-
     .badge-track-s-turf2dirt { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #7c2d12 100%); color: #fef3c7; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fde68a; box-shadow: 0 0 10px rgba(245, 158, 11, 0.6); margin-right: 4px; }
 
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
@@ -225,6 +224,22 @@ def clean_str(val):
     if pd.isnull(val): return ""
     return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
+def load_external_training_csvs():
+    sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
+    for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
+        try:
+            if os.path.exists("出馬表_坂路.csv"):
+                sakaro_df = pd.read_csv("出馬表_坂路.csv", encoding=enc)
+                if not sakaro_df.empty: break
+        except: pass
+    for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
+        try:
+            if os.path.exists("出馬表_ウッド.csv"):
+                wood_df = pd.read_csv("出馬表_ウッド.csv", encoding=enc)
+                if not wood_df.empty: break
+        except: pass
+    return sakaro_df, wood_df
+
 def read_csv_robust():
     candidates = ["10.24全指数統合シート - 全指数統合.csv", "当日全指数統合10.18.csv", "当日全指数統合.csv", "データ統合.csv", "*全指数統合*.csv"]
     all_found = []
@@ -240,6 +255,28 @@ def read_csv_robust():
             except Exception:
                 continue
     return pd.DataFrame(), ""
+
+def parse_and_judge_lap(l1_val, l2_val, t4_val):
+    try:
+        l1 = float(l1_val) if pd.notnull(l1_val) else 0.0
+        l2 = float(l2_val) if pd.notnull(l2_val) else 0.0
+        t4 = float(t4_val) if pd.notnull(t4_val) else 99.0
+    except:
+        return "判定不能", "#374151"
+
+    if t4 > 56.0 or l1 > 13.0:
+        return "基準外(軽め)", "#374151"
+
+    if l1 < l2: # 加速ラップ
+        if l1 <= 11.9: return "A3 (終い11秒台加速🔥)", "#dc2626"
+        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9: return "A2 (終い2Fともに12秒台加速)", "#d97706"
+        elif l2 >= 13.0 and 12.0 <= l1 <= 12.9: return "A1 (終いのみ12秒台加速)", "#2563eb"
+        else: return "A型 (加速)", "#047857"
+    else: # 減速ラップ
+        if l2 <= 11.9: return "B3 (2F目11秒台減速)", "#7c2d12"
+        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9: return "B2 (終い2Fともに12秒台減速)", "#4b5563"
+        elif 12.0 <= l2 <= 12.9 and l1 >= 13.0: return "B1 (2Fのみ12秒台減速)", "#4b5563"
+        else: return "B型 (減速)", "#374151"
 
 def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category):
     score = 0.0
@@ -309,40 +346,21 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
 
     return score, is_rescued, is_sss, nb_hits, stable_hits
 
-def parse_and_judge_lap(lap1_val, lap2_val, time4f_val):
-    try:
-        l1 = float(lap1_val) if pd.notnull(lap1_val) else 0.0
-        l2 = float(lap2_val) if pd.notnull(lap2_val) else 0.0
-        t4 = float(time4f_val) if pd.notnull(time4f_val) else 99.0
-    except:
-        return "判定不能", "#374151"
-
-    if t4 > 56.0 or l1 > 13.0:
-        return "基準外(軽め)", "#374151"
-
-    if l1 < l2:  # 加速ラップ
-        if l1 <= 11.9:
-            return "A3 (終い11秒台加速)", "#dc2626"
-        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9:
-            return "A2 (終い2Fともに12秒台加速)", "#d97706"
-        elif l2 >= 13.0 and 12.0 <= l1 <= 12.9:
-            return "A1 (終いのみ12秒台加速)", "#2563eb"
-        else:
-            return "A型 (加速)", "#047857"
-    else:  # 減速ラップ
-        if l2 <= 11.9:
-            return "B3 (2F目11秒台減速)", "#7c2d12"
-        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9:
-            return "B2 (終い2Fともに12秒台減速)", "#4b5563"
-        elif 12.0 <= l2 <= 12.9 and l1 >= 13.0:
-            return "B1 (2Fのみ12秒台減速)", "#4b5563"
-        else:
-            return "B型 (減速)", "#374151"
-
 def main():
     st.sidebar.markdown("## 📂 CSVデータ読込管理")
     df_raw, loaded_filename = read_csv_robust()
-    
+    sakaro_raw, wood_raw = load_external_training_csvs()
+
+    if not sakaro_raw.empty:
+        st.sidebar.success(f"✅ 坂路調教CSV読込成功 ({len(sakaro_raw)}件)")
+    else:
+        st.sidebar.warning("⚠️ 出馬表_坂路.csv が見つかりません。")
+
+    if not wood_raw.empty:
+        st.sidebar.success(f"✅ ウッド調教CSV読込成功 ({len(wood_raw)}件)")
+    else:
+        st.sidebar.warning("⚠️ 出馬表_ウッド.csv が見つかりません。")
+      
     uploaded_file = st.sidebar.file_uploader("全42列マスターCSVを指定", type=['csv'])
     if uploaded_file is not None:
         for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
@@ -358,7 +376,7 @@ def main():
         st.markdown("<div class='race-type-banner race-type-normal'>⚠️ 全42列マスターCSVが見つかりません。サイドバーからCSVを指定してください。</div>", unsafe_allow_html=True)
         st.stop()
 
-    st.sidebar.success(f"✅ 読込成功: {loaded_filename} (全{len(df_raw)}頭)")
+    st.sidebar.success(f"✅ 指数CSV読込成功: {loaded_filename} (全{len(df_raw)}頭)")
 
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
@@ -388,9 +406,7 @@ def main():
         s_val = float(pd.to_numeric(row.get('S', 0.0), errors='coerce') or 0.0)
         s_rk = int(pd.to_numeric(row.get('S順位', 99), errors='coerce') or 99)
 
-        sakaro_chou = str(row.get('坂路調', '')).strip() if pd.notnull(row.get('坂路調', '')) else ''
         hc_rk = int(pd.to_numeric(row.get('坂路調順位', 99), errors='coerce') or 99)
-
         hk_rk = int(pd.to_numeric(row.get('坂路血順位', 99), errors='coerce') or 99)
         tk_rk = int(pd.to_numeric(row.get('時計血順位', 99), errors='coerce') or 99)
         c_rk = int(pd.to_numeric(row.get('コース連順位', 99), errors='coerce') or 99)
@@ -408,6 +424,38 @@ def main():
         match_v = re.match(r'([^\d]+)(\d+)', race_id)
         v_name = venue_dict.get(match_v.group(1), match_v.group(1)) if match_v else "東京"
 
+        # 坂路CSVから直近の調教データを抽出
+        s_row = pd.Series()
+        if not sakaro_raw.empty and horse:
+            matched_s = sakaro_raw[sakaro_raw['馬名'].astype(str).str.strip() == horse]
+            if not matched_s.empty:
+                s_row = matched_s.iloc[-1] # 直近の追い切り
+
+        # ウッドCSVから直近の調教データを抽出
+        w_row = pd.Series()
+        if not wood_raw.empty and horse:
+            matched_w = wood_raw[wood_raw['馬名'].astype(str).str.strip() == horse]
+            if not matched_w.empty:
+                w_row = matched_w.iloc[-1]
+
+        sakaro_t1 = s_row.get('Time1', '')
+        sakaro_t2 = s_row.get('Time2', '')
+        sakaro_t3 = s_row.get('Time3', '')
+        sakaro_t4 = s_row.get('Time4', '')
+        sakaro_l4 = s_row.get('Lap4', '')
+        sakaro_l3 = s_row.get('Lap3', '')
+        sakaro_l2 = s_row.get('Lap2', '')
+        sakaro_l1 = s_row.get('Lap1', '')
+
+        wood_6f = w_row.get('6F', '')
+        wood_5f = w_row.get('5F', '')
+        wood_4f = w_row.get('4F', '')
+        wood_3f = w_row.get('3F', '')
+        wood_2f = w_row.get('2F', '')
+        wood_1f = w_row.get('1F', '')
+        wood_l2 = w_row.get('Lap2', '')
+        wood_l1 = w_row.get('Lap1', '')
+
         if horse:
             records.append({
                 'race_id': race_id, 'race_uid': race_id, '競馬場名': v_name, 'track': track, 'dist': dist_int,
@@ -415,7 +463,10 @@ def main():
                 '調教師': trainer, '騎手': jockey, '種牡馬': sire, '人気順位': int(float(pop)) if pd.notnull(pop) else 99,
                 'Fup2': fup, 'Fup2順位': fup_rk, 'F': f_val, 'F順位': f_rk, 'ARM': arm_val, 'ARM順位': arm_rk,
                 'TUA': tua_val, 'TUA順位': tua_rk, 'S': s_val, 'S順位': s_rk,
-                '坂路調': sakaro_chou, '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
+                '坂路T1': sakaro_t1, '坂路T2': sakaro_t2, '坂路T3': sakaro_t3, '坂路T4': sakaro_t4,
+                '坂路L4': sakaro_l4, '坂路L3': sakaro_l3, '坂路L2': sakaro_l2, '坂路L1': sakaro_l1,
+                'ウッド6F': wood_6f, 'ウッド5F': wood_5f, 'ウッド4F': wood_4f, 'ウッド3F': wood_3f, 'ウッド2F': wood_2f, 'ウッド1F': wood_1f, 'ウッドL2': wood_l2, 'ウッドL1': wood_l1,
+                '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
                 'コース連順位': c_rk, '血統連順位': k_rk, 'バランス順位': b_rk,
                 '芝ダート変わり': track_change, '前走脚質': run_style, '前走決手': pass_style,
                 '間隔': interval, '前場体重': weight_val, '日付': race_date
@@ -722,17 +773,19 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-        # 調教ラップおよび6大区分判定の取得
-        sakaro_lap1 = h.get('坂路Lap1', '12.5')
-        sakaro_lap2 = h.get('坂路Lap2', '13.1')
-        sakaro_4f  = h.get('坂路4F', h.get('坂路調', '53.0'))
-        
-        wood_lap1  = h.get('ウッドLap1', '11.5')
-        wood_lap2  = h.get('ウッドLap2', '12.2')
-        wood_5f    = h.get('ウッド5F', '68.5')
+        # 坂路・ウッドの実ラップ解析
+        s_t4 = h.get('坂路T4', '')
+        s_l2 = h.get('坂路L2', '')
+        s_l1 = h.get('坂路L1', '')
+        w_5f = h.get('ウッド5F', '')
+        w_l2 = h.get('ウッドL2', '')
+        w_l1 = h.get('ウッドL1', '')
 
-        judge_label, judge_color = parse_and_judge_lap(sakaro_lap1, sakaro_lap2, sakaro_4f)
-        choukyou_summary = f"坂路[4F:{sakaro_4f} | Lap2:{sakaro_lap2} → Lap1:{sakaro_lap1}] ｜ ウッド[5F:{wood_5f} | Lap2:{wood_lap2} → Lap1:{wood_lap1}]"
+        judge_label, judge_color = parse_and_judge_lap(s_l1, s_l2, s_t4)
+        
+        sakaro_str = f"坂路[4F:{s_t4 or '---'} | L2:{s_l2 or '---'} → L1:{s_l1 or '---'}]" if s_t4 else "坂路データなし"
+        wood_str = f"ウッド[5F:{w_5f or '---'} | L2:{w_l2 or '---'} → L1:{w_l1 or '---'}]" if w_5f else "ウッドデータなし"
+        choukyou_summary = f"{sakaro_str} ｜ {wood_str}"
 
         st.markdown(f"""
         <div class='horse-card'>
