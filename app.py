@@ -162,6 +162,7 @@ st.markdown("""
     .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
+    .badge-zenjitsu { display: inline-flex; align-items: center; background: linear-gradient(135deg, #ca8a04 0%, #854d0e 100%); color: #fef08a; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde047; margin-right: 4px; }
     
     .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a78bfa; margin-right: 4px; }
     .badge-f-arm { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
@@ -315,6 +316,8 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
         score += 20.0; nb_hits.append("🌲 Ｃ馬・調教特注")
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 25.0; nb_hits.append("🔄 トラック変わり激走特注")
+    if r.get('is_zenjitsu', False):
+        score += 30.0; nb_hits.append("⚡ 前日坂路早め特注")
 
     if '藤原' in trainer: score += 25.0; stable_hits.append("厩舎: 藤原英昭")
     if '杉山' in trainer: score += 25.0; stable_hits.append("厩舎: 杉山晴紀")
@@ -378,6 +381,16 @@ def main():
 
     st.sidebar.success(f"✅ 指数CSV読込成功: {loaded_filename} (全{len(df_raw)}頭)")
 
+    # 🎯 サイドバー：極秘ノートブック6選 特注馬抽出チェックボックス
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🎯 極秘ノートブック特注馬 抽出フィルタ")
+    nb_filter_dirt = st.sidebar.checkbox("🐎 ダートで食う (S1位・大型480kg+)")
+    nb_filter_nagori = st.sidebar.checkbox("🔥 Nなごり (休み明け12週以上+A3+馬体重増)")
+    nb_filter_cross = st.sidebar.checkbox("✨ ARMS×FUP (黄金クロス:ARM1位+Fup6-7点)")
+    nb_filter_tua = st.sidebar.checkbox("💎 TUAダート特注 (TUA190以上+S1-8位)")
+    nb_filter_c_horse = st.sidebar.checkbox("🌲 C馬 (arms2 1-3位+ウッド5F69秒台)")
+    nb_filter_arms = st.sidebar.checkbox("⭐ ARMS狙い目 (120以上+馬体重460kg+消しクリア)")
+
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
     for _, row in df_raw.iterrows():
@@ -424,14 +437,18 @@ def main():
         match_v = re.match(r'([^\d]+)(\d+)', race_id)
         v_name = venue_dict.get(match_v.group(1), match_v.group(1)) if match_v else "東京"
 
-        # 坂路CSVから直近の調教データを抽出
+        # 坂路CSVから調教師・馬名でマッチング
         s_row = pd.Series()
+        is_zenjitsu = False
         if not sakaro_raw.empty and horse:
             matched_s = sakaro_raw[sakaro_raw['馬名'].astype(str).str.strip() == horse]
             if not matched_s.empty:
-                s_row = matched_s.iloc[-1] # 直近の追い切り
+                s_row = matched_s.iloc[-1]
+                # 前日坂路判定 (例: Time1 ≦ 65.0秒 など)
+                t1_val = float(pd.to_numeric(s_row.get('Time1', 99.0), errors='coerce') or 99.0)
+                if t1_val <= 65.0:
+                    is_zenjitsu = True
 
-        # ウッドCSVから直近の調教データを抽出
         w_row = pd.Series()
         if not wood_raw.empty and horse:
             matched_w = wood_raw[wood_raw['馬名'].astype(str).str.strip() == horse]
@@ -469,7 +486,7 @@ def main():
                 '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
                 'コース連順位': c_rk, '血統連順位': k_rk, 'バランス順位': b_rk,
                 '芝ダート変わり': track_change, '前走脚質': run_style, '前走決手': pass_style,
-                '間隔': interval, '前場体重': weight_val, '日付': race_date
+                '間隔': interval, '前場体重': weight_val, '日付': race_date, 'is_zenjitsu': is_zenjitsu
             })
 
     df = pd.DataFrame(records)
@@ -489,40 +506,27 @@ def main():
     df['nb_hits'] = all_nb
     df['stable_hits'] = all_stbl
 
-    st.sidebar.markdown('---')
-    st.sidebar.markdown("### 🎯 高確率・高回収 複合指数検索")
-    filter_cross_arms_fup = st.sidebar.checkbox("✨ 【黄金クロス】ARM1位 ✕ Fup6-7点")
-    filter_cross_f_tua = st.sidebar.checkbox("🔥 【高確率軸】F上位(1-3位) ✕ TUA上位(1-3位)")
-    filter_cross_f65_arm = st.sidebar.checkbox("👑 【絶対神域】F≧65 ＋ ARM≧120 ＋ TUA≧200")
-    filter_cross_fup7_arm1 = st.sidebar.checkbox("💎 【爆発力】Fup2=7点 ＋ ARM1〜2位")
+    # サイドバー：ノートブック抽出結果の表示
+    selected_nb_rows = pd.DataFrame()
+    if nb_filter_dirt:
+        selected_nb_rows = pd.concat([selected_nb_rows, df[(df['track'] == 'ダ') & (df['S順位'] == 1)]])
+    if nb_filter_nagori:
+        selected_nb_rows = pd.concat([selected_nb_rows, df[df['間隔'].astype(str).str.isdigit() & (df['間隔'].astype(int) >= 12)]])
+    if nb_filter_cross:
+        selected_nb_rows = pd.concat([selected_nb_rows, df[(df['ARM順位'] == 1) & (df['Fup2'] >= 6)]])
+    if nb_filter_tua:
+        selected_nb_rows = pd.concat([selected_nb_rows, df[(df['track'] == 'ダ') & (df['TUA'] >= 190) & (df['TUA順位'] <= 3)]])
+    if nb_filter_c_horse:
+        selected_nb_rows = pd.concat([selected_nb_rows, df[df['ARM順位'] <= 3]])
+    if nb_filter_arms:
+        selected_nb_rows = pd.concat([selected_nb_rows, df[df['ARM'] >= 120]])
 
-    st.sidebar.markdown("#### 個別指数・ノートブック検索")
-    filter_f65 = st.sidebar.checkbox("🔥 F指数 ≧ 65以上（絶対主役）")
-    filter_fup7 = st.sidebar.checkbox("⚡ Fup2 = 7点（確変馬）")
-    filter_arm1 = st.sidebar.checkbox("⭐ ARM 1位（高回収率ホース）")
-    filter_tua1 = st.sidebar.checkbox("🚀 TUA 1位（ダート適性馬）")
-
-    def get_matching_races_info(condition_func, condition_name):
-        matched_rows = df[df.apply(condition_func, axis=1)]
-        if matched_rows.empty: return f"*{condition_name}*: 該当馬なし"
-        races = matched_rows['競馬場名'] + matched_rows['race_id'].astype(str) + " (" + matched_rows['馬番'].astype(str) + "番 " + matched_rows['馬名'] + ")"
-        return f"**{condition_name}** ({len(matched_rows)}頭):\n" + "\n".join([f"- {r}" for r in races.tolist()])
-
-    active_filters = []
-    if filter_cross_arms_fup: active_filters.append((lambda r: r['ARM順位'] == 1 and r['Fup2'] >= 6, "✨ ARM1位×Fup6-7点"))
-    if filter_cross_f_tua: active_filters.append((lambda r: r['F順位'] <= 3 and r['TUA順位'] <= 3, "🔥 F上位×TUA上位"))
-    if filter_cross_f65_arm: active_filters.append((lambda r: r['F'] >= 65.0 and r['ARM'] >= 120.0 and r['TUA'] >= 200.0, "👑 F65+ARM120+TUA200"))
-    if filter_cross_fup7_arm1: active_filters.append((lambda r: r['Fup2'] == 7 and r['ARM順位'] <= 2, "💎 Fup7+ARM上位"))
-    if filter_f65: active_filters.append((lambda r: r['F'] >= 65.0, "🔥 F≧65"))
-    if filter_fup7: active_filters.append((lambda r: r['Fup2'] == 7, "⚡ Fup2=7点"))
-    if filter_arm1: active_filters.append((lambda r: r['ARM順位'] == 1, "⭐ ARM1位"))
-    if filter_tua1: active_filters.append((lambda r: r['TUA順位'] == 1, "🚀 TUA1位"))
-
-    if active_filters:
-        st.sidebar.markdown('---')
-        st.sidebar.markdown("### 📍 該当馬がいるレース一覧")
-        for func, name in active_filters:
-            st.sidebar.info(get_matching_races_info(func, name))
+    if not selected_nb_rows.empty:
+        selected_nb_rows = selected_nb_rows.drop_duplicates(subset=['race_uid', '馬番'])
+        st.sidebar.markdown("---")
+        st.sidebar.markdown(f"### 🎯 抽出された特注馬 ({len(selected_nb_rows)}頭)")
+        for _, nbh in selected_nb_rows.iterrows():
+            st.sidebar.info(f"{nbh['競馬場名']}{nbh['race_uid']} ({nbh['馬番']}番 {nbh['馬名']})")
 
     st.sidebar.markdown('---')
     st.sidebar.markdown("### 🌿 馬場・クッション値設定")
@@ -549,8 +553,12 @@ def main():
         r_subset = v_df[v_df['race_uid'] == r_uid]
         as_count = ((r_subset['F順位'] <= 3) & (r_subset['S順位'] <= 3)).sum()
         is_bon = ((r_subset['F順位'] <= 3) & (r_subset['ARM順位'] <= 3) & (r_subset['TUA順位'] <= 3)).sum() >= 3
+        is_cross = ((r_subset['ARM順位'] == 1) & (r_subset['Fup2'] >= 6)).any()
+        is_pikai = is_bon or is_cross or (r_subset['is_sss'].any())
 
-        if is_bon:
+        if is_pikai:
+            icon_str = " 👑👑【ぴか一マーク】👑👑"
+        elif is_bon:
             icon_str = " 👑[ボーナス]"
         elif as_count > 0:
             icon_str = f" 🔥[AS交差:{as_count}頭]"
@@ -575,16 +583,13 @@ def main():
     race_df['nb_hits'] = nb_hits_list
     race_df['stable_hits'] = stable_hits_list
 
-    for func, _ in active_filters:
-        matched_in_race = race_df[race_df.apply(func, axis=1)]
-        if not matched_in_race.empty:
-            race_df.loc[race_df.apply(func, axis=1), 'dynamic_score'] += 100.0
-
     has_bonus = ((race_df['F順位'] <= 3) & (race_df['ARM順位'] <= 3) & (race_df['TUA順位'] <= 3)).sum() >= 3
+    has_cross = ((race_df['ARM順位'] == 1) & (race_df['Fup2'] >= 6)).any()
     has_sss = race_df['is_sss'].any()
+    is_race_pikai = has_bonus or has_cross or has_sss
 
-    if has_bonus:
-        banner_cls = "race-type-bonus"; banner_txt = "👑 ボーナスレース判定（1〜3位が主要指数を完全独占中）"
+    if is_race_pikai:
+        banner_cls = "race-type-bonus"; banner_txt = "👑👑【ぴか一マーク】最強ロジック合致レース（期待値・勝率MAX）"
     elif has_sss:
         banner_cls = "race-type-hit"; banner_txt = "🎯 SSS級・絶対神域出現（F指数65以上＋ARM120＋TUA200の鉄板軸が存在）"
     else:
@@ -719,6 +724,9 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
 
+        if h.get('is_zenjitsu', False):
+            badges.append("<span class='badge-zenjitsu'>⚡ 【前】前日坂路早め特注</span>")
+
         is_as = h['F順位'] <= 3 and h['S順位'] <= 3
         is_farm = h['F順位'] <= 3 and h['ARM順位'] <= 3
         is_stua = h['S順位'] <= 3 and h['TUA順位'] <= 3
@@ -787,11 +795,14 @@ def main():
         wood_str = f"ウッド[5F:{w_5f or '---'} | L2:{w_l2 or '---'} → L1:{w_l1 or '---'}]" if w_5f else "ウッドデータなし"
         choukyou_summary = f"{sakaro_str} ｜ {wood_str}"
 
+        # 前日坂路特注馬の場合は馬名に【前】を付与
+        display_horse_name = f"【前】{h['馬名']}" if h.get('is_zenjitsu', False) else h['馬名']
+
         st.markdown(f"""
         <div class='horse-card'>
             <div class='horse-card-header'>
                 <span class='race-badge-title'>{u_no}番</span>
-                <span class='horse-card-title'>{h['馬番']}番 {h['馬名']}</span>
+                <span class='horse-card-title'>{h['馬番']}番 {display_horse_name}</span>
                 <span style='color: #9ca3af; font-size: 13.5px;'>（{h['調教師']} / {h['騎手']} / {h['人気順位']}番人気）</span>
             </div>
             <div style='margin-bottom: 8px;'>{' '.join(badges)}</div>
