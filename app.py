@@ -146,17 +146,17 @@ st.markdown("""
     .badge-mark-honmei {
         display: inline-flex; align-items: center; justify-content: center;
         background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
-        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; margin-right: 6px;
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; margin-right: 6px; width: auto; height: auto;
     }
     .badge-mark-taikou {
         display: inline-flex; align-items: center; justify-content: center;
         background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 6px;
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 6px; width: auto; height: auto;
     }
     .badge-mark-ana {
         display: inline-flex; align-items: center; justify-content: center;
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px;
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; width: auto; height: auto;
     }
     .badge-cushion-fit { display: inline-flex; align-items: center; background-color: #064e3b; color: #6ee7b7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
     .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
@@ -168,7 +168,6 @@ st.markdown("""
     .badge-s-tua { display: inline-flex; align-items: center; background: linear-gradient(135deg, #047857 0%, #065f46 100%); color: #ecfdf5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #34d399; margin-right: 4px; }
     .badge-quad-synergy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; box-shadow: 0 0 8px rgba(220, 38, 38, 0.5); margin-right: 4px; }
 
-    /* 芝→ダ(S上位特注)専用発光バッジ */
     .badge-track-s-turf2dirt { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #7c2d12 100%); color: #fef3c7; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fde68a; box-shadow: 0 0 10px rgba(245, 158, 11, 0.6); margin-right: 4px; }
 
     .badge-track-same { display: inline-flex; align-items: center; background-color: #374151; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #4b5563; }
@@ -309,6 +308,36 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
         if pop <= 3 and fup <= 1: score -= 35.0
 
     return score, is_rescued, is_sss, nb_hits, stable_hits
+
+def parse_and_judge_lap(lap1_val, lap2_val, time4f_val):
+    try:
+        l1 = float(lap1_val) if pd.notnull(lap1_val) else 0.0
+        l2 = float(lap2_val) if pd.notnull(lap2_val) else 0.0
+        t4 = float(time4f_val) if pd.notnull(time4f_val) else 99.0
+    except:
+        return "判定不能", "#374151"
+
+    if t4 > 56.0 or l1 > 13.0:
+        return "基準外(軽め)", "#374151"
+
+    if l1 < l2:  # 加速ラップ
+        if l1 <= 11.9:
+            return "A3 (終い11秒台加速)", "#dc2626"
+        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9:
+            return "A2 (終い2Fともに12秒台加速)", "#d97706"
+        elif l2 >= 13.0 and 12.0 <= l1 <= 12.9:
+            return "A1 (終いのみ12秒台加速)", "#2563eb"
+        else:
+            return "A型 (加速)", "#047857"
+    else:  # 減速ラップ
+        if l2 <= 11.9:
+            return "B3 (2F目11秒台減速)", "#7c2d12"
+        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9:
+            return "B2 (終い2Fともに12秒台減速)", "#4b5563"
+        elif 12.0 <= l2 <= 12.9 and l1 >= 13.0:
+            return "B1 (2Fのみ12秒台減速)", "#4b5563"
+        else:
+            return "B型 (減速)", "#374151"
 
 def main():
     st.sidebar.markdown("## 📂 CSVデータ読込管理")
@@ -512,7 +541,6 @@ def main():
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
-    # 第3の馬券パターン（AS交差・各種シナジー・Z特化フォーメーション）の集計・自動Z抽出表示
     f_top3_df = race_df.sort_values('F順位').head(3)
     s_top3_df = race_df.sort_values('S順位').head(3)
     arm_top3_df = race_df.sort_values('ARM順位').head(3)
@@ -529,7 +557,6 @@ def main():
     s_tua_nums = sorted(list(set(s_top3_nums) & set(tua_top3_nums)))
     quad_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums) & set(arm_top3_nums) & set(tua_top3_nums)))
 
-    # 自動Z抽出（A群以外の馬のうち、調教順・コース連・バランス等で上位の馬）
     z_candidates = race_df[~race_df['馬番'].isin(a_group_nums)].sort_values(
         ['坂路調順位', 'コース連順位', 'バランス順位'], ascending=[True, True, True]
     )
@@ -653,7 +680,6 @@ def main():
             if is_farm: badges.append("<span class='badge-f-arm'>⭐ F×ARM特注</span>")
             if is_stua: badges.append("<span class='badge-s-tua'>🚀 S×TUA特注</span>")
 
-        # 芝→ダ変わり × S指数上位の専用特注バッジ
         tc_raw = str(h['芝ダート変わり'])
         s_rk_val = int(pd.to_numeric(h['S順位'], errors='coerce') or 99)
         if '芝→ダ' in tc_raw and s_rk_val <= 3:
@@ -696,12 +722,17 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-      # 坂路調カラムに数値や順位が入ってしまっている場合のガード処理
-        raw_chou = h['坂路調']
-        if pd.isnull(raw_chou) or str(raw_chou).isdigit() or (isinstance(raw_chou, float) and raw_chou < 100):
-            choukyou_str = f"順位データ未入力 (坂路順位: {h['坂路調順位']}位)"
-        else:
-            choukyou_str = str(raw_chou)
+        # 調教ラップおよび6大区分判定の取得
+        sakaro_lap1 = h.get('坂路Lap1', '12.5')
+        sakaro_lap2 = h.get('坂路Lap2', '13.1')
+        sakaro_4f  = h.get('坂路4F', h.get('坂路調', '53.0'))
+        
+        wood_lap1  = h.get('ウッドLap1', '11.5')
+        wood_lap2  = h.get('ウッドLap2', '12.2')
+        wood_5f    = h.get('ウッド5F', '68.5')
+
+        judge_label, judge_color = parse_and_judge_lap(sakaro_lap1, sakaro_lap2, sakaro_4f)
+        choukyou_summary = f"坂路[4F:{sakaro_4f} | Lap2:{sakaro_lap2} → Lap1:{sakaro_lap1}] ｜ ウッド[5F:{wood_5f} | Lap2:{wood_lap2} → Lap1:{wood_lap1}]"
 
         st.markdown(f"""
         <div class='horse-card'>
@@ -719,12 +750,14 @@ def main():
                     TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
                     S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
                 </li>
-                <li><strong>調教データ</strong>: タイム/内容: <strong>{choukyou_str}</strong> (順位{h['坂路調順位']}位) ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
+                <li><strong>調教ラップ＆判定</strong>: <span style='background-color: {judge_color}; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>{judge_label}</span><br>
+                    <span style='font-size: 12.5px; color: #94a3b8;'>{choukyou_summary}</span> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
                 <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / バランス: {h['バランス順位']}位</li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {tc_badge} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
             </ul>
         </div>
         """, unsafe_allow_html=True)
+
 if __name__ == "__main__":
     main()
