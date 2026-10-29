@@ -696,12 +696,12 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-       # 坂路調カラムに数値や順位が入ってしまっている場合のガード処理
-raw_chou = h['坂路調']
-if pd.isnull(raw_chou) or str(raw_chou).isdigit() or (isinstance(raw_chou, float) and raw_chou < 100):
-    choukyou_str = f"順位データ未入力 (坂路順位: {h['坂路調順位']}位)"
-else:
-    choukyou_str = str(raw_chou)
+      # 坂路調カラムに数値や順位が入ってしまっている場合のガード処理
+        raw_chou = h['坂路調']
+        if pd.isnull(raw_chou) or str(raw_chou).isdigit() or (isinstance(raw_chou, float) and raw_chou < 100):
+            choukyou_str = f"順位データ未入力 (坂路順位: {h['坂路調順位']}位)"
+        else:
+            choukyou_str = str(raw_chou)
 
         st.markdown(f"""
         <div class='horse-card'>
@@ -726,6 +726,5 @@ else:
             </ul>
         </div>
         """, unsafe_allow_html=True)
-
 if __name__ == "__main__":
     main()
