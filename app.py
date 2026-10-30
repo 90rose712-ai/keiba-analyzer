@@ -159,6 +159,7 @@ st.markdown("""
     .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
+    .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a78bfa; margin-right: 4px; }
     
     .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
@@ -232,7 +233,7 @@ CUSHION_DATA_BOOK = {
 
 def clean_str(val):
     if pd.isnull(val): return ""
-    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace("　", "")
+    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
 def load_external_training_csvs():
     sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
@@ -565,8 +566,51 @@ def main():
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
+    # 👑 第3の馬券パターン：AS交差 ＆ 種別シナジー・Z特化フォーメーション
     f_top3_df = race_df.sort_values('F順位').head(3)
+    s_top3_df = race_df.sort_values('S順位').head(3)
+    arm_top3_df = race_df.sort_values('ARM順位').head(3)
+    tua_top3_df = race_df.sort_values('TUA順位').head(3)
+
     f_top3_nums = f_top3_df['馬番'].tolist()
+    s_top3_nums = s_top3_df['馬番'].tolist()
+    arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in arm_top3_df else []
+    tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in tua_top3_df else []
+
+    a_group_nums = sorted(list(set(f_top3_nums + s_top3_nums)))
+    as_intersect_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums)))
+    f_arm_nums = sorted(list(set(f_top3_nums) & set(arm_top3_nums)))
+    s_tua_nums = sorted(list(set(s_top3_nums) & set(tua_top3_nums)))
+    quad_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums) & set(arm_top3_nums) & set(tua_top3_nums)))
+
+    z_candidates = race_df[~race_df['馬番'].isin(a_group_nums)].sort_values(
+        ['坂路調順位', 'コース連順位', 'バランス順位'], ascending=[True, True, True]
+    )
+    z_nums = z_candidates.head(3)['馬番'].tolist()
+
+    as_str = ", ".join([f"<strong>{n}番</strong>" for n in as_intersect_nums]) if as_intersect_nums else "なし"
+    f_arm_str = ", ".join([f"<strong>{n}番</strong>" for n in f_arm_nums]) if f_arm_nums else "なし"
+    s_tua_str = ", ".join([f"<strong>{n}番</strong>" for n in s_tua_nums]) if s_tua_nums else "なし"
+    quad_str = ", ".join([f"<strong>{n}番</strong>" for n in quad_nums]) if quad_nums else "なし"
+    z_str = ", ".join([f"<strong>{n}番</strong>" for n in z_nums]) if z_nums else "なし"
+
+    st.markdown(f"""
+    <div class='recom-block' style='border: 2px solid #3b82f6;'>
+        <h4 style='color: #60a5fa; margin-top: 0;'>🎯 第3の馬券パターン：AS交差 ＆ 種別シナジー・Z特化フォーメーション</h4>
+        <div style='font-size: 13.5px; color: #cbd5e1; margin-bottom: 8px;'>
+            <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: {', '.join([f"<strong>{n}番</strong>" for n in a_group_nums])} (計{len(a_group_nums)}頭)<br>
+            👑 <strong>【AS交差馬（F&S両方上位）】</strong>: {as_str}<br>
+            ⭐ <strong>【F × ARM交差馬（絶対能力 ＋ 高回収）】</strong>: {f_arm_str}<br>
+            🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
+            💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
+            🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span><br>
+            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「厳選Z馬」選定に全集中する構成。
+        </div>
+        <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
+            <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
 
     f65_horses = race_df[race_df['F'] >= 65.0].sort_values('F', ascending=False)
     has_f65 = len(f65_horses) > 0
@@ -661,6 +705,9 @@ def main():
 
         if m2_v >= 5:
             badges.append(f"<span class='badge-cushion-fit' style='background-color:#064e3b; color:#6ee7b7; padding:2px 8px; border-radius:4px; font-weight:bold;'>⭐ 前走相手掲示板{m2_v}頭(出世レース)</span>")
+
+        is_as = h['F順位'] <= 3 and h['S順位'] <= 3
+        if is_as: badges.append("<span class='badge-as-intersect'>👑 AS交差馬 (F&S上位)</span>")
 
         if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ コア指数救済（減点免除）</span>")
         for nb in h['nb_hits']: badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
