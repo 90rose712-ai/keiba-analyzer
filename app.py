@@ -160,6 +160,8 @@ st.markdown("""
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
     .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a78bfa; margin-right: 4px; }
+    .badge-danger-fan { display: inline-flex; align-items: center; background-color: #7f1d1d; color: #fca5a5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #ef4444; margin-right: 4px; }
+    .badge-high-level { display: inline-flex; align-items: center; background-color: #065f46; color: #34d399; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; margin-right: 4px; }
     
     .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
     .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
@@ -233,7 +235,7 @@ CUSHION_DATA_BOOK = {
 
 def clean_str(val):
     if pd.isnull(val): return ""
-    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
+    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace("　", "")
 
 def load_external_training_csvs():
     sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
@@ -314,7 +316,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
     if pd.isna(in_val): in_val = 2.0
     
     if in_val == 0:
-        score -= 150.0
+        score -= 150.0 # 0頭なら凡戦として特大ペナルティ
     elif in_val == 1:
         score -= 20.0
     elif in_val == 2:
@@ -414,6 +416,13 @@ def main():
 
     st.sidebar.success(f"✅ 指数CSV読込成功: {loaded_filename} (全{len(df_raw)}頭)")
 
+    # サイドバー：前走頭数・レベル狙い目フィルタ
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🎯 前走対戦馬レベル 狙い目フィルタ")
+    filter_high_level_in = st.sidebar.checkbox("👑 前走馬券内3頭以上 (ハイレベル特注)")
+    filter_high_level_m2 = st.sidebar.checkbox("⭐ 前走掲示板5頭以上 (出世レース特注)")
+    filter_danger_in0 = st.sidebar.checkbox("🚨 前走馬券内0頭 (凡戦危険馬を除外)")
+
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
     for _, row in df_raw.iterrows():
@@ -495,6 +504,18 @@ def main():
     df = pd.DataFrame(records)
     if df.empty:
         st.error("解析可能な有効データが存在しません。")
+        st.stop()
+
+    # サイドバーフィルタの適用
+    if filter_high_level_in:
+        df = df[df['印'] >= 3]
+    if filter_high_level_m2:
+        df = df[df['M2'] >= 5]
+    if filter_danger_in0:
+        df = df[df['印'] > 0]
+
+    if df.empty:
+        st.warning("選択したフィルター条件に一致する馬が存在しません。")
         st.stop()
 
     st.sidebar.markdown('---')
@@ -697,14 +718,14 @@ def main():
         in_v = h['印']
         m2_v = h['M2']
         if in_v == 0:
-            badges.append("<span class='badge-danger-fan' style='background-color:#7f1d1d; color:#fca5a5; padding:2px 8px; border-radius:4px; font-weight:900;'>🚨 前走相手馬券内0頭(凡戦危険馬)</span>")
+            badges.append("<span class='badge-danger-fan'>🚨 前走相手馬券内0頭(凡戦危険馬)</span>")
         elif in_v >= 8:
-            badges.append(f"<span class='badge-high-level' style='background-color:#065f46; color:#34d399; padding:2px 8px; border-radius:4px; font-weight:900;'>👑 前走相手馬券内{in_v}頭(超ハイレベル)</span>")
+            badges.append(f"<span class='badge-high-level'>👑 前走相手馬券内{in_v}頭(超ハイレベル)</span>")
         elif in_v >= 3:
-            badges.append(f"<span class='badge-notebook-hit' style='background-color:#831843; color:#f472b6; padding:2px 8px; border-radius:4px; font-weight:bold;'>🔥 前走相手馬券内{in_v}頭</span>")
+            badges.append(f"<span class='badge-notebook-hit'>🔥 前走相手馬券内{in_v}頭</span>")
 
         if m2_v >= 5:
-            badges.append(f"<span class='badge-cushion-fit' style='background-color:#064e3b; color:#6ee7b7; padding:2px 8px; border-radius:4px; font-weight:bold;'>⭐ 前走相手掲示板{m2_v}頭(出世レース)</span>")
+            badges.append(f"<span class='badge-cushion-fit'>⭐ 前走相手掲示板{m2_v}頭(出世レース)</span>")
 
         is_as = h['F順位'] <= 3 and h['S順位'] <= 3
         if is_as: badges.append("<span class='badge-as-intersect'>👑 AS交差馬 (F&S上位)</span>")
