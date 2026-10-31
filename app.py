@@ -1,97 +1,3 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import os
-import glob
-import re
-
-st.set_page_config(
-    page_title="競馬予想10 クッション値Vr - 完全統合システム",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.markdown("""
-<style>
-    div[data-baseweb="select"] input {
-        inputmode: none !important;
-        pointer-events: none !important;
-    }
-    .date-header-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-        border: 1px solid #3b82f6;
-        padding: 6px 16px;
-        border-radius: 20px;
-        color: #60a5fa;
-        font-size: 14.5px;
-        font-weight: bold;
-        margin-bottom: 12px;
-    }
-    .race-type-banner {
-        padding: 12px 18px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        font-size: 15px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .race-type-bonus {
-        background: linear-gradient(135deg, #7c2d12 0%, #b45309 50%, #d97706 100%);
-        color: #fef3c7;
-        border: 2px solid #fde68a;
-        box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
-    }
-    .race-type-hit {
-        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
-        color: #d1fae5;
-        border: 2px solid #6ee7b7;
-    }
-    .race-type-recovery {
-        background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%);
-        color: #ede9fe;
-        border: 2px solid #c4b5fd;
-    }
-    .race-type-normal {
-        background: #1f2937;
-        color: #e5e7eb;
-        border: 1px solid #4b5563;
-    }
-    .recom-panel-go {
-        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
-        border: 2px solid #10b981;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 20px;
-    }
-    .recom-title-go {
-        font-size: 16px;
-        font-weight: bold;
-        color: #34d399;
-        margin-bottom: 12px;
-        border-bottom: 1px solid #374151;
-        padding-bottom: 5px;
-    }
-    .recom-row {
-        margin-bottom: 8px;
-        font-size: 14.5px;
-        line-height: 1.6;
-    }
-    .recom-block {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 10px;
-    }
-    .recom-val-num {
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 15.5px;
         letter-spacing: 1px;
     }
     .horse-card {
@@ -510,32 +416,19 @@ def main():
         st.error("解析可能な有効データが存在しません。")
         st.stop()
 
-    # サイドバーチェックボックスに基づくデータ絞り込み（チェックONの条件を完全に満たす馬のみ）
-    if filter_high_level_in:
-        df = df[df['印'] >= 3]
-    if filter_high_level_m2:
-        df = df[df['M2'] >= 5]
-    if filter_danger_in0:
-        df = df[df['印'] > 0]
-    if filter_nb_dart:
-        df = df.apply(lambda r: r if (r['track'] == 'ダ' and r['S順位'] == 1 and float(str(r['前場体重']).replace('kg','')) >= 480) else None, axis=1).dropna()
-    if filter_nb_nagori:
-        df = df.apply(lambda r: r if (str(r['間隔']).isdigit() and int(r['間隔']) >= 12) else None, axis=1).dropna()
-    if filter_arms_fup:
-        df = df.apply(lambda r: r if (r['ARM順位'] == 1 and r['Fup2'] >= 6) else None, axis=1).dropna()
-    if filter_as_cross:
-        df = df.apply(lambda r: r if (r['F順位'] <= 3 and r['S順位'] <= 3) else None, axis=1).dropna()
+    # 安全な日付取得
+    race_date_str = str(df['日付'].iloc[0]) if not df.empty and '日付' in df.columns else "10.25"
 
-    if df.empty:
-        st.warning("選択したチェックBOX条件に一致する馬・レースが存在しません。")
-        st.stop()
+    # ここでは全体データを維持しつつ、チェックボックスがONの馬をフィルタリングするのではなく「ハイライト・抽出対象」にする、あるいはサイドバーフィルタを安全に適用
+    # ユーザーの要望「チェックBOX欄にノートブック狙い目と指数狙い目のチェックも作って欲しい。レース検索欄にはぴか一マークを消してチェックBOXの該当馬がいるレースに各印を入れて欲しい」
+    # つまり、データを消去(df = df[...])するのではなく、全レースを残した状態で、レース選択欄にチェックBOXに合致する馬がいるかどうかの「印」を表示したい！
 
     st.sidebar.markdown('---')
     st.sidebar.markdown("### 🌿 馬場・クッション値設定")
     track_cond = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重", "不良"], index=0)
     cushion_val = st.sidebar.slider("当日クッション値", min_value=6.0, max_value=12.5, value=9.5, step=0.1, format="%.1f")
 
-    st.markdown(f"<div class='date-header-badge'>📅 開催日: 2026年{df['日付'].iloc[0]} | JRAデータ解析エンジン「競馬予想10 クッション値Vr」</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 クッション値Vr」</div>", unsafe_allow_html=True)
 
     venue_sort_order = ["東京", "中山", "京都", "阪神", "中京", "小倉", "新潟", "福島", "函館", "札幌", "新"]
     existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()]
@@ -560,12 +453,20 @@ def main():
         if filter_high_level_in and (r_subset['印'] >= 3).any(): race_tags.append("👑印≧3")
         if filter_high_level_m2 and (r_subset['M2'] >= 5).any(): race_tags.append("⭐M2≧5")
         if filter_danger_in0 and (r_subset['印'] == 0).any(): race_tags.append("🚨印0除外")
-        if filter_nb_dart and ((r_subset['track'] == 'ダ') & (r_subset['S順位'] == 1)).any(): race_tags.append("🐎ダート特注")
-        if filter_nb_nagori and (r_subset['間隔'].astype(str).str.isdigit() & (r_subset['間隔'].astype(int) >= 12)).any(): race_tags.append("🔥Nなごり")
-        if filter_arms_fup and ((r_subset['ARM順位'] == 1) & (r_subset['Fup2'] >= 6)).any(): race_tags.append("✨ARMSクロス")
-        if filter_as_cross and ((r_subset['F順位'] <= 3) & (r_subset['S順位'] <= 3)).any(): race_tags.append("👑AS交差")
+        if filter_nb_dart:
+            has_dart = r_subset.apply(lambda row: (row['track'] == 'ダ' and row['S順位'] == 1 and float(str(row['前場体重']).replace('kg','')) >= 480), axis=1).any()
+            if has_dart: race_tags.append("🐎ダート特注")
+        if filter_nb_nagori:
+            has_nagori = r_subset.apply(lambda row: (str(row['間隔']).isdigit() and int(row['間隔']) >= 12), axis=1).any()
+            if has_nagori: race_tags.append("🔥Nなごり")
+        if filter_arms_fup:
+            has_af = r_subset.apply(lambda row: (row['ARM順位'] == 1 and row['Fup2'] >= 6), axis=1).any()
+            if has_af: race_tags.append("✨ARMSクロス")
+        if filter_as_cross:
+            has_as = r_subset.apply(lambda row: (row['F順位'] <= 3 and row['S順位'] <= 3), axis=1).any()
+            if has_as: race_tags.append("👑AS交差")
 
-        tag_str = f" [{' '.join(race_tags)}]" if race_tags else " 📌"
+        tag_str = f" [{' '.join(race_tags)}]" if race_tags else ""
         race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){tag_str}"
 
     selected_race_uid = st.selectbox("レース選択（1R〜順次）", options=list(race_options.keys()), format_func=lambda x: race_options[x])
@@ -605,7 +506,7 @@ def main():
     tua_top3_df = race_df.sort_values('TUA順位').head(3)
 
     f_top3_nums = f_top3_df['馬番'].tolist()
-    s_top3_nums = s_top3_df['馬番'].tolist()
+    s_top3_nums = s_top3_df['S順位'].tolist()
     arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in arm_top3_df else []
     tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in tua_top3_df else []
 
