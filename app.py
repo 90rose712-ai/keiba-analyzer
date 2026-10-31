@@ -161,6 +161,8 @@ st.markdown("""
         background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
         color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; width: auto; height: auto;
     }
+    .badge-c-mark { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
+    .badge-c-horse { display: inline-flex; align-items: center; background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
     .badge-cushion-fit { display: inline-flex; align-items: center; background-color: #064e3b; color: #6ee7b7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
     .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
     .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
@@ -466,6 +468,8 @@ def main():
         raw_c = clean_str(row.get('C', row.get('C(馬)', '')))
         mark = row.get('印', 2)
         m2_raw = row.get('M2', 0)
+        c_mark = clean_str(row.get('C(マーク)', ''))
+        c_horse = clean_str(row.get('C(馬)', ''))
 
         track = "ダ" if "ダ" in raw_c else ("芝" if "芝" in raw_c else "芝")
         dist_int = int(re.sub(r'\D', '', str(dist_raw))) if re.sub(r'\D', '', str(dist_raw)).isdigit() else 1600
@@ -520,6 +524,7 @@ def main():
             records.append({
                 'race_id': race_id, 'race_uid': race_id, '競馬場名': v_name, 'track': track, 'dist': dist_int,
                 '馬番': int(float(umaban)), '馬名': horse, '印': in_num, 'M2': m2_num,
+                'C(マーク)': c_mark, 'C(馬)': c_horse,
                 '調教師': trainer, '騎手': jockey, '種牡馬': sire, '人気順位': int(float(pop)) if pd.notnull(pop) else 99,
                 'Fup2': fup, 'Fup2順位': fup_rk, 'F': f_val, 'F順位': f_rk, 'ARM': arm_val, 'ARM順位': arm_rk,
                 'TUA': tua_val, 'TUA順位': tua_rk, 'S': s_val, 'S順位': s_rk,
@@ -761,6 +766,14 @@ def main():
 
         in_v = h['印']
         m2_v = h['M2']
+        c_mark_val = h['C(マーク)']
+        c_horse_val = h['C(馬)']
+
+        if c_mark_val:
+            badges.append(f"<span class='badge-c-mark'>🏷️ C(マーク): {c_mark_val}</span>")
+        if c_horse_val:
+            badges.append(f"<span class='badge-c-horse'>🐴 C(馬): {c_horse_val}</span>")
+
         if in_v == 0:
             badges.append("<span class='badge-danger-fan'>🚨 前走相手馬券内0頭(凡戦危険馬)</span>")
         elif in_v >= 8:
@@ -832,7 +845,7 @@ def main():
                 </li>
                 <li><strong>対戦レベル評価</strong>: 前走馬券内頭数(印): <strong>{in_v}頭</strong> ｜ 前走掲示板内頭数(M2): <strong>{m2_v}頭</strong></li>
                 <li><strong>調教ラップ＆判定</strong>: <span style='background-color: {judge_color}; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>{judge_label}</span><br>
-                    <span style='font-size: 12.5px; color: #94a3b8; '>{choukyou_summary}</span> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
+                    <span style='font-size: 12.5px; color: #94a3b8;'>{choukyou_summary}</span> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
                 <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / Balance: {h['バランス順位']}位</li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {h['芝ダート変わり']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
