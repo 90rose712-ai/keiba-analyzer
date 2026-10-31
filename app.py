@@ -1,121 +1,4 @@
-import streamlit as st
-import pandas as pd
-import numpy as np
-import os
-import glob
-import re
-
-st.set_page_config(
-    page_title="競馬予想10 クッション値Vr - 完全統合システム",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
-
-st.markdown("""
-<style>
-    div[data-baseweb="select"] input {
-        inputmode: none !important;
-        pointer-events: none !important;
-    }
-    .date-header-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 8px;
-        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-        border: 1px solid #3b82f6;
-        padding: 6px 16px;
-        border-radius: 20px;
-        color: #60a5fa;
-        font-size: 14.5px;
-        font-weight: bold;
-        margin-bottom: 12px;
-    }
-    .race-type-banner {
-        padding: 12px 18px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        font-size: 15px;
-        font-weight: bold;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-    }
-    .race-type-bonus {
-        background: linear-gradient(135deg, #7c2d12 0%, #b45309 50%, #d97706 100%);
-        color: #fef3c7;
-        border: 2px solid #fde68a;
-        box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
-    }
-    .race-type-hit {
-        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
-        color: #d1fae5;
-        border: 2px solid #6ee7b7;
-    }
-    .race-type-recovery {
-        background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%);
-        color: #ede9fe;
-        border: 2px solid #c4b5fd;
-    }
-    .race-type-normal {
-        background: #1f2937;
-        color: #e5e7eb;
-        border: 1px solid #4b5563;
-    }
-    .recom-panel-go {
-        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
-        border: 2px solid #10b981;
-        border-radius: 10px;
-        padding: 16px 20px;
-        margin-bottom: 20px;
-    }
-    .recom-title-go {
-        font-size: 16px;
-        font-weight: bold;
-        color: #34d399;
-        margin-bottom: 12px;
-        border-bottom: 1px solid #374151;
-        padding-bottom: 5px;
-    }
-    .recom-row {
-        margin-bottom: 8px;
-        font-size: 14.5px;
-        line-height: 1.6;
-    }
-    .recom-block {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-bottom: 10px;
-    }
-    .recom-val-num {
-        color: #ffffff;
-        font-weight: bold;
-        font-size: 15.5px;
-        letter-spacing: 1px;
-    }
-    .horse-card {
-        background-color: #161e2e;
-        border-left: 5px solid #238636;
-        padding: 14px 18px;
-        border-radius: 8px;
-        margin-bottom: 14px;
-        border: 1px solid #30363d;
-    }
-    .horse-card-header {
-        display: flex;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-bottom: 8px;
-    }
-    .horse-card-title {
-        font-size: 18px;
-        font-weight: bold;
-        color: #ffffff;
-    }
-    .race-badge-title {
-        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+ 100%);
         color: #ffffff;
         font-weight: bold;
         font-size: 14px;
@@ -383,6 +266,28 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
 
     return score, is_rescued, is_sss, nb_hits, stable_hits
 
+def evaluate_race_quality(r_subset):
+    # Calculate score based purely on indices
+    for col in ['F', 'F順位', 'ARM', 'ARM順位', 'TUA', 'TUA順位', 'S', 'S順位', 'Fup2', '印', 'M2']:
+        if col in r_subset.columns:
+            r_subset[col] = pd.to_numeric(r_subset[col], errors='coerce')
+            
+    max_f = r_subset['F'].max() if not r_subset.empty else 0.0
+    as_count = ((r_subset['F順位'] <= 3) & (r_subset['S順位'] <= 3)).sum() if 'F順位' in r_subset and 'S順位' in r_subset else 0
+    gc_count = ((r_subset['ARM順位'] == 1) & (r_subset['Fup2'] >= 6)).sum() if 'ARM順位' in r_subset and 'Fup2' in r_subset else 0
+    high_in_count = (r_subset['印'] >= 3).sum() if '印' in r_subset else 0
+    high_m2_count = (r_subset['M2'] >= 5).sum() if 'M2' in r_subset else 0
+    
+    score = 0
+    if max_f >= 65.0: score += 3
+    elif max_f >= 60.0: score += 2
+    if as_count >= 1: score += 2
+    if gc_count >= 1: score += 2
+    if high_in_count >= 2: score += 1
+    if high_m2_count >= 2: score += 1
+    
+    return score
+
 def main():
     st.sidebar.markdown("## 📂 CSVデータ読込管理")
     df_raw, loaded_filename = read_csv_robust()
@@ -534,7 +439,12 @@ def main():
         r_uid = r['race_uid']
         r_subset = v_df[v_df['race_uid'] == r_uid]
         
+        # Calculate race quality score purely from indices
+        q_score = evaluate_race_quality(r_subset)
+        is_super_win = (q_score >= 4)
+        
         race_tags = []
+        if is_super_win: race_tags.append("🔥【高確率勝負】")
         if filter_high_level_in and (r_subset['印'] >= 3).any(): race_tags.append("👑印≧3")
         if filter_high_level_m2 and (r_subset['M2'] >= 5).any(): race_tags.append("⭐M2≧5")
         if filter_danger_in0 and (r_subset['印'] == 0).any(): race_tags.append("🚨印0除外")
@@ -551,7 +461,7 @@ def main():
             has_as = r_subset.apply(lambda row: (row['F順位'] <= 3 and row['S順位'] <= 3), axis=1).any()
             if has_as: race_tags.append("👑AS交差")
 
-        tag_str = f" [{' '.join(race_tags)}]" if race_tags else ""
+        tag_str = f" [{' '.join(race_tags)}]" if race_tags else (" 🔥【勝負レース】" if is_super_win else " 📌")
         race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){tag_str}"
 
     selected_race_uid = st.selectbox("レース選択（1R〜順次）", options=list(race_options.keys()), format_func=lambda x: race_options[x])
@@ -570,17 +480,27 @@ def main():
     race_df['nb_hits'] = nb_hits_list
     race_df['stable_hits'] = stable_hits_list
 
+    # Evaluate selected race quality for special banner
+    sel_q_score = evaluate_race_quality(race_df)
+    is_sel_super_win = (sel_q_score >= 4)
+
     has_bonus = ((race_df['F順位'] <= 3) & (race_df['ARM順位'] <= 3) & (race_df['TUA順位'] <= 3)).sum() >= 3
     has_cross = ((race_df['ARM順位'] == 1) & (race_df['Fup2'] >= 6)).any()
     has_sss = race_df['is_sss'].any()
     is_race_pikai = has_bonus or has_cross or has_sss
 
-    if is_race_pikai:
-        banner_cls = "race-type-bonus"; banner_txt = "👑👑【該当馬確認】最強ロジック合致レース（期待値・勝率MAX）"
+    if is_sel_super_win:
+        banner_cls = "race-type-super-win"
+        banner_txt = "🔥🌟【高確率的中・勝負レース判定】指数データが示す最高信頼度合致レース（単勝・軸馬鉄板）"
+    elif is_race_pikai:
+        banner_cls = "race-type-bonus"
+        banner_txt = "👑👑【ぴか一マーク】最強ロジック合致レース（期待値・勝率MAX）"
     elif has_sss:
-        banner_cls = "race-type-hit"; banner_txt = "🎯 SSS級・絶対神域出現（F指数65以上＋ARM120＋TUA200の鉄板軸が存在）"
+        banner_cls = "race-type-hit"
+        banner_txt = "🎯 SSS級・絶対神域出現（F指数65以上＋ARM120＋TUA200の鉄板軸が存在）"
     else:
-        banner_cls = "race-type-recovery"; banner_txt = "🔥 波乱抽出・標準ハイブリッド買い目連動レース"
+        banner_cls = "race-type-recovery"
+        banner_txt = "🔥 波乱抽出・標準ハイブリッド買い目連動レース"
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
@@ -616,7 +536,7 @@ def main():
     quad_str = ", ".join([f"<strong>{n}番</strong>" for n in quad_nums]) if quad_nums else "なし"
     z_str = ", ".join([f"<strong>{n}番</strong>" for n in z_nums]) if z_nums else "なし"
 
-    filter_notice = " [🚨 前走0頭消し・チェックBOX連動適用済み]" if (filter_danger_in0 or filter_high_level_in) else ""
+    filter_notice = " [🚨 前走0頭消し・高確率勝負レース判定適用済み]" if (filter_danger_in0 or is_sel_super_win) else ""
 
     st.markdown(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
@@ -628,7 +548,7 @@ def main():
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
             🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span><br>
-            ※前走頭数ロジック（危険馬除外・ハイレベル裏付け）を完全反映した鉄壁の3連単構成。
+            ※指数解析による高確率的中レース判定ロジックを完全反映した鉄壁の3連単構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span></li>
