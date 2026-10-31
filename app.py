@@ -235,7 +235,7 @@ CUSHION_DATA_BOOK = {
 
 def clean_str(val):
     if pd.isnull(val): return ""
-    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace("　", "")
+    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
 def load_external_training_csvs():
     sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
@@ -546,14 +546,21 @@ def main():
         is_cross = ((r_subset['ARM順位'] == 1) & (r_subset['Fup2'] >= 6)).any()
         is_pikai = is_bon or is_cross or (r_subset['F'] >= 65).any()
 
+        # チェックボックスの状態をレースタイトルにも反映
+        filter_tags = []
+        if filter_high_level_in: filter_tags.append("👑印≧3")
+        if filter_high_level_m2: filter_tags.append("⭐M2≧5")
+        if filter_danger_in0: filter_tags.append("🚨印>0")
+        tag_str = f" [{','.join(filter_tags)}]" if filter_tags else ""
+
         if is_pikai:
-            icon_str = " 👑👑【ぴか一マーク】👑👑"
+            icon_str = f" 👑👑【ぴか一マーク】{tag_str}"
         elif is_bon:
-            icon_str = " 👑[ボーナス]"
+            icon_str = f" 👑[ボーナス]{tag_str}"
         elif as_count > 0:
-            icon_str = f" 🔥[AS交差:{as_count}頭]"
+            icon_str = f" 🔥[AS交差:{as_count}頭]{tag_str}"
         else:
-            icon_str = " 📌"
+            icon_str = f" 📌{tag_str}"
 
         race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){icon_str}"
 
@@ -587,7 +594,7 @@ def main():
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
-    # 👑 第3の馬券パターン：AS交差 ＆ 種別シナジー・Z特化フォーメーション
+    # 👑 第3の馬券パターン：AS交差 ＆ 種別シナジー・Z特化フォーメーション（前走頭数ロジック連動）
     f_top3_df = race_df.sort_values('F順位').head(3)
     s_top3_df = race_df.sort_values('S順位').head(3)
     arm_top3_df = race_df.sort_values('ARM順位').head(3)
@@ -598,13 +605,19 @@ def main():
     arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in arm_top3_df else []
     tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in tua_top3_df else []
 
-    a_group_nums = sorted(list(set(f_top3_nums + s_top3_nums)))
-    as_intersect_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums)))
-    f_arm_nums = sorted(list(set(f_top3_nums) & set(arm_top3_nums)))
-    s_tua_nums = sorted(list(set(s_top3_nums) & set(tua_top3_nums)))
-    quad_nums = sorted(list(set(f_top3_nums) & set(s_top3_nums) & set(arm_top3_nums) & set(tua_top3_nums)))
+    # 前走馬券内頭数0頭（危険馬）をA群・Z群から完全に除外するフィルタ適用
+    safe_race_df = race_df[race_df['印'] > 0] if filter_danger_in0 else race_df
 
-    z_candidates = race_df[~race_df['馬番'].isin(a_group_nums)].sort_values(
+    f_safe_top3 = safe_race_df.sort_values('F順位').head(3)['馬番'].tolist()
+    s_safe_top3 = safe_race_df.sort_values('S順位').head(3)['馬番'].tolist()
+
+    a_group_nums = sorted(list(set(f_safe_top3 + s_safe_top3)))
+    as_intersect_nums = sorted(list(set(f_safe_top3) & set(s_safe_top3)))
+    f_arm_nums = sorted(list(set(f_safe_top3) & set(arm_top3_nums)))
+    s_tua_nums = sorted(list(set(s_safe_top3) & set(tua_top3_nums)))
+    quad_nums = sorted(list(set(f_safe_top3) & set(s_safe_top3) & set(arm_top3_nums) & set(tua_top3_nums)))
+
+    z_candidates = safe_race_df[~safe_race_df['馬番'].isin(a_group_nums)].sort_values(
         ['坂路調順位', 'コース連順位', 'バランス順位'], ascending=[True, True, True]
     )
     z_nums = z_candidates.head(3)['馬番'].tolist()
@@ -615,9 +628,11 @@ def main():
     quad_str = ", ".join([f"<strong>{n}番</strong>" for n in quad_nums]) if quad_nums else "なし"
     z_str = ", ".join([f"<strong>{n}番</strong>" for n in z_nums]) if z_nums else "なし"
 
+    filter_notice = " [🚨 前走0頭消しフィルター適用済み]" if filter_danger_in0 else ""
+
     st.markdown(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
-        <h4 style='color: #60a5fa; margin-top: 0;'>🎯 第3の馬券パターン：AS交差 ＆ 種別シナジー・Z特化フォーメーション</h4>
+        <h4 style='color: #60a5fa; margin-top: 0;'>🎯 第3の馬券パターン：AS交差 ＆ 種別シナジー・Z特化フォーメーション{filter_notice}</h4>
         <div style='font-size: 13.5px; color: #cbd5e1; margin-bottom: 8px;'>
             <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: {', '.join([f"<strong>{n}番</strong>" for n in a_group_nums])} (計{len(a_group_nums)}頭)<br>
             👑 <strong>【AS交差馬（F&S両方上位）】</strong>: {as_str}<br>
@@ -625,7 +640,7 @@ def main():
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
             🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span><br>
-            ※1着率71.4%・馬券内率95.9%のA群を1・2列目に固定し、3列目の「厳選Z馬」選定に全集中する構成。
+            ※前走頭数ロジック（危険馬除外・ハイレベル裏付け）を完全反映した鉄壁の3連単構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span></li>
@@ -768,10 +783,13 @@ def main():
         wood_str = f"ウッド[5F:{w_5f or '---'} | L2:{w_l2 or '---'} → L1:{w_l1 or '---'}]" if w_5f else "ウッドデータなし"
         choukyou_summary = f"{sakaro_str} ｜ {wood_str}"
 
+        # 馬情報ヘッダーに場所・レース番号（例: 新1 / 東京11R 等）を正確に表示
+        race_place_num_str = f"【{chosen_venue}{re.search(r'\d+', str(h['race_uid'])).group()}R】" if re.search(r'\d+', str(h['race_uid'])) else f"【{chosen_venue}】"
+
         st.markdown(f"""
         <div class='horse-card'>
             <div class='horse-card-header'>
-                <span class='race-badge-title'>{u_no}番</span>
+                <span class='race-badge-title'>{race_place_num_str} {u_no}番</span>
                 <span class='horse-card-title'>{h['馬番']}番 {h['馬名']}</span>
                 <span style='color: #9ca3af; font-size: 13.5px;'>（{h['調教師']} / {h['騎手']} / {h['人気順位']}番人気）</span>
             </div>
