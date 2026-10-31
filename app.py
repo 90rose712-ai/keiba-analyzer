@@ -1,3 +1,352 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+import os
+import glob
+import re
+
+st.set_page_config(
+    page_title="競馬予想10 クッション値Vr - 完全統合システム",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+st.markdown("""
+<style>
+    div[data-baseweb="select"] input {
+        inputmode: none !important;
+        pointer-events: none !important;
+    }
+    .date-header-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+        border: 1px solid #3b82f6;
+        padding: 6px 16px;
+        border-radius: 20px;
+        color: #60a5fa;
+        font-size: 14.5px;
+        font-weight: bold;
+        margin-bottom: 12px;
+    }
+    .race-type-banner {
+        padding: 12px 18px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        font-size: 15px;
+        font-weight: bold;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+    .race-type-bonus {
+        background: linear-gradient(135deg, #7c2d12 0%, #b45309 50%, #d97706 100%);
+        color: #fef3c7;
+        border: 2px solid #fde68a;
+        box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
+    }
+    .race-type-hit {
+        background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
+        color: #d1fae5;
+        border: 2px solid #6ee7b7;
+    }
+    .race-type-recovery {
+        background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%);
+        color: #ede9fe;
+        border: 2px solid #c4b5fd;
+    }
+    .race-type-normal {
+        background: #1f2937;
+        color: #e5e7eb;
+        border: 1px solid #4b5563;
+    }
+    .recom-panel-go {
+        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+        border: 2px solid #10b981;
+        border-radius: 10px;
+        padding: 16px 20px;
+        margin-bottom: 20px;
+    }
+    .recom-title-go {
+        font-size: 16px;
+        font-weight: bold;
+        color: #34d399;
+        margin-bottom: 12px;
+        border-bottom: 1px solid #374151;
+        padding-bottom: 5px;
+    }
+    .recom-row {
+        margin-bottom: 8px;
+        font-size: 14.5px;
+        line-height: 1.6;
+    }
+    .recom-block {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-bottom: 10px;
+    }
+    .recom-val-num {
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 15.5px;
+        letter-spacing: 1px;
+    }
+    .horse-card {
+        background-color: #161e2e;
+        border-left: 5px solid #238636;
+        padding: 14px 18px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        border: 1px solid #30363d;
+    }
+    .horse-card-header {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+    }
+    .horse-card-title {
+        font-size: 18px;
+        font-weight: bold;
+        color: #ffffff;
+    }
+    .race-badge-title {
+        background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);
+        color: #ffffff;
+        font-weight: bold;
+        font-size: 14px;
+        padding: 2px 10px;
+        border-radius: 6px;
+        border: 1px solid #93c5fd;
+        margin-right: 6px;
+    }
+    .horse-card-list {
+        list-style-type: none;
+        padding-left: 0;
+        margin: 0;
+    }
+    .horse-card-list li {
+        font-size: 13.5px;
+        color: #c9d1d9;
+        margin-bottom: 6px;
+        line-height: 1.6;
+    }
+    .horse-card-list li::before {
+        content: "• ";
+        color: #58a6ff;
+        font-weight: bold;
+    }
+    .badge-mark-honmei {
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%);
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; margin-right: 6px; width: auto; height: auto;
+    }
+    .badge-mark-taikou {
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 6px; width: auto; height: auto;
+    }
+    .badge-mark-ana {
+        display: inline-flex; align-items: center; justify-content: center;
+        background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        color: #ffffff; font-size: 12.5px; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; width: auto; height: auto;
+    }
+    .badge-cushion-fit { display: inline-flex; align-items: center; background-color: #064e3b; color: #6ee7b7; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; }
+    .badge-notebook-hit { display: inline-flex; align-items: center; background-color: #831843; color: #f472b6; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #db2777; margin-right: 4px; }
+    .badge-stable-hit { display: inline-flex; align-items: center; background-color: #1e3a8a; color: #93c5fd; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #3b82f6; margin-right: 4px; }
+    .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; }
+    .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a78bfa; margin-right: 4px; }
+    .badge-danger-fan { display: inline-flex; align-items: center; background-color: #7f1d1d; color: #fca5a5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #ef4444; margin-right: 4px; }
+    .badge-high-level { display: inline-flex; align-items: center; background-color: #065f46; color: #34d399; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #10b981; margin-right: 4px; }
+    
+    .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
+    .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
+    .fup-badge-mid { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; font-size: 13px; }
+    .fup-badge-low { background: #374151; color: #9ca3af; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
+
+    .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
+    .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
+    .val-arms-top { color: #083344; background-color: #38bdf8; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #0284c7; }
+    .val-tua-top { color: #022c22; background-color: #34d399; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #059669; }
+</style>
+""", unsafe_allow_html=True)
+
+def get_cushion_category(cushion_val, venue_name):
+    c_val = float(cushion_val)
+    if venue_name == "札幌":
+        if c_val <= 7.3: return "場内低<=7.3"
+        elif c_val >= 7.7: return "場内高>=7.7"
+        else: return "場内中7.4-7.6"
+    elif venue_name == "函館":
+        if c_val <= 7.2: return "場内低<=7.2"
+        elif c_val >= 7.5: return "場内高>=7.5"
+        else: return "場内中7.3-7.4"
+    elif venue_name == "京都":
+        if c_val <= 9.7: return "推奨低め<=9.7"
+        elif c_val >= 10.5: return ">=10.5 超高"
+        else: return "10.0-10.4 高"
+    elif venue_name in ["中山", "中京"]:
+        if c_val <= 9.3: return "やや低め8.6-9.4"
+        elif c_val >= 10.0: return ">=10.5 超高" if c_val >= 10.5 else "10.0-10.4 高"
+        else: return "9.5-9.9 標準高"
+    elif venue_name == "福島":
+        if c_val <= 8.7: return "<=8.5低"
+        elif c_val >= 9.2: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+    elif venue_name == "新潟":
+        if c_val <= 9.1: return "やや低め8.6-9.4"
+        elif c_val >= 9.5: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+    elif venue_name == "東京":
+        if c_val <= 9.2: return "やや低め8.6-9.4"
+        elif c_val >= 9.5: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+    elif venue_name == "阪神":
+        if c_val <= 9.2: return "やや低め8.6-9.4"
+        elif c_val >= 9.7: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+    elif venue_name == "小倉":
+        if c_val <= 8.9: return "やや低め8.6-9.4"
+        elif c_val >= 9.5: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+
+    if c_val <= 8.5: return "<=8.5低"
+    elif c_val <= 9.4: return "8.6-9.4 やや低"
+    elif c_val <= 9.9: return "9.5-9.9 標準高"
+    elif c_val <= 10.4: return "10.0-10.4高"
+    else: return ">=10.5 超高"
+
+CUSHION_DATA_BOOK = {
+    ("阪神", "芝", 1800, "キズナ", "9.5-9.9 標準高"): ("最重要", "N56 勝19.6% 複41.1% 単421"),
+    ("東京", "芝", 1600, "エピファネイア", "9.5-9.9 標準高"): ("最重要", "N98 勝13.3% 複39.8% 単277"),
+    ("東京", "芝", 1400, "モーリス", "9.5-9.9 標準高"): ("最重要", "N69 勝10.1% 複29.0% 単408"),
+    ("東京", "芝", 1800, "ディープインパクト", "9.5-9.9 標準高"): ("最重要", "N57 勝15.8% 複38.6% 単228"),
+    ("東京", "芝", 2000, "キズナ", "8.6-9.4 やや低"): ("最重要", "N66 勝19.7% 複42.4% 単200"),
+    ("中京", "芝", 2000, "ディープインパクト", "8.6-9.4 やや低"): ("最重要", "N61 勝18.0% 複42.6% 単178"),
+    ("小倉", "芝", 1200, "ダイワメジャー", "9.5-9.9 標準高"): ("最重要", "N66 勝13.6% 複30.3% 単173"),
+    ("函館", "芝", 1800, "キズナ", "<=8.5低"): ("最重要", "N62 勝17.7% 複38.7% 単143"),
+    ("札幌", "芝", 2000, "オルフェーヴル", "<=8.5低"): ("最重要", "N57 勝15.8% 複35.1% 単136"),
+    ("京都", "芝", 2000, "キタサンブラック", ">=10.5 超高"): ("最重要", "N38 勝21.1% 複50.0% 単149"),
+}
+
+def clean_str(val):
+    if pd.isnull(val): return ""
+    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace("　", "")
+
+def load_external_training_csvs():
+    sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
+    for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
+        try:
+            if os.path.exists("出馬表_坂路.csv"):
+                sakaro_df = pd.read_csv("出馬表_坂路.csv", encoding=enc)
+                if not sakaro_df.empty: break
+        except: pass
+    for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
+        try:
+            if os.path.exists("出馬表_ウッド.csv"):
+                wood_df = pd.read_csv("出馬表_ウッド.csv", encoding=enc)
+                if not wood_df.empty: break
+        except: pass
+    return sakaro_df, wood_df
+
+def read_csv_robust():
+    candidates = ["当日全指数統合.csv", "データ統合.csv", "*全指数統合*.csv"]
+    all_found = []
+    for c in candidates:
+        all_found.extend(glob.glob(c))
+    if all_found:
+        newest = max(all_found, key=os.path.getmtime)
+        for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
+            try:
+                df = pd.read_csv(newest, encoding=enc)
+                if not df.empty and df.shape[1] >= 38:
+                    return df, newest
+            except Exception:
+                continue
+    return pd.DataFrame(), ""
+
+def parse_and_judge_lap(l1_val, l2_val, t4_val):
+    try:
+        l1 = float(l1_val) if pd.notnull(l1_val) else 0.0
+        l2 = float(l2_val) if pd.notnull(l2_val) else 0.0
+        t4 = float(t4_val) if pd.notnull(t4_val) else 99.0
+    except:
+        return "判定不能", "#374151"
+
+    if t4 > 56.0 or l1 > 13.0:
+        return "基準外(軽め)", "#374151"
+
+    if l1 < l2: # 加速ラップ
+        if l1 <= 11.9: return "A3 (終い11秒台加速🔥)", "#dc2626"
+        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9: return "A2 (終い2Fともに12秒台加速)", "#d97706"
+        elif l2 >= 13.0 and 12.0 <= l1 <= 12.9: return "A1 (終いのみ12秒台加速)", "#2563eb"
+        else: return "A型 (加速)", "#047857"
+    else: # 減速ラップ
+        if l2 <= 11.9: return "B3 (2F目11秒台減速)", "#7c2d12"
+        elif 12.0 <= l2 <= 12.9 and 12.0 <= l1 <= 12.9: return "B2 (終い2Fともに12秒台減速)", "#4b5563"
+        elif 12.0 <= l2 <= 12.9 and l1 >= 13.0: return "B1 (2Fのみ12秒台減速)", "#4b5563"
+        else: return "B型 (減速)", "#374151"
+
+def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category):
+    score = 0.0
+    f_val = float(pd.to_numeric(r.get('F', 0.0), errors='coerce') or 0.0)
+    f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
+    fup = int(pd.to_numeric(r.get('Fup2', 0), errors='coerce') or 0)
+    arm_val = float(pd.to_numeric(r.get('ARM', 0.0), errors='coerce') or 0.0)
+    arm_rk = int(pd.to_numeric(r.get('ARM順位', 99), errors='coerce') or 99)
+    tua_val = float(pd.to_numeric(r.get('TUA', 0.0), errors='coerce') or 0.0)
+    tua_rk = int(pd.to_numeric(r.get('TUA順位', 99), errors='coerce') or 99)
+    s_val = float(pd.to_numeric(r.get('S', 0.0), errors='coerce') or 0.0)
+    s_rk = int(pd.to_numeric(r.get('S順位', 99), errors='coerce') or 99)
+    pop = int(pd.to_numeric(r.get('人気順位', 99), errors='coerce') or 99)
+
+    trainer = clean_str(r.get('調教師', ''))
+    sire = clean_str(r.get('種牡馬', ''))
+    h_name = clean_str(r.get('馬名', ''))
+    track_change = clean_str(r.get('芝ダート変わり', ''))
+    interval = str(r.get('間隔', ''))
+    weight = float(pd.to_numeric(str(r.get('前場体重', '480')).replace('kg', ''), errors='coerce') or 480.0)
+
+    in_val = pd.to_numeric(r.get('印', 2), errors='coerce')
+    if pd.isna(in_val): in_val = 2.0
+    
+    if in_val == 0:
+        score -= 150.0
+    elif in_val == 1:
+        score -= 20.0
+    elif in_val == 2:
+        pass
+    elif 3 <= in_val <= 4:
+        score += 20.0
+    elif 5 <= in_val <= 7:
+        score += 40.0
+    elif 8 <= in_val <= 10:
+        score += 70.0
+    elif in_val >= 11:
+        score += 100.0
+
+    m2_val = pd.to_numeric(r.get('M2', 0), errors='coerce')
+    if not pd.isna(m2_val) and m2_val >= 5:
+        score += min(m2_val * 8.0, 70.0)
+
+    c_rk = int(pd.to_numeric(r.get('コース連順位', 99), errors='coerce') or 99)
+    b_rk = int(pd.to_numeric(r.get('バランス順位', 99), errors='coerce') or 99)
+
+    nb_hits, stable_hits = [], []
+    if track_type == 'ダ' and s_rk == 1 and weight >= 480:
+        score += 40.0; nb_hits.append("🐎 ダートで食う(S1位・大型)")
+    if interval.isdigit() and int(interval) >= 12:
+        score += 30.0; nb_hits.append("🔥 Nなごり(休み明け特注)")
+    if arm_rk == 1 and fup >= 6:
+        score += 45.0; nb_hits.append("✨ ARMS×FUP(黄金クロス)")
+    if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8:
+        score += 35.0; nb_hits.append("💎 TUAダート特注")
+    if arm_rk <= 3:
+        score += 20.0; nb_hits.append("🌲 Ｃ馬・調教特注")
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 25.0; nb_hits.append("🔄 トラック変わり激走特注")
 
@@ -241,7 +590,7 @@ def main():
     tua_top3_df = race_df.sort_values('TUA順位').head(3)
 
     f_top3_nums = f_top3_df['馬番'].tolist()
-    s_top3_nums = s_top3_df['S順位'].tolist()
+    s_top3_nums = s_top3_df['S順位'].tolist() if 'S順位' in s_top3_df else []
     arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in arm_top3_df else []
     tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in tua_top3_df else []
 
