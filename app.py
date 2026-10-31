@@ -235,7 +235,7 @@ CUSHION_DATA_BOOK = {
 
 def clean_str(val):
     if pd.isnull(val): return ""
-    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
+    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace("　", "")
 
 def load_external_training_csvs():
     sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
@@ -416,12 +416,16 @@ def main():
 
     st.sidebar.success(f"✅ 指数CSV読込成功: {loaded_filename} (全{len(df_raw)}頭)")
 
-    # サイドバー：前走頭数・レベル狙い目フィルタ
+    # サイドバー：チェックボックス（前走頭数 ＆ ノートブック狙い目 ＆ 指数狙い目）
     st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🎯 前走対戦馬レベル 狙い目フィルタ")
+    st.sidebar.markdown("### 🎯 チェックBOX 狙い目・レベルフィルタ")
     filter_high_level_in = st.sidebar.checkbox("👑 前走馬券内3頭以上 (ハイレベル特注)")
     filter_high_level_m2 = st.sidebar.checkbox("⭐ 前走掲示板5頭以上 (出世レース特注)")
     filter_danger_in0 = st.sidebar.checkbox("🚨 前走馬券内0頭 (凡戦危険馬を除外)")
+    filter_nb_dart = st.sidebar.checkbox("🐎 ノートブック: ダートで食う(S1位・大型)")
+    filter_nb_nagori = st.sidebar.checkbox("🔥 ノートブック: Nなごり(休み明け)")
+    filter_arms_fup = st.sidebar.checkbox("✨ 指数特注: ARMS×FUP黄金クロス")
+    filter_as_cross = st.sidebar.checkbox("👑 指数特注: AS交差馬(F&S上位)")
 
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
@@ -506,16 +510,24 @@ def main():
         st.error("解析可能な有効データが存在しません。")
         st.stop()
 
-    # サイドバーフィルタの適用
+    # サイドバーチェックボックスに基づくデータ絞り込み（チェックONの条件を完全に満たす馬のみ）
     if filter_high_level_in:
         df = df[df['印'] >= 3]
     if filter_high_level_m2:
         df = df[df['M2'] >= 5]
     if filter_danger_in0:
         df = df[df['印'] > 0]
+    if filter_nb_dart:
+        df = df.apply(lambda r: r if (r['track'] == 'ダ' and r['S順位'] == 1 and float(str(r['前場体重']).replace('kg','')) >= 480) else None, axis=1).dropna()
+    if filter_nb_nagori:
+        df = df.apply(lambda r: r if (str(r['間隔']).isdigit() and int(r['間隔']) >= 12) else None, axis=1).dropna()
+    if filter_arms_fup:
+        df = df.apply(lambda r: r if (r['ARM順位'] == 1 and r['Fup2'] >= 6) else None, axis=1).dropna()
+    if filter_as_cross:
+        df = df.apply(lambda r: r if (r['F順位'] <= 3 and r['S順位'] <= 3) else None, axis=1).dropna()
 
     if df.empty:
-        st.warning("選択したフィルター条件に一致する馬が存在しません。")
+        st.warning("選択したチェックBOX条件に一致する馬・レースが存在しません。")
         st.stop()
 
     st.sidebar.markdown('---')
@@ -537,32 +549,24 @@ def main():
     races_in_v = v_df[['race_uid', 'race_id', 'track', 'dist']].drop_duplicates('race_uid')
     races_sorted = sorted(races_in_v.to_dict('records'), key=lambda x: extract_race_number(x['race_uid']))
 
+    # レース検索欄（セレクトボックス）の生成：ぴか一マーク等の絵文字を排除し、チェックBOXの該当馬がいるレースに各印を表示
     race_options = {}
     for r in races_sorted:
         r_uid = r['race_uid']
         r_subset = v_df[v_df['race_uid'] == r_uid]
-        as_count = ((r_subset['F順位'] <= 3) & (r_subset['S順位'] <= 3)).sum()
-        is_bon = ((r_subset['F順位'] <= 3) & (r_subset['ARM順位'] <= 3) & (r_subset['TUA順位'] <= 3)).sum() >= 3
-        is_cross = ((r_subset['ARM順位'] == 1) & (r_subset['Fup2'] >= 6)).any()
-        is_pikai = is_bon or is_cross or (r_subset['F'] >= 65).any()
+        
+        # チェックBOX状態に応じたレースごとの該当印・タグ生成
+        race_tags = []
+        if filter_high_level_in and (r_subset['印'] >= 3).any(): race_tags.append("👑印≧3")
+        if filter_high_level_m2 and (r_subset['M2'] >= 5).any(): race_tags.append("⭐M2≧5")
+        if filter_danger_in0 and (r_subset['印'] == 0).any(): race_tags.append("🚨印0除外")
+        if filter_nb_dart and ((r_subset['track'] == 'ダ') & (r_subset['S順位'] == 1)).any(): race_tags.append("🐎ダート特注")
+        if filter_nb_nagori and (r_subset['間隔'].astype(str).str.isdigit() & (r_subset['間隔'].astype(int) >= 12)).any(): race_tags.append("🔥Nなごり")
+        if filter_arms_fup and ((r_subset['ARM順位'] == 1) & (r_subset['Fup2'] >= 6)).any(): race_tags.append("✨ARMSクロス")
+        if filter_as_cross and ((r_subset['F順位'] <= 3) & (r_subset['S順位'] <= 3)).any(): race_tags.append("👑AS交差")
 
-        # チェックボックスの状態をレースタイトルにも反映
-        filter_tags = []
-        if filter_high_level_in: filter_tags.append("👑印≧3")
-        if filter_high_level_m2: filter_tags.append("⭐M2≧5")
-        if filter_danger_in0: filter_tags.append("🚨印>0")
-        tag_str = f" [{','.join(filter_tags)}]" if filter_tags else ""
-
-        if is_pikai:
-            icon_str = f" 👑👑【ぴか一マーク】{tag_str}"
-        elif is_bon:
-            icon_str = f" 👑[ボーナス]{tag_str}"
-        elif as_count > 0:
-            icon_str = f" 🔥[AS交差:{as_count}頭]{tag_str}"
-        else:
-            icon_str = f" 📌{tag_str}"
-
-        race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){icon_str}"
+        tag_str = f" [{' '.join(race_tags)}]" if race_tags else " 📌"
+        race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){tag_str}"
 
     selected_race_uid = st.selectbox("レース選択（1R〜順次）", options=list(race_options.keys()), format_func=lambda x: race_options[x])
 
@@ -586,7 +590,7 @@ def main():
     is_race_pikai = has_bonus or has_cross or has_sss
 
     if is_race_pikai:
-        banner_cls = "race-type-bonus"; banner_txt = "👑👑【ぴか一マーク】最強ロジック合致レース（期待値・勝率MAX）"
+        banner_cls = "race-type-bonus"; banner_txt = "👑👑【該当馬確認】最強ロジック合致レース（期待値・勝率MAX）"
     elif has_sss:
         banner_cls = "race-type-hit"; banner_txt = "🎯 SSS級・絶対神域出現（F指数65以上＋ARM120＋TUA200の鉄板軸が存在）"
     else:
@@ -605,7 +609,7 @@ def main():
     arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in arm_top3_df else []
     tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in tua_top3_df else []
 
-    # 前走馬券内頭数0頭（危険馬）をA群・Z群から完全に除外するフィルタ適用
+    # 前走馬券内頭数0頭（危険馬）をA群・Z群から完全に除外するロジック
     safe_race_df = race_df[race_df['印'] > 0] if filter_danger_in0 else race_df
 
     f_safe_top3 = safe_race_df.sort_values('F順位').head(3)['馬番'].tolist()
@@ -628,7 +632,7 @@ def main():
     quad_str = ", ".join([f"<strong>{n}番</strong>" for n in quad_nums]) if quad_nums else "なし"
     z_str = ", ".join([f"<strong>{n}番</strong>" for n in z_nums]) if z_nums else "なし"
 
-    filter_notice = " [🚨 前走0頭消しフィルター適用済み]" if filter_danger_in0 else ""
+    filter_notice = " [🚨 前走0頭消し・チェックBOX連動適用済み]" if (filter_danger_in0 or filter_high_level_in) else ""
 
     st.markdown(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
@@ -783,7 +787,7 @@ def main():
         wood_str = f"ウッド[5F:{w_5f or '---'} | L2:{w_l2 or '---'} → L1:{w_l1 or '---'}]" if w_5f else "ウッドデータなし"
         choukyou_summary = f"{sakaro_str} ｜ {wood_str}"
 
-        # 馬情報ヘッダーに場所・レース番号（例: 新1 / 東京11R 等）を正確に表示
+        # 馬情報ヘッダーに場所・レース番号（例: 京3R 等）を正確に表示
         race_place_num_str = f"【{chosen_venue}{re.search(r'\d+', str(h['race_uid'])).group()}R】" if re.search(r'\d+', str(h['race_uid'])) else f"【{chosen_venue}】"
 
         st.markdown(f"""
