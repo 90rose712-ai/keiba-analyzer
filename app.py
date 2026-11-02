@@ -40,31 +40,26 @@ st.markdown("""
         align-items: center;
         justify-content: space-between;
     }
-    .race-type-super-win {
+    .race-type-s-class {
         background: linear-gradient(135deg, #7c2d12 0%, #b45309 30%, #dc2626 100%);
         color: #fef3c7;
         border: 2px solid #fde68a;
         box-shadow: 0 0 15px rgba(239, 68, 68, 0.6);
     }
-    .race-type-bonus {
+    .race-type-a-class {
         background: linear-gradient(135deg, #7c2d12 0%, #b45309 50%, #d97706 100%);
         color: #fef3c7;
         border: 2px solid #fde68a;
         box-shadow: 0 0 10px rgba(245, 158, 11, 0.5);
     }
-    .race-type-hit {
+    .race-type-b-class {
         background: linear-gradient(135deg, #064e3b 0%, #047857 100%);
         color: #d1fae5;
         border: 2px solid #6ee7b7;
     }
-    .race-type-recovery {
-        background: linear-gradient(135deg, #4c1d95 0%, #6d28d9 100%);
-        color: #ede9fe;
-        border: 2px solid #c4b5fd;
-    }
-    .race-type-normal {
-        background: #1f2937;
-        color: #e5e7eb;
+    .race-type-c-class {
+        background: #374151;
+        color: #9ca3af;
         border: 1px solid #4b5563;
     }
     .recom-panel-go {
@@ -243,7 +238,7 @@ CUSHION_DATA_BOOK = {
 
 def clean_str(val):
     if pd.isnull(val): return ""
-    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace("　", "")
+    return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
 def load_external_training_csvs():
     sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
@@ -391,7 +386,7 @@ def calc_upgraded_dynamic_score(r, venue_name, track_type, dist_val, c_category)
 
     return score, is_rescued, is_sss, nb_hits, stable_hits
 
-def evaluate_race_quality(r_subset):
+def evaluate_race_rating(r_subset):
     sub = r_subset.copy()
     for col in ['F', 'F順位', 'ARM', 'ARM順位', 'TUA', 'TUA順位', 'S', 'S順位', 'Fup2', '印', 'M2']:
         if col in sub.columns:
@@ -403,15 +398,17 @@ def evaluate_race_quality(r_subset):
     high_in_count = (sub['印'] >= 3).sum() if '印' in sub else 0
     high_m2_count = (sub['M2'] >= 5).sum() if 'M2' in sub else 0
     
-    score = 0
-    if max_f >= 65.0: score += 3
-    elif max_f >= 60.0: score += 2
-    if as_count >= 1: score += 2
-    if gc_count >= 1: score += 2
-    if high_in_count >= 2: score += 1
-    if high_m2_count >= 2: score += 1
-    
-    return score
+    # S-Class criteria: max_f >= 66 and (high_in_count >= 3 or high_m2_count >= 3) OR as_count == 1 with high quality
+    if max_f >= 66.0 and (high_in_count >= 3 or high_m2_count >= 3):
+        return "S"
+    elif as_count == 1 and max_f >= 63.0:
+        return "S"
+    elif max_f >= 62.0 or gc_count >= 1 or high_in_count >= 2:
+        return "A"
+    elif max_f >= 55.0 or as_count >= 2:
+        return "B"
+    else:
+        return "C"
 
 def main():
     st.sidebar.markdown("## 📂 CSVデータ読込管理")
@@ -567,11 +564,14 @@ def main():
         r_uid = r['race_uid']
         r_subset = v_df[v_df['race_uid'] == r_uid]
         
-        q_score = evaluate_race_quality(r_subset)
-        is_super_win = (q_score >= 4)
+        r_rating = evaluate_race_rating(r_subset)
         
         race_tags = []
-        if is_super_win: race_tags.append("🔥【高確率勝負】")
+        if r_rating == "S": race_tags.append("🔥【S級勝負】")
+        elif r_rating == "A": race_tags.append("🎯【A級準勝負】")
+        elif r_rating == "B": race_tags.append("⚖️【B級標準】")
+        else: race_tags.append("📌【見送り推奨】")
+
         if filter_high_level_in and (r_subset['印'] >= 3).any(): race_tags.append("👑印≧3")
         if filter_high_level_m2 and (r_subset['M2'] >= 5).any(): race_tags.append("⭐M2≧5")
         if filter_danger_in0 and (r_subset['印'] == 0).any(): race_tags.append("🚨印0除外")
@@ -588,7 +588,7 @@ def main():
             has_as = r_subset.apply(lambda row: (row['F順位'] <= 3 and row['S順位'] <= 3), axis=1).any()
             if has_as: race_tags.append("👑AS交差")
 
-        tag_str = f" [{' '.join(race_tags)}]" if race_tags else (" 🔥【勝負】" if is_super_win else " 📌")
+        tag_str = f" [{' '.join(race_tags)}]"
         race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){tag_str}"
 
     selected_race_uid = st.selectbox("レース選択（1R〜順次）", options=list(race_options.keys()), format_func=lambda x: race_options[x])
@@ -607,26 +607,20 @@ def main():
     race_df['nb_hits'] = nb_hits_list
     race_df['stable_hits'] = stable_hits_list
 
-    sel_q_score = evaluate_race_quality(race_df)
-    is_sel_super_win = (sel_q_score >= 4)
+    sel_rating = evaluate_race_rating(race_df)
 
-    has_bonus = ((race_df['F順位'] <= 3) & (race_df['ARM順位'] <= 3) & (race_df['TUA順位'] <= 3)).sum() >= 3
-    has_cross = ((race_df['ARM順位'] == 1) & (race_df['Fup2'] >= 6)).any()
-    has_sss = race_df['is_sss'].any()
-    is_race_pikai = has_bonus or has_cross or has_sss
-
-    if is_sel_super_win:
-        banner_cls = "race-type-super-win"
-        banner_txt = "🔥🌟【高確率的中・勝負レース判定】指数データが示す最高信頼度合致レース（単勝・軸馬鉄板）"
-    elif is_race_pikai:
-        banner_cls = "race-type-bonus"
-        banner_txt = "👑👑【ぴか一マーク】最強ロジック合致レース（期待値・勝率MAX）"
-    elif has_sss:
-        banner_cls = "race-type-hit"
-        banner_txt = "🎯 SSS級・絶対神域出現（F指数65以上＋ARM120＋TUA200の鉄板軸が存在）"
+    if sel_rating == "S":
+        banner_cls = "race-type-s-class"
+        banner_txt = "🔥🌟【S級絶対勝負レース】指数・前走頭数の裏付けが極限まで合致した最優先勝負レース（単勝・軸馬鉄板）"
+    elif sel_rating == "A":
+        banner_cls = "race-type-a-class"
+        banner_txt = "🎯👑【A級準勝負レース】黄金クロス・特注条件合致の狙い目レース"
+    elif sel_rating == "B":
+        banner_cls = "race-type-b-class"
+        banner_txt = "⚖️🎯【B級標準レース】標準的な能力比較による的中重視レース"
     else:
-        banner_cls = "race-type-recovery"
-        banner_txt = "🔥 波乱抽出・標準ハイブリッド買い目連動レース"
+        banner_cls = "race-type-c-class"
+        banner_txt = "📌⚠️【C級・見送り推奨レース】低レベル混戦または指数拮抗のため資金投入非推奨"
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
 
@@ -662,7 +656,7 @@ def main():
     quad_str = ", ".join([f"<strong>{n}番</strong>" for n in quad_nums]) if quad_nums else "なし"
     z_str = ", ".join([f"<strong>{n}番</strong>" for n in z_nums]) if z_nums else "なし"
 
-    filter_notice = " [🚨 前走0頭消し・高確率勝負レース判定適用済み]" if (filter_danger_in0 or is_sel_super_win) else ""
+    filter_notice = " [🚨 前走0頭消し・レイティング判定適用済み]" if (filter_danger_in0 or sel_rating in ["S", "A"]) else ""
 
     st.markdown(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
@@ -674,7 +668,7 @@ def main():
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
             🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span><br>
-            ※指数解析による高確率的中レース判定ロジックを完全反映した鉄壁の3連単構成。
+            ※レイティング判定ロジックおよび指数解析を完全反映した鉄壁の3連単構成。
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span></li>
@@ -770,88 +764,4 @@ def main():
         c_horse_val = h['C(馬)']
 
         if c_mark_val:
-            badges.append(f"<span class='badge-c-mark'>🏷️ C(マーク): {c_mark_val}</span>")
-        if c_horse_val:
-            badges.append(f"<span class='badge-c-horse'>🐴 C(馬): {c_horse_val}</span>")
-
-        if in_v == 0:
-            badges.append("<span class='badge-danger-fan'>🚨 前走相手馬券内0頭(凡戦危険馬)</span>")
-        elif in_v >= 8:
-            badges.append(f"<span class='badge-high-level'>👑 前走相手馬券内{in_v}頭(超ハイレベル)</span>")
-        elif in_v >= 3:
-            badges.append(f"<span class='badge-notebook-hit'>🔥 前走相手馬券内{in_v}頭</span>")
-
-        if m2_v >= 5:
-            badges.append(f"<span class='badge-cushion-fit'>⭐ 前走相手掲示板{m2_v}頭(出世レース)</span>")
-
-        is_as = h['F順位'] <= 3 and h['S順位'] <= 3
-        if is_as: badges.append("<span class='badge-as-intersect'>👑 AS交差馬 (F&S上位)</span>")
-
-        if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ コア指数救済（減点免除）</span>")
-        for nb in h['nb_hits']: badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
-        for stbl in h['stable_hits']: badges.append(f"<span class='badge-stable-hit'>{stbl}</span>")
-
-        c_key = (chosen_venue, h['track'], h['dist'], h['種牡馬'], c_cat)
-        if c_key in CUSHION_DATA_BOOK:
-            judg, stat_txt = CUSHION_DATA_BOOK[c_key]
-            if judg == '最重要': badges.append(f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>")
-
-        fup_val = h['Fup2']
-        fup_rk = h['Fup2順位']
-        if fup_rk == 1:
-            fup_badge = f"<span class='fup-badge-rank1'>👑 {fup_val}点 (順位1位)</span>"
-        elif fup_val >= 7:
-            fup_badge = f"<span class='fup-badge-top'>⚡ {fup_val}点 (順位{fup_rk})</span>"
-        elif fup_val >= 5:
-            fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{fup_rk})</span>"
-        else:
-            fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{fup_rk})</span>"
-
-        f_style = "val-f-top" if h['F順位'] <= 3 else ""
-        s_style = "val-s-top" if h['S順位'] <= 3 else ""
-        arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
-        tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
-
-        s_t4 = h.get('坂路T4', '')
-        s_l2 = h.get('坂路L2', '')
-        s_l1 = h.get('坂路L1', '')
-        w_5f = h.get('ウッド5F', '')
-        w_l2 = h.get('ウッドL2', '')
-        w_l1 = h.get('ウッドL1', '')
-
-        judge_label, judge_color = parse_and_judge_lap(s_l1, s_l2, s_t4)
-        
-        sakaro_str = f"坂路[4F:{s_t4 or '---'} | L2:{s_l2 or '---'} → L1:{s_l1 or '---'}]" if s_t4 else "坂路データなし"
-        wood_str = f"ウッド[5F:{w_5f or '---'} | L2:{w_l2 or '---'} → L1:{w_l1 or '---'}]" if w_5f else "ウッドデータなし"
-        choukyou_summary = f"{sakaro_str} ｜ {wood_str}"
-
-        race_place_num_str = f"【{chosen_venue}{re.search(r'\d+', str(h['race_uid'])).group()}R】" if re.search(r'\d+', str(h['race_uid'])) else f"【{chosen_venue}】"
-
-        st.markdown(f"""
-        <div class='horse-card'>
-            <div class='horse-card-header'>
-                <span class='race-badge-title'>{race_place_num_str} {u_no}番</span>
-                <span class='horse-card-title'>{h['馬番']}番 {h['馬名']}</span>
-                <span style='color: #9ca3af; font-size: 13.5px;'>（{h['調教師']} / {h['騎手']} / {h['人気順位']}番人気）</span>
-            </div>
-            <div style='margin-bottom: 8px;'>{' '.join(badges)}</div>
-            <ul class='horse-card-list'>
-                <li><strong>主要5大指数</strong>: 
-                    F指数: <span class='{f_style}'>{h['F']}</span> (順位{h['F順位']}) / 
-                    Fup2: {fup_badge} / 
-                    ARM: <span class='{arm_style}'>{h['ARM']}</span> (順位{h['ARM順位']}) / 
-                    TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
-                    S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
-                </li>
-                <li><strong>対戦レベル評価</strong>: 前走馬券内頭数(印): <strong>{in_v}頭</strong> ｜ 前走掲示板内頭数(M2): <strong>{m2_v}頭</strong></li>
-                <li><strong>調教ラップ＆判定</strong>: <span style='background-color: {judge_color}; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>{judge_label}</span><br>
-                    <span style='font-size: 12.5px; color: #94a3b8;'>{choukyou_summary}</span> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
-                <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / Balance: {h['バランス順位']}位</li>
-                <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {h['芝ダート変わり']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
-                <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
-            </ul>
-        </div>
-        """, unsafe_allow_html=True)
-
-if __name__ == "__main__":
-    main()
+            badges.
