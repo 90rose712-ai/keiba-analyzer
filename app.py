@@ -691,6 +691,9 @@ def main():
     tua_top3_df = race_df.sort_values('TUA順位').head(3)
 
     f_top3_nums = f_top3_df['馬番'].tolist()
+    s_top3_nums = s_top3_df['馬番'].tolist()
+    arm_top3_nums = arm_top3_df['馬番'].tolist()
+    tua_top3_nums = tua_top3_df['馬番'].tolist()
     safe_race_df = race_df[race_df['印'] > 0] if filter_danger_in0 else race_df
     f_safe_top3 = safe_race_df.sort_values('F順位').head(3)['馬番'].tolist()
     s_safe_top3 = safe_race_df.sort_values('S順位').head(3)['馬番'].tolist()
