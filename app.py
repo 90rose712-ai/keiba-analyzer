@@ -298,13 +298,6 @@ def parse_and_judge_lap(l1_val, l2_val, t4_val):
         else: return "B型 (減速)", "#374151"
 
 def evaluate_f_index_strict(r, race_subset):
-    """
-    F指数判定の厳格な3要件（F指数判定マニュアル）:
-    - 条件A: F指数が66以上
-    - 条件B: F指数順位（F順位）が3位以内
-    - 条件C: レース内F指数平均値と各馬の差（馬のF - レース内F平均）の平均値との差が大きい順で上位20%以内（端数切り上げ）
-    評価: 3つ該当=S評価, 2つ=A評価, 1つ=B評価, 0つ=非該当
-    """
     try:
         f_val = float(r.get('F', 0.0) or 0.0)
         f_rk = int(r.get('F順位', 99) or 99)
@@ -313,8 +306,6 @@ def evaluate_f_index_strict(r, race_subset):
 
     cond_a = (f_val >= 66.0)
     cond_b = (f_rk <= 3)
-
-    # Condition C calculation
     try:
         f_series = pd.to_numeric(race_subset['F'], errors='coerce').dropna()
         if not f_series.empty:
@@ -336,10 +327,6 @@ def evaluate_f_index_strict(r, race_subset):
     else: return "非該当", 0
 
 def get_race_balance_level(race_subset, track_type, class_name):
-    """
-    S・F指数「レースバランス攻略」の水準判定テーブルに基づく判定
-    芝ダ・クラスに応じたS低・S高・F低・F高の閾値と比較
-    """
     try:
         s_vals = pd.to_numeric(race_subset['S'], errors='coerce').dropna().sort_values(ascending=False)
         f_vals = pd.to_numeric(race_subset['F'], errors='coerce').dropna().sort_values(ascending=False)
@@ -371,7 +358,7 @@ def get_race_balance_level(race_subset, track_type, class_name):
     f_level = "高" if f_avg_top3 >= f_high else ("低" if f_avg_top3 <= f_low else "標準")
     return s_level, f_level
 
-def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val, c_category, class_name):
+def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val, c_category, class_name, s_row_laps):
     score = 0.0
     f_val = float(pd.to_numeric(r.get('F', 0.0), errors='coerce') or 0.0)
     f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
@@ -390,6 +377,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     interval = str(r.get('間隔', ''))
     weight = float(pd.to_numeric(str(r.get('前場体重', '480')).replace('kg', ''), errors='coerce') or 480.0)
 
+    # F-index strict evaluation
     f_eval_label, f_eval_score = evaluate_f_index_strict(r, race_subset)
     if f_eval_label == "S評価": score += 60.0
     elif f_eval_label == "A評価": score += 40.0
@@ -398,12 +386,12 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     in_val = pd.to_numeric(r.get('印', 2), errors='coerce')
     if pd.isna(in_val): in_val = 2.0
     
-    if in_val == 0: score -= 150.0
-    elif in_val == 1: score -= 20.0
-    elif 3 <= in_val <= 4: score += 20.0
-    elif 5 <= in_val <= 7: score += 40.0
-    elif 8 <= in_val <= 10: score += 70.0
-    elif in_val >= 11: score += 100.0
+    if in_val == 0: score -= 50.0 # 緩和措置
+    elif in_val == 1: score += 10.0
+    elif 3 <= in_val <= 4: score += 25.0
+    elif 5 <= in_val <= 7: score += 45.0
+    elif 8 <= in_val <= 10: score += 75.0
+    elif in_val >= 11: score += 110.0
 
     m2_val = pd.to_numeric(r.get('M2', 0), errors='coerce')
     if not pd.isna(m2_val) and m2_val >= 5: score += min(m2_val * 8.0, 70.0)
@@ -412,47 +400,67 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     b_rk = int(pd.to_numeric(r.get('バランス順位', 99), errors='coerce') or 99)
 
     nb_hits, stable_hits = [], []
+    
+    # 1. ダートで食う
     if track_type == 'ダ' and s_rk == 1 and weight >= 480:
-        score += 40.0; nb_hits.append("🐎 ダートで食う(S1位・大型)")
-    if interval.isdigit() and int(interval) >= 12:
-        score += 30.0; nb_hits.append("🔥 Nなごり(休み明け特注)")
+        score += 50.0; nb_hits.append("🐎 ダートで食う(S1位・大型)")
+    
+    # 2. Nなごり（休み明け12週以上 ＋ 坂路A3）
+    is_a3_lap = False
+    try:
+        l1 = float(s_row_laps.get('Lap1', 99) or 99)
+        l2 = float(s_row_laps.get('Lap2', 99) or 99)
+        if l1 <= 11.9 and l1 < l2:
+            is_a3_lap = True
+    except:
+        pass
+
+    if interval.isdigit() and int(interval) >= 12 and is_a3_lap:
+        score += 60.0; nb_hits.append("🔥 Nなごり(休み明け12週+A3)")
+
+    # 3. ARMS x FUP 黄金クロス
     if arm_rk == 1 and fup >= 6:
-        score += 45.0; nb_hits.append("✨ ARMS×FUP(黄金クロス)")
+        score += 50.0; nb_hits.append("✨ ARMS×FUP(黄金クロス)")
+
+    # 4. TUAダート特注
     if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8:
-        score += 35.0; nb_hits.append("💎 TUAダート特注")
+        score += 40.0; nb_hits.append("💎 TUAダート特注")
+
+    # 5. C馬（ウッド特則）
     if arm_rk <= 3:
-        score += 20.0; nb_hits.append("🌲 Ｃ馬・調教特注")
+        score += 30.0; nb_hits.append("🌲 Ｃ馬・調教特注")
+
+    # 6. トラック変わり
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
-        score += 25.0; nb_hits.append("🔄 トラック変わり激走特注")
+        score += 30.0; nb_hits.append("🔄 トラック変わり激走特注")
 
-    if '藤原' in trainer: score += 25.0; stable_hits.append("厩舎: 藤原英昭")
-    if '杉山' in trainer: score += 25.0; stable_hits.append("厩舎: 杉山晴紀")
-    if '矢作' in trainer: score += 25.0; stable_hits.append("厩舎: 矢作芳人")
-    if '中内田' in trainer: score += (30.0 if f_rk == 1 else 20.0); stable_hits.append("厩舎: 中内田充正")
-    if '木村' in trainer: score += 25.0; stable_hits.append("厩舎: 木村哲也")
-    if '堀' in trainer: score += 20.0; stable_hits.append("厩舎: 堀宣行")
-    if '友道' in trainer: score += 20.0; stable_hits.append("厩舎: 友道康夫")
+    # 厩舎加点（強力加点）
+    if '藤原' in trainer: score += 30.0; stable_hits.append("厩舎: 藤原英昭")
+    if '杉山' in trainer: score += 30.0; stable_hits.append("厩舎: 杉山晴紀")
+    if '矢作' in trainer: score += 30.0; stable_hits.append("厩舎: 矢作芳人")
+    if '中内田' in trainer: score += 35.0; stable_hits.append("厩舎: 中内田充正")
+    if '木村' in trainer: score += 30.0; stable_hits.append("厩舎: 木村哲也")
+    if '堀' in trainer: score += 25.0; stable_hits.append("厩舎: 堀宣行")
+    if '友道' in trainer: score += 25.0; stable_hits.append("厩舎: 友道康夫")
 
-    if fup == 7: score += 45.0
-    elif fup >= 5: score += 30.0
-    if c_rk <= 3: score += 25.0
-    if b_rk <= 3: score += 25.0
+    if fup == 7: score += 50.0
+    elif fup >= 5: score += 35.0
+    if c_rk <= 3: score += 30.0
+    if b_rk <= 3: score += 30.0
 
+    # フェイルセーフ（強力な加点が1つでもあれば完全消しを回避して保険として救済）
     is_sss = (f_val >= 65.0) and (arm_val >= 120.0) and (tua_val >= 200.0)
     is_quad_crown = (f_rk <= 3) and (arm_rk <= 3) and (tua_rk <= 3) and (fup >= 5)
     is_solid_axis = (f_rk == 1) and (fup >= 5)
     is_kakugen = (fup == 7)
     is_f65_top = (f_val >= 65.0) or (f_eval_label == "S評価")
+    has_strong_bonus = is_sss or is_quad_crown or is_solid_axis or is_kakugen or is_f65_top or len(nb_hits) > 0 or len(stable_hits) > 0 or (fup >= 6) or (arm_rk <= 2)
 
-    if in_val == 0:
-        is_rescued = False
-    else:
-        is_rescued = is_sss or is_quad_crown or is_solid_axis or is_kakugen or len(nb_hits) > 0 or len(stable_hits) > 0 or is_f65_top
-
+    is_rescued = has_strong_bonus
     if not is_rescued:
-        if c_rk >= 6: score -= 30.0
-        if b_rk >= 6: score -= 15.0
-        if pop <= 3 and fup <= 1: score -= 35.0
+        if c_rk >= 6: score -= 10.0 # 減点を大幅に軽減
+        if b_rk >= 6: score -= 5.0
+        if pop <= 3 and fup <= 1: score -= 15.0
 
     return score, is_rescued, is_sss, nb_hits, stable_hits, f_eval_label
 
@@ -517,7 +525,7 @@ def main():
     filter_high_level_m2 = st.sidebar.checkbox("⭐ 前走掲示板5頭以上 (出世レース特注)")
     filter_danger_in0 = st.sidebar.checkbox("🚨 前走馬券内0頭 (凡戦危険馬を除外)")
     filter_nb_dart = st.sidebar.checkbox("🐎 ノートブック: ダートで食う(S1位・大型)")
-    filter_nb_nagori = st.sidebar.checkbox("🔥 ノートブック: Nなごり(休み明け)")
+    filter_nb_nagori = st.sidebar.checkbox("🔥 ノートブック: Nなごり(休み明け12週+A3)")
     filter_arms_fup = st.sidebar.checkbox("✨ 指数特注: ARMS×FUP黄金クロス")
     filter_as_cross = st.sidebar.checkbox("👑 指数特注: AS交差馬(F&S上位)")
 
@@ -593,6 +601,7 @@ def main():
                 '調教師': trainer, '騎手': jockey, '種牡馬': sire, '人気順位': int(float(pop)) if pd.notnull(pop) else 99,
                 'Fup2': fup, 'Fup2順位': fup_rk, 'F': f_val, 'F順位': f_rk, 'ARM': arm_val, 'ARM順位': arm_rk,
                 'TUA': tua_val, 'TUA順位': tua_rk, 'S': s_val, 'S順位': s_rk,
+                's_row': s_row,
                 '坂路T1': s_row.get('Time1', ''), '坂路L2': s_row.get('Lap2', ''), '坂路L1': s_row.get('Lap1', ''),
                 '坂路T4': s_row.get('Time4', ''), 'ウッド5F': w_row.get('5F', ''), 'ウッドL2': w_row.get('Lap2', ''), 'ウッドL1': w_row.get('Lap1', ''),
                 '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
@@ -657,7 +666,7 @@ def main():
 
     scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
     for _, r in race_df.iterrows():
-        sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'])
+        sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'])
         scores.append(sc); rescued_flags.append(res); sss_flags.append(sss); nb_hits_list.append(nb); stable_hits_list.append(stbl); f_eval_labels.append(f_lbl)
 
     race_df['dynamic_score'] = scores
@@ -724,7 +733,7 @@ def main():
             ⭐ <strong>【F × ARM交差馬（絶対能力 ＋ 高回収）】</strong>: {f_arm_str}<br>
             🚀 <strong>【S × TUA交差馬（スピード ＋ 機動力）】</strong>: {s_tua_str}<br>
             💎 <strong>【4大指数完全網羅馬（F・S・ARM・TUAすべて上位）】</strong>: {quad_str}<br>
-            🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span>
+            🎯 <strong>【アプリ自動抽出・厳選Z馬（3列目特化候補・保険含む）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span>
         </div>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第3パターン構築】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> ＝ <span style='color: #fbbf24; font-weight: bold;'>{', '.join(map(str, a_group_nums))}</span> → <span style='color: #38bdf8; font-weight: bold;'>{z_str}</span></li>
@@ -737,7 +746,7 @@ def main():
 
     if has_f65:
         mode_name = "👑 モードA：F指数65以上【絶対主役モード】"
-        mode_desc = "F指数65以上の抜けた馬を不動の連軸とし、F上位＋期待値穴馬へ網を張る構成"
+        mode_desc = "F指数65以上の抜けた馬を不動の連軸とし、F上位＋期待値穴馬・保険馬へ網を張る構成"
         honmei = f65_horses.iloc[0]
         honmei_num = int(honmei['馬番'])
         opponents = race_df[race_df['馬番'] != honmei_num].copy()
@@ -768,7 +777,7 @@ def main():
         <div style='font-size: 13px; color: #9ca3af; margin-bottom: 10px;'>{mode_desc}</div>
         <div class='recom-row'>🥇 <strong>本命・連軸</strong>: <span class='recom-val-num'>{honmei_num}番 {honmei['馬名']}</span>（F指数: {honmei['F']} / 動的スコア: {honmei['dynamic_score']:.1f}）</div>
         <div class='recom-row'>🛡️ <strong>対抗・相手筆頭</strong>: <span class='recom-val-num'>{taikou_num}番 {taikou['馬名']}</span>（F指数: {taikou['F']}）</div>
-        <div class='recom-row'>💣 <strong>激走穴特注</strong>: <span class='recom-val-num'>{ana_num}番 {ana['馬名']}</span>（ARM: {ana['ARM']} / TUA: {ana['TUA']}）</div>
+        <div class='recom-row'>💣 <strong>激走穴特注（保険推奨）</strong>: <span class='recom-val-num'>{ana_num}番 {ana['馬名']}</span>（ARM: {ana['ARM']} / TUA: {ana['TUA']}）</div>
     </div>
     """, unsafe_allow_html=True)
 
@@ -777,10 +786,10 @@ def main():
 
     st.markdown(f"""
     <div class='recom-block'>
-        <h4 style='color: #60a5fa; margin-top: 0;'>🎯 標準ハイブリッド馬券パック フォーメーション</h4>
+        <h4 style='color: #60a5fa; margin-top: 0;'>🎯 標準ハイブリッド馬券パック フォーメーション（保険網完備）</h4>
         <ul style='list-style-type: none; padding-left: 0; line-height: 1.8; font-size: 14px;'>
             <li><strong>【第1の網：主軸回収】</strong> 単勝: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ／ 馬単: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num} → {taikou_num}</span></li>
-            <li><strong>【第2の網：連対確保】</strong> 馬連: <span style='color: #38bdf8; font-weight: bold;'>{honmei_num} - {sec_nums_str}</span> ／ ワイド: <span style='color: #f472b6; font-weight: bold;'>{honmei_num} - {ana_num}</span></li>
+            <li><strong>【第2の網：連対確保・保険】</strong> 馬連: <span style='color: #38bdf8; font-weight: bold;'>{honmei_num} - {sec_nums_str}</span> ／ ワイド（保険）: <span style='color: #f472b6; font-weight: bold;'>{honmei_num} - {ana_num}</span></li>
             <li><strong>【第3の網：中配当網】</strong> 3連複F: <span style='color: #34d399; font-weight: bold;'>{honmei_num}</span> ＝ <span style='color: #38bdf8;'>{sec_nums_str}</span> ＝ <span style='color: #a78bfa;'>{third_nums_str}</span></li>
             <li><strong>【第4の網：高配当万馬券】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ⇄ <span style='color: #38bdf8;'>{taikou_num}</span> → <span style='color: #a78bfa;'>{third_nums_str}</span></li>
         </ul>
@@ -812,7 +821,7 @@ def main():
         badges = []
         if u_no == honmei_num: badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
-        elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注</span>")
+        elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
         in_v = h['印']
         m2_v = h['M2']
@@ -827,7 +836,7 @@ def main():
         elif f_eval == "A評価": badges.append("<span class='badge-f-eval-a'>⭐ F指数 A評価</span>")
         elif f_eval == "B評価": badges.append("<span class='badge-f-eval-b'>📌 F指数 B評価</span>")
 
-        if in_v == 0: badges.append("<span class='badge-danger-fan'>🚨 前走相手馬券内0頭(凡戦危険馬)</span>")
+        if in_v == 0: badges.append("<span class='badge-danger-fan'>🚨 前走相手馬券内0頭(凡戦注意)</span>")
         elif in_v >= 8: badges.append(f"<span class='badge-high-level'>👑 前走相手馬券内{in_v}頭(超ハイレベル)</span>")
         elif in_v >= 3: badges.append(f"<span class='badge-notebook-hit'>🔥 前走相手馬券内{in_v}頭</span>")
 
@@ -836,7 +845,7 @@ def main():
         is_as = h['F順位'] <= 3 and h['S順位'] <= 3
         if is_as: badges.append("<span class='badge-as-intersect'>👑 AS交差馬 (F&S上位)</span>")
 
-        if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ コア指数救済（減点免除）</span>")
+        if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ 強力加点・保険救済馬</span>")
         for nb in h['nb_hits']: badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
         for stbl in h['stable_hits']: badges.append(f"<span class='badge-stable-hit'>{stbl}</span>")
 
