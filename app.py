@@ -677,18 +677,6 @@ def main():
     race_df = df[df['race_uid'] == selected_race_uid].copy()
     c_cat = get_cushion_category(cushion_val, chosen_venue)
 
-    scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
-    for _, r in race_df.iterrows():
-        sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
-        scores.append(sc); rescued_flags.append(res); sss_flags.append(sss); nb_hits_list.append(nb); stable_hits_list.append(stbl); f_eval_labels.append(f_lbl)
-
-    race_df['dynamic_score'] = scores
-    race_df['is_rescued'] = rescued_flags
-    race_df['is_sss'] = sss_flags
-    race_df['nb_hits'] = nb_hits_list
-    race_df['stable_hits'] = stable_hits_list
-    race_df['f_eval'] = f_eval_labels
-
     # 狙い目調教チェックBOXによるリアルタイムフィルタリング（該当0頭の場合の安全フェイルセーフ完備）
     if filter_target_sakaro_a3:
         filtered = race_df[race_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
@@ -700,6 +688,18 @@ def main():
         ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
         filtered = race_df[race_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
         if not filtered.empty: race_df = filtered
+
+    scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
+    for _, r in race_df.iterrows():
+        sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
+        scores.append(sc); rescued_flags.append(res); sss_flags.append(sss); nb_hits_list.append(nb); stable_hits_list.append(stbl); f_eval_labels.append(f_lbl)
+
+    race_df['dynamic_score'] = scores
+    race_df['is_rescued'] = rescued_flags
+    race_df['is_sss'] = sss_flags
+    race_df['nb_hits'] = nb_hits_list
+    race_df['stable_hits'] = stable_hits_list
+    race_df['f_eval'] = f_eval_labels
 
     sel_rating = evaluate_race_rating(race_df)
     s_lvl_sel, f_lvl_sel = get_race_balance_level(race_df, race_df['track'].iloc[0] if not race_df.empty else '芝', race_df['class_name'].iloc[0] if not race_df.empty else '1勝クラス')
