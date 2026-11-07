@@ -169,75 +169,12 @@ st.markdown("""
     .badge-f-eval-a { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-f-eval-b { display: inline-flex; align-items: center; background: #2563eb; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
 
-    .fup-badge-rank1 { background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; font-size: 13.5px; box-shadow: 0 0 8px rgba(245, 158, 11, 0.5); }
-    .fup-badge-top { background: linear-gradient(135deg, #dc2626 0%, #b91c1c 100%); color: #ffffff; font-weight: 900; padding: 2px 8px; border-radius: 4px; border: 1px solid #fca5a5; font-size: 13.5px; }
-    .fup-badge-mid { background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%); color: #ffffff; font-weight: bold; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; font-size: 13px; }
-    .fup-badge-low { background: #374151; color: #9ca3af; padding: 1px 6px; border-radius: 4px; font-size: 13px; }
-
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
     .val-arms-top { color: #083344; background-color: #38bdf8; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #0284c7; }
     .val-tua-top { color: #022c22; background-color: #34d399; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #059669; }
 </style>
 """, unsafe_allow_html=True)
-
-def get_cushion_category(cushion_val, venue_name):
-    c_val = float(cushion_val)
-    if venue_name == "札幌":
-        if c_val <= 7.3: return "場内低<=7.3"
-        elif c_val >= 7.7: return "場内高>=7.7"
-        else: return "場内中7.4-7.6"
-    elif venue_name == "函館":
-        if c_val <= 7.2: return "場内低<=7.2"
-        elif c_val >= 7.5: return "場内高>=7.5"
-        else: return "場内中7.3-7.4"
-    elif venue_name == "京都":
-        if c_val <= 9.7: return "推奨低め<=9.7"
-        elif c_val >= 10.5: return ">=10.5 超高"
-        else: return "10.0-10.4 高"
-    elif venue_name in ["中山", "中京"]:
-        if c_val <= 9.3: return "やや低め8.6-9.4"
-        elif c_val >= 10.0: return ">=10.5 超高" if c_val >= 10.5 else "10.0-10.4 高"
-        else: return "9.5-9.9 標準高"
-    elif venue_name == "福島":
-        if c_val <= 8.7: return "<=8.5低"
-        elif c_val >= 9.2: return "9.5-9.9 標準高"
-        else: return "8.6-9.4 やや低"
-    elif venue_name == "新潟":
-        if c_val <= 9.1: return "やや低め8.6-9.4"
-        elif c_val >= 9.5: return "9.5-9.9 標準高"
-        else: return "8.6-9.4 やや低"
-    elif venue_name == "東京":
-        if c_val <= 9.2: return "やや低め8.6-9.4"
-        elif c_val >= 9.5: return "9.5-9.9 標準高"
-        else: return "8.6-9.4 やや低"
-    elif venue_name == "阪神":
-        if c_val <= 9.2: return "やや低め8.6-9.4"
-        elif c_val >= 9.7: return "9.5-9.9 標準高"
-        else: return "8.6-9.4 やや低"
-    elif venue_name == "小倉":
-        if c_val <= 8.9: return "やや低め8.6-9.4"
-        elif c_val >= 9.5: return "9.5-9.9 標準高"
-        else: return "8.6-9.4 やや低"
-
-    if c_val <= 8.5: return "<=8.5低"
-    elif c_val <= 9.4: return "8.6-9.4 やや低"
-    elif c_val <= 9.9: return "9.5-9.9 標準高"
-    elif c_val <= 10.4: return "10.0-10.4高"
-    else: return ">=10.5 超高"
-
-CUSHION_DATA_BOOK = {
-    ("阪神", "芝", 1800, "キズナ", "9.5-9.9 標準高"): ("最重要", "N56 勝19.6% 複41.1% 単421"),
-    ("東京", "芝", 1600, "エピファネイア", "9.5-9.9 標準高"): ("最重要", "N98 勝13.3% 複39.8% 単277"),
-    ("東京", "芝", 1400, "モーリス", "9.5-9.9 標準高"): ("最重要", "N69 勝10.1% 複29.0% 単408"),
-    ("東京", "芝", 1800, "ディープインパクト", "9.5-9.9 標準高"): ("最重要", "N57 勝15.8% 複38.6% 単228"),
-    ("東京", "芝", 2000, "キズナ", "8.6-9.4 やや低"): ("最重要", "N66 勝19.7% 複42.4% 単200"),
-    ("中京", "芝", 2000, "ディープインパクト", "8.6-9.4 やや低"): ("最重要", "N61 勝18.0% 複42.6% 単178"),
-    ("小倉", "芝", 1200, "ダイワメジャー", "9.5-9.9 標準高"): ("最重要", "N66 勝13.6% 複30.3% 単173"),
-    ("函館", "芝", 1800, "キズナ", "<=8.5低"): ("最重要", "N62 勝17.7% 複38.7% 単143"),
-    ("札幌", "芝", 2000, "オルフェーヴル", "<=8.5低"): ("最重要", "N57 勝15.8% 複35.1% 単136"),
-    ("京都", "芝", 2000, "キタサンブラック", ">=10.5 超高"): ("最重要", "N38 勝21.1% 複50.0% 単149"),
-}
 
 def clean_str(val):
     if pd.isnull(val): return ""
@@ -358,7 +295,7 @@ def get_race_balance_level(race_subset, track_type, class_name):
     f_level = "高" if f_avg_top3 >= f_high else ("低" if f_avg_top3 <= f_low else "標準")
     return s_level, f_level
 
-def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val, c_category, class_name, s_row_laps):
+def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val, c_category, class_name, s_row_laps, w_row_data):
     score = 0.0
     f_val = float(pd.to_numeric(r.get('F', 0.0), errors='coerce') or 0.0)
     f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
@@ -377,7 +314,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     interval = str(r.get('間隔', ''))
     weight = float(pd.to_numeric(str(r.get('前場体重', '480')).replace('kg', ''), errors='coerce') or 480.0)
 
-    # F-index strict evaluation
     f_eval_label, f_eval_score = evaluate_f_index_strict(r, race_subset)
     if f_eval_label == "S評価": score += 60.0
     elif f_eval_label == "A評価": score += 40.0
@@ -386,7 +322,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     in_val = pd.to_numeric(r.get('印', 2), errors='coerce')
     if pd.isna(in_val): in_val = 2.0
     
-    if in_val == 0: score -= 50.0 # 緩和措置
+    if in_val == 0: score -= 50.0
     elif in_val == 1: score += 10.0
     elif 3 <= in_val <= 4: score += 25.0
     elif 5 <= in_val <= 7: score += 45.0
@@ -405,7 +341,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     if track_type == 'ダ' and s_rk == 1 and weight >= 480:
         score += 50.0; nb_hits.append("🐎 ダートで食う(S1位・大型)")
     
-    # 2. Nなごり（休み明け12週以上 ＋ 坂路A3）
+    # 2. Z11 / Nなごり（休み明け12週以上 ＋ 坂路A3）
     is_a3_lap = False
     try:
         l1 = float(s_row_laps.get('Lap1', 99) or 99)
@@ -416,25 +352,30 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         pass
 
     if interval.isdigit() and int(interval) >= 12 and is_a3_lap:
-        score += 60.0; nb_hits.append("🔥 Nなごり(休み明け12週+A3)")
+        score += 60.0; nb_hits.append("🔥 Z11/Nなごり(休み明け12週+A3)")
 
-    # 3. ARMS x FUP 黄金クロス
+    # 3. Ｃ馬ノートルック判定（ARMS1〜3位 ＋ ウッド5F69秒台以下 ＋ 前週土日坂路59秒台以下）
+    try:
+        w_5f_val = float(w_row_data.get('5F', 99) or 99)
+        s_time1 = float(s_row_laps.get('Time1', 99) or 99) # 坂路時計
+        if arm_rk <= 3 and w_5f_val <= 69.0 and s_time1 <= 59.9:
+            score += 55.0; nb_hits.append("🌲 Ｃ馬特注(ウッド鉄則)")
+    except:
+        pass
+
+    # 4. ARMS x FUP 黄金クロス
     if arm_rk == 1 and fup >= 6:
         score += 50.0; nb_hits.append("✨ ARMS×FUP(黄金クロス)")
 
-    # 4. TUAダート特注
+    # 5. TUAダート特注
     if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8:
         score += 40.0; nb_hits.append("💎 TUAダート特注")
-
-    # 5. C馬（ウッド特則）
-    if arm_rk <= 3:
-        score += 30.0; nb_hits.append("🌲 Ｃ馬・調教特注")
 
     # 6. トラック変わり
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 30.0; nb_hits.append("🔄 トラック変わり激走特注")
 
-    # 厩舎加点（強力加点）
+    # 厩舎加点
     if '藤原' in trainer: score += 30.0; stable_hits.append("厩舎: 藤原英昭")
     if '杉山' in trainer: score += 30.0; stable_hits.append("厩舎: 杉山晴紀")
     if '矢作' in trainer: score += 30.0; stable_hits.append("厩舎: 矢作芳人")
@@ -458,7 +399,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
 
     is_rescued = has_strong_bonus
     if not is_rescued:
-        if c_rk >= 6: score -= 10.0 # 減点を大幅に軽減
+        if c_rk >= 6: score -= 10.0
         if b_rk >= 6: score -= 5.0
         if pop <= 3 and fup <= 1: score -= 15.0
 
@@ -525,12 +466,36 @@ def main():
     filter_high_level_m2 = st.sidebar.checkbox("⭐ 前走掲示板5頭以上 (出世レース特注)")
     filter_danger_in0 = st.sidebar.checkbox("🚨 前走馬券内0頭 (凡戦危険馬を除外)")
     filter_nb_dart = st.sidebar.checkbox("🐎 ノートブック: ダートで食う(S1位・大型)")
-    filter_nb_nagori = st.sidebar.checkbox("🔥 ノートブック: Nなごり(休み明け12週+A3)")
+    filter_nb_nagori = st.sidebar.checkbox("🔥 ノートブック: Z11/Nなごり(休み明け12週+A3)")
+    filter_c_horse = st.sidebar.checkbox("🌲 ノートブック: Ｃ馬特注(ウッド鉄則)")
     filter_arms_fup = st.sidebar.checkbox("✨ 指数特注: ARMS×FUP黄金クロス")
     filter_as_cross = st.sidebar.checkbox("👑 指数特注: AS交差馬(F&S上位)")
 
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
+    
+    # 調教データの最新（直近）抽出前処理（馬名 ＋ 調教師を複合キーとして対応）
+    sakaro_dict = {}
+    if not sakaro_raw.empty:
+        s_df = sakaro_raw.copy()
+        s_df['馬名_clean'] = s_df['馬名'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
+        s_df['調教師_clean'] = s_df['調教師'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
+        s_df['年月日_num'] = pd.to_numeric(s_df['年月日'], errors='coerce')
+        # グループ化して直近（最大の日付）のデータを取得
+        for (h_name, t_name], group in s_df.groupby(['馬名_clean', '調教師_clean']):
+            latest_row = group.sort_values('年月日_num').iloc[-1]
+            sakaro_dict[(h_name, t_name)] = latest_row
+
+    wood_dict = {}
+    if not wood_raw.empty:
+        w_df = wood_raw.copy()
+        w_df['馬名_clean'] = w_df['馬名'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
+        w_df['調教師_clean'] = w_df['調教師'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
+        w_df['年月日_num'] = pd.to_numeric(w_df['年月日'], errors='coerce')
+        for (h_name, t_name], group in w_df.groupby(['馬名_clean', '調教師_clean']):
+            latest_row = group.sort_values('年月日_num').iloc[-1]
+            wood_dict[(h_name, t_name)] = latest_row
+
     for _, row in df_raw.iterrows():
         race_id = clean_str(row.get('場所R', ''))
         dist_raw = row.get('距離', 1600)
@@ -572,7 +537,7 @@ def main():
         pass_style = clean_str(row.get('前走決手', ''))
         interval = clean_str(row.get('間隔', ''))
         weight_val = clean_str(row.get('前場体重', '480'))
-        race_date = clean_str(row.get('日付', '10.25'))
+        race_date = clean_str(row.get('日付', '11.01'))
         class_str = clean_str(str(row.iloc[3]) if row.shape[0] > 3 else "1勝クラス")
 
         in_num = pd.to_numeric(mark, errors='coerce')
@@ -583,15 +548,12 @@ def main():
         match_v = re.match(r'([^\d]+)(\d+)', race_id)
         v_name = venue_dict.get(match_v.group(1), match_v.group(1)) if match_v else "新"
 
-        s_row = pd.Series()
-        if not sakaro_raw.empty and horse:
-            matched_s = sakaro_raw[sakaro_raw['馬名'].astype(str).str.strip() == horse]
-            if not matched_s.empty: s_row = matched_s.iloc[-1]
-
-        w_row = pd.Series()
-        if not wood_raw.empty and horse:
-            matched_w = wood_raw[wood_raw['馬名'].astype(str).str.strip() == horse]
-            if not matched_w.empty: w_row = matched_w.iloc[-1]
+        # 馬名 ＋ 調教師名で直近の調教データを完璧にマッチング
+        h_clean = clean_str(horse).replace('*', '').replace('$', '')
+        t_clean = clean_str(trainer)
+        
+        s_row = sakaro_dict.get((h_clean, t_clean), pd.Series())
+        w_row = wood_dict.get((h_clean, t_clean), pd.Series())
 
         if horse:
             records.append({
@@ -601,7 +563,7 @@ def main():
                 '調教師': trainer, '騎手': jockey, '種牡馬': sire, '人気順位': int(float(pop)) if pd.notnull(pop) else 99,
                 'Fup2': fup, 'Fup2順位': fup_rk, 'F': f_val, 'F順位': f_rk, 'ARM': arm_val, 'ARM順位': arm_rk,
                 'TUA': tua_val, 'TUA順位': tua_rk, 'S': s_val, 'S順位': s_rk,
-                's_row': s_row,
+                's_row': s_row, 'w_row': w_row,
                 '坂路T1': s_row.get('Time1', ''), '坂路L2': s_row.get('Lap2', ''), '坂路L1': s_row.get('Lap1', ''),
                 '坂路T4': s_row.get('Time4', ''), 'ウッド5F': w_row.get('5F', ''), 'ウッドL2': w_row.get('Lap2', ''), 'ウッドL1': w_row.get('Lap1', ''),
                 '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
@@ -615,7 +577,7 @@ def main():
         st.error("解析可能な有効データが存在しません。")
         st.stop()
 
-    race_date_str = str(df['日付'].iloc[0]) if not df.empty and '日付' in df.columns else "10.25"
+    race_date_str = str(df['日付'].iloc[0]) if not df.empty and '日付' in df.columns else "11.01"
 
     st.sidebar.markdown('---')
     st.sidebar.markdown("### 🌿 馬場・クッション値設定")
@@ -666,7 +628,7 @@ def main():
 
     scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
     for _, r in race_df.iterrows():
-        sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'])
+        sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
         scores.append(sc); rescued_flags.append(res); sss_flags.append(sss); nb_hits_list.append(nb); stable_hits_list.append(stbl); f_eval_labels.append(f_lbl)
 
     race_df['dynamic_score'] = scores
