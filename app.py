@@ -421,21 +421,26 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 30.0; nb_hits.append("🔄 トラック変わり激走特注")
 
-    # 厩舎加点
-    if '藤原' in trainer: score += 30.0; stable_hits.append("厩舎: 藤原英昭")
-    if '杉山' in trainer: score += 30.0; stable_hits.append("厩舎: 杉山晴紀")
-    if '矢作' in trainer: score += 30.0; stable_hits.append("厩舎: 矢作芳人")
-    if '中内田' in trainer: score += 35.0; stable_hits.append("厩舎: 中内田充正")
-    if '木村' in trainer: score += 30.0; stable_hits.append("厩舎: 木村哲也")
-    if '堀' in trainer: score += 25.0; stable_hits.append("厩舎: 堀宣行")
-    if '友道' in trainer: score += 25.0; stable_hits.append("厩舎: 友道康夫")
+    # 厩舎20選・30選の主要バイアス＆勝負パターン加点
+    if '藤原' in trainer: score += 30.0; stable_hits.append("厩舎: 藤原英昭(A3/B3特注)")
+    if '杉山' in trainer: score += 30.0; stable_hits.append("厩舎: 杉山晴紀(A3黄金)")
+    if '矢作' in trainer: score += 30.0; stable_hits.append("厩舎: 矢作芳人(A2真髄)")
+    if '中内田' in trainer: score += 35.0; stable_hits.append("厩舎: 中内田充正(鉄板)")
+    if '木村' in trainer: score += 30.0; stable_hits.append("厩舎: 木村哲也(ルメール鉄板)")
+    if '堀' in trainer: score += 25.0; stable_hits.append("厩舎: 堀宣行(ウッド速め)")
+    if '友道' in trainer: score += 25.0; stable_hits.append("厩舎: 友道康夫(地味A1)")
+    if '池添' in trainer: score += 25.0; stable_hits.append("厩舎: 池添学(A3特注)")
+    if '吉岡' in trainer: score += 25.0; stable_hits.append("厩舎: 吉岡辰弥(前週坂路超速)")
+    if '大竹' in trainer: score += 25.0; stable_hits.append("厩舎: 大竹正博(前週坂路57秒以下)")
+    if '斉藤崇' in trainer: score += 25.0; stable_hits.append("厩舎: 斉藤崇史(芝ウッド/ダ坂路)")
+    if '音無' in trainer: score += 25.0; stable_hits.append("厩舎: 音無秀孝(定年直前勝負)")
+    if '国枝' in trainer: score += 25.0; stable_hits.append("厩舎: 国枝栄(前週坂路59秒以下)")
 
     if fup == 7: score += 50.0
     elif fup >= 5: score += 35.0
     if c_rk <= 3: score += 30.0
     if b_rk <= 3: score += 30.0
 
-    # フェイルセーフ（強力な加点が1つでもあれば完全消しを回避して保険として救済）
     is_sss = (f_val >= 65.0) and (arm_val >= 120.0) and (tua_val >= 200.0)
     is_quad_crown = (f_rk <= 3) and (arm_rk <= 3) and (tua_rk <= 3) and (fup >= 5)
     is_solid_axis = (f_rk == 1) and (fup >= 5)
@@ -516,6 +521,11 @@ def main():
     filter_c_horse = st.sidebar.checkbox("🌲 ノートブック: Ｃ馬特注(ウッド鉄則)")
     filter_arms_fup = st.sidebar.checkbox("✨ 指数特注: ARMS×FUP黄金クロス")
     filter_as_cross = st.sidebar.checkbox("👑 指数特注: AS交差馬(F&S上位)")
+    
+    st.sidebar.markdown("### 🏆 狙い目調教・特選フィルター")
+    filter_target_sakaro_a3 = st.sidebar.checkbox("🔥 坂路A3（終い11秒台加速）該当馬のみ")
+    filter_target_c_horse = st.sidebar.checkbox("🌲 Ｃ馬特注（ウッド鉄則）該当馬のみ")
+    filter_target_stable_ace = st.sidebar.checkbox("👑 特選厩舎（矢作・杉山・木村等）該当馬のみ")
 
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
@@ -684,6 +694,19 @@ def main():
     race_df['nb_hits'] = nb_hits_list
     race_df['stable_hits'] = stable_hits_list
     race_df['f_eval'] = f_eval_labels
+
+    # 狙い目調教チェックBOXによるリアルタイムフィルタリング
+    if filter_target_sakaro_a3:
+        race_df = race_df[race_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
+    if filter_target_c_horse:
+        race_df = race_df[race_df.apply(lambda x: int(x['ARM順位']) <= 3 and float(x['w_row'].get('5F', 99) or 99) <= 69.0 and float(x['s_row'].get('Time1', 99) or 99) <= 59.9 if isinstance(x['w_row'], pd.Series) and isinstance(x['s_row'], pd.Series) else False, axis=1)]
+    if filter_target_stable_ace:
+        ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
+        race_df = race_df[race_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
+
+    if race_df.empty:
+        st.warning("⚠️ 指定された狙い目調教フィルターに該当する馬がいません。フィルターを解除してください。")
+        st.stop()
 
     sel_rating = evaluate_race_rating(race_df)
     s_lvl_sel, f_lvl_sel = get_race_balance_level(race_df, race_df['track'].iloc[0] if not race_df.empty else '芝', race_df['class_name'].iloc[0] if not race_df.empty else '1勝クラス')
