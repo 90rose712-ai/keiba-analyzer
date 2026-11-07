@@ -677,18 +677,7 @@ def main():
     race_df = df[df['race_uid'] == selected_race_uid].copy()
     c_cat = get_cushion_category(cushion_val, chosen_venue)
 
-    # 狙い目調教チェックBOXによるリアルタイムフィルタリング（該当0頭の場合の安全フェイルセーフ完備）
-    if filter_target_sakaro_a3:
-        filtered = race_df[race_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
-        if not filtered.empty: race_df = filtered
-    if filter_target_c_horse:
-        filtered = race_df[race_df.apply(lambda x: int(x['ARM順位']) <= 3 and float(x['w_row'].get('5F', 99) or 99) <= 69.0 and float(x['s_row'].get('Time1', 99) or 99) <= 59.9 if isinstance(x['w_row'], pd.Series) and isinstance(x['s_row'], pd.Series) else False, axis=1)]
-        if not filtered.empty: race_df = filtered
-    if filter_target_stable_ace:
-        ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
-        filtered = race_df[race_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
-        if not filtered.empty: race_df = filtered
-
+    # まず元データの状態でレース評価・スコアリングを実施（全頭ベース）
     scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
     for _, r in race_df.iterrows():
         sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
@@ -835,6 +824,19 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # 任意：チェックBOXによるビュー用フィルタリング（ここに配置することで上部のパネルと馬券パックが正常描画される）
+    display_df = race_df.copy()
+    if filter_target_sakaro_a3:
+        filtered = display_df[display_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
+        if not filtered.empty: display_df = filtered
+    if filter_target_c_horse:
+        filtered = display_df[display_df.apply(lambda x: int(x['ARM順位']) <= 3 and float(x['w_row'].get('5F', 99) or 99) <= 69.0 and float(x['s_row'].get('Time1', 99) or 99) <= 59.9 if isinstance(x['w_row'], pd.Series) and isinstance(x['s_row'], pd.Series) else False, axis=1)]
+        if not filtered.empty: display_df = filtered
+    if filter_target_stable_ace:
+        ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
+        filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
+        if not filtered.empty: display_df = filtered
+
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
     sort_col1, sort_col2 = st.columns(2)
     with sort_col1:
@@ -843,18 +845,18 @@ def main():
             'F指数 降順', 'ARM指数 降順', 'TUA指数 降順', 'S指数 降順', 'Fup2点数 降順', '馬番順'
         ], index=0)
 
-    if sort_criterion == '総合動的評価スコア順': sorted_df = race_df.sort_values('dynamic_score', ascending=False)
-    elif sort_criterion == '坂路全体タイム順（速い順）': sorted_df = race_df.sort_values('坂路T4', ascending=True, na_position='last')
-    elif sort_criterion == '坂路ラスト1F順（速い順）': sorted_df = race_df.sort_values('坂路L1', ascending=True, na_position='last')
-    elif sort_criterion == '坂路加速量順（切れ味順）': sorted_df = race_df.sort_values('坂路加速', ascending=False, na_position='last')
-    elif sort_criterion == 'ウッド全体タイム(5F)順': sorted_df = race_df.sort_values('ウッド5F', ascending=True, na_position='last')
-    elif sort_criterion == 'ウッドラスト1F順': sorted_df = race_df.sort_values('ウッドL1', ascending=True, na_position='last')
-    elif sort_criterion == 'F指数 降順': sorted_df = race_df.sort_values(['F', 'F順位'], ascending=[False, True])
-    elif sort_criterion == 'ARM指数 降順': sorted_df = race_df.sort_values(['ARM', 'ARM順位'], ascending=[False, True])
-    elif sort_criterion == 'TUA指数 降順': sorted_df = race_df.sort_values(['TUA', 'TUA順位'], ascending=[False, True])
-    elif sort_criterion == 'S指数 降順': sorted_df = race_df.sort_values(['S', 'S順位'], ascending=[False, True])
-    elif sort_criterion == 'Fup2点数 降順': sorted_df = race_df.sort_values(['Fup2', 'Fup2順位'], ascending=[False, True])
-    else: sorted_df = race_df.sort_values('馬番', ascending=True)
+    if sort_criterion == '総合動的評価スコア順': sorted_df = display_df.sort_values('dynamic_score', ascending=False)
+    elif sort_criterion == '坂路全体タイム順（速い順）': sorted_df = display_df.sort_values('坂路T4', ascending=True, na_position='last')
+    elif sort_criterion == '坂路ラスト1F順（速い順）': sorted_df = display_df.sort_values('坂路L1', ascending=True, na_position='last')
+    elif sort_criterion == '坂路加速量順（切れ味順）': sorted_df = display_df.sort_values('坂路加速', ascending=False, na_position='last')
+    elif sort_criterion == 'ウッド全体タイム(5F)順': sorted_df = display_df.sort_values('ウッド5F', ascending=True, na_position='last')
+    elif sort_criterion == 'ウッドラスト1F順': sorted_df = display_df.sort_values('ウッドL1', ascending=True, na_position='last')
+    elif sort_criterion == 'F指数 降順': sorted_df = display_df.sort_values(['F', 'F順位'], ascending=[False, True])
+    elif sort_criterion == 'ARM指数 降順': sorted_df = display_df.sort_values(['ARM', 'ARM順位'], ascending=[False, True])
+    elif sort_criterion == 'TUA指数 降順': sorted_df = display_df.sort_values(['TUA', 'TUA順位'], ascending=[False, True])
+    elif sort_criterion == 'S指数 降順': sorted_df = display_df.sort_values(['S', 'S順位'], ascending=[False, True])
+    elif sort_criterion == 'Fup2点数 降順': sorted_df = display_df.sort_values(['Fup2', 'Fup2順位'], ascending=[False, True])
+    else: sorted_df = display_df.sort_values('馬番', ascending=True)
 
     for _, h in sorted_df.iterrows():
         u_no = int(h['馬番'])
