@@ -689,18 +689,17 @@ def main():
     race_df['stable_hits'] = stable_hits_list
     race_df['f_eval'] = f_eval_labels
 
-    # 狙い目調教チェックBOXによるリアルタイムフィルタリング
+    # 狙い目調教チェックBOXによるリアルタイムフィルタリング（該当0頭の場合の安全フェイルセーフ完備）
     if filter_target_sakaro_a3:
-        race_df = race_df[race_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
+        filtered = race_df[race_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
+        if not filtered.empty: race_df = filtered
     if filter_target_c_horse:
-        race_df = race_df[race_df.apply(lambda x: int(x['ARM順位']) <= 3 and float(x['w_row'].get('5F', 99) or 99) <= 69.0 and float(x['s_row'].get('Time1', 99) or 99) <= 59.9 if isinstance(x['w_row'], pd.Series) and isinstance(x['s_row'], pd.Series) else False, axis=1)]
+        filtered = race_df[race_df.apply(lambda x: int(x['ARM順位']) <= 3 and float(x['w_row'].get('5F', 99) or 99) <= 69.0 and float(x['s_row'].get('Time1', 99) or 99) <= 59.9 if isinstance(x['w_row'], pd.Series) and isinstance(x['s_row'], pd.Series) else False, axis=1)]
+        if not filtered.empty: race_df = filtered
     if filter_target_stable_ace:
         ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
-        race_df = race_df[race_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
-
-    if race_df.empty:
-        st.warning("⚠️ 指定された狙い目調教フィルターに該当する馬がいません。フィルターを解除してください。")
-        st.stop()
+        filtered = race_df[race_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
+        if not filtered.empty: race_df = filtered
 
     sel_rating = evaluate_race_rating(race_df)
     s_lvl_sel, f_lvl_sel = get_race_balance_level(race_df, race_df['track'].iloc[0] if not race_df.empty else '芝', race_df['class_name'].iloc[0] if not race_df.empty else '1勝クラス')
@@ -776,34 +775,40 @@ def main():
         honmei = f65_horses.iloc[0]
         honmei_num = int(honmei['馬番'])
         opponents = race_df[race_df['馬番'] != honmei_num].copy()
-        taikou = opponents.sort_values(['F順位', 'ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, True, False]).iloc[0]
+        taikou = opponents.sort_values(['F順位', 'ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, True, False]).iloc[0] if not opponents.empty else honmei
         taikou_num = int(taikou['馬番'])
-        second_row = list(set(opponents.sort_values('F順位').head(2)['馬番'].tolist() + opponents.sort_values('ARM順位').head(1)['馬番'].tolist() + opponents.sort_values('TUA順位').head(1)['馬番'].tolist()))
-        third_row = list(set(second_row + opponents.sort_values('コース連順位').head(2)['馬番'].tolist() + opponents.sort_values('バランス順位').head(2)['馬番'].tolist()))
-        ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, False])
+        second_row = list(set(opponents.sort_values('F順位').head(2)['馬番'].tolist() + opponents.sort_values('ARM順位').head(1)['馬番'].tolist() + opponents.sort_values('TUA順位').head(1)['馬番'].tolist())) if not opponents.empty else [honmei_num]
+        third_row = list(set(second_row + opponents.sort_values('コース連順位').head(2)['馬番'].tolist() + opponents.sort_values('バランス順位').head(2)['馬番'].tolist())) if not opponents.empty else [honmei_num]
+        ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, False]) if not opponents.empty else pd.DataFrame()
         if not ana_candidates.empty:
             ana = ana_candidates.iloc[0]
             ana_num = int(ana['馬番'])
-        else:
+        elif not opponents.empty:
             ana = opponents.iloc[-1]
             ana_num = int(ana['馬番'])
+        else:
+            ana = honmei
+            ana_num = honmei_num
     else:
         mode_name = "🔥 モードB：単勝期待値軸 × F指数相手補完モード"
         mode_desc = "単勝期待値馬を軸にし、相手2列目に好走率約70%のF指数1〜3位を完全固定する構成"
         honmei = race_df.sort_values(['dynamic_score', 'Fup2', 'ARM順位'], ascending=[False, False, True]).iloc[0]
         honmei_num = int(honmei['馬番'])
         second_row = [n for n in f_top3_nums if n != honmei_num]
-        taikou_num = second_row[0] if second_row else f_top3_nums[0]
-        taikou = race_df[race_df['馬番'] == taikou_num].iloc[0]
+        taikou_num = second_row[0] if second_row else f_top3_nums[0] if f_top3_nums else honmei_num
+        taikou = race_df[race_df['馬番'] == taikou_num].iloc[0] if not race_df[race_df['馬番'] == taikou_num].empty else honmei
         opponents = race_df[race_df['馬番'] != honmei_num].copy()
-        third_row = list(set(second_row + opponents.sort_values('坂路調順位').head(2)['馬番'].tolist() + opponents.sort_values('コース連順位').head(2)['馬番'].tolist()))
-        ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, False])
+        third_row = list(set(second_row + opponents.sort_values('坂路調順位').head(2)['馬番'].tolist() + opponents.sort_values('コース連順位').head(2)['馬番'].tolist())) if not opponents.empty else [honmei_num]
+        ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, False]) if not opponents.empty else pd.DataFrame()
         if not ana_candidates.empty:
             ana = ana_candidates.iloc[0]
             ana_num = int(ana['馬番'])
-        else:
+        elif not opponents.empty:
             ana = opponents.iloc[-1]
             ana_num = int(ana['馬番'])
+        else:
+            ana = honmei
+            ana_num = honmei_num
 
     st.markdown(f"""
     <div class='recom-panel-go'>
