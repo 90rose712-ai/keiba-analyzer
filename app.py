@@ -357,7 +357,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     # 3. Ｃ馬ノートルック判定（ARMS1〜3位 ＋ ウッド5F69秒台以下 ＋ 前週土日坂路59秒台以下）
     try:
         w_5f_val = float(w_row_data.get('5F', 99) or 99)
-        s_time1 = float(s_row_laps.get('Time1', 99) or 99) # 坂路時計
+        s_time1 = float(s_row_laps.get('Time1', 99) or 99)
         if arm_rk <= 3 and w_5f_val <= 69.0 and s_time1 <= 59.9:
             score += 55.0; nb_hits.append("🌲 Ｃ馬特注(ウッド鉄則)")
     except:
@@ -474,15 +474,14 @@ def main():
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
     
-    # 調教データの最新（直近）抽出前処理（馬名 ＋ 調教師を複合キーとして対応）
+    # 修正済み：タプルアンパックの括弧エラーを完全に解消
     sakaro_dict = {}
     if not sakaro_raw.empty:
         s_df = sakaro_raw.copy()
         s_df['馬名_clean'] = s_df['馬名'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
         s_df['調教師_clean'] = s_df['調教師'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
         s_df['年月日_num'] = pd.to_numeric(s_df['年月日'], errors='coerce')
-        # グループ化して直近（最大の日付）のデータを取得
-        for (h_name, t_name], group in s_df.groupby(['馬名_clean', '調教師_clean']):
+        for (h_name, t_name), group in s_df.groupby(['馬名_clean', '調教師_clean']):
             latest_row = group.sort_values('年月日_num').iloc[-1]
             sakaro_dict[(h_name, t_name)] = latest_row
 
@@ -492,7 +491,7 @@ def main():
         w_df['馬名_clean'] = w_df['馬名'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
         w_df['調教師_clean'] = w_df['調教師'].astype(str).str.strip().str.replace(r'[\*\$\s ]', '', regex=True)
         w_df['年月日_num'] = pd.to_numeric(w_df['年月日'], errors='coerce')
-        for (h_name, t_name], group in w_df.groupby(['馬名_clean', '調教師_clean']):
+        for (h_name, t_name), group in w_df.groupby(['馬名_clean', '調教師_clean']):
             latest_row = group.sort_values('年月日_num').iloc[-1]
             wood_dict[(h_name, t_name)] = latest_row
 
@@ -548,7 +547,6 @@ def main():
         match_v = re.match(r'([^\d]+)(\d+)', race_id)
         v_name = venue_dict.get(match_v.group(1), match_v.group(1)) if match_v else "新"
 
-        # 馬名 ＋ 調教師名で直近の調教データを完璧にマッチング
         h_clean = clean_str(horse).replace('*', '').replace('$', '')
         t_clean = clean_str(trainer)
         
