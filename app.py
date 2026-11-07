@@ -383,11 +383,9 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
 
     nb_hits, stable_hits = [], []
     
-    # 1. ダートで食う
     if track_type == 'ダ' and s_rk == 1 and weight >= 480:
         score += 50.0; nb_hits.append("🐎 ダートで食う(S1位・大型)")
     
-    # 2. Z11 / Nなごり（休み明け12週以上 ＋ 坂路A3）
     is_a3_lap = False
     try:
         l1 = float(s_row_laps.get('Lap1', 99) or 99)
@@ -400,7 +398,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     if interval.isdigit() and int(interval) >= 12 and is_a3_lap:
         score += 60.0; nb_hits.append("🔥 Z11/Nなごり(休み明け12週+A3)")
 
-    # 3. Ｃ馬ノートルック判定（ARMS1〜3位 ＋ ウッド5F69秒台以下 ＋ 前週土日坂路59秒台以下）
     try:
         w_5f_val = float(w_row_data.get('5F', 99) or 99)
         s_time1 = float(s_row_laps.get('Time1', 99) or 99)
@@ -409,15 +406,12 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     except:
         pass
 
-    # 4. ARMS x FUP 黄金クロス
     if arm_rk == 1 and fup >= 6:
         score += 50.0; nb_hits.append("✨ ARMS×FUP(黄金クロス)")
 
-    # 5. TUAダート特注
     if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8:
         score += 40.0; nb_hits.append("💎 TUAダート特注")
 
-    # 6. トラック変わり
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 30.0; nb_hits.append("🔄 トラック変わり激走特注")
 
@@ -787,8 +781,12 @@ def main():
         second_row = list(set(opponents.sort_values('F順位').head(2)['馬番'].tolist() + opponents.sort_values('ARM順位').head(1)['馬番'].tolist() + opponents.sort_values('TUA順位').head(1)['馬番'].tolist()))
         third_row = list(set(second_row + opponents.sort_values('コース連順位').head(2)['馬番'].tolist() + opponents.sort_values('バランス順位').head(2)['馬番'].tolist()))
         ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, False])
-        ana = ana_candidates.iloc[0] if not ana_candidates.empty else opponents.iloc[-1]
-        ana_num = int(ana['馬番'])
+        if not ana_candidates.empty:
+            ana = ana_candidates.iloc[0]
+            ana_num = int(ana['馬番'])
+        else:
+            ana = opponents.iloc[-1]
+            ana_num = int(ana['馬番'])
     else:
         mode_name = "🔥 モードB：単勝期待値軸 × F指数相手補完モード"
         mode_desc = "単勝期待値馬を軸にし、相手2列目に好走率約70%のF指数1〜3位を完全固定する構成"
@@ -800,8 +798,12 @@ def main():
         opponents = race_df[race_df['馬番'] != honmei_num].copy()
         third_row = list(set(second_row + opponents.sort_values('坂路調順位').head(2)['馬番'].tolist() + opponents.sort_values('コース連順位').head(2)['馬番'].tolist()))
         ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['ARM順位', 'TUA順位', 'dynamic_score'], ascending=[True, True, False])
-        ana = ana_candidates.iloc[0] if not ana_candidates.empty else opponents.iloc[-1]
-        ana_num = int(ana['馬番'])
+        if not ana_candidates.empty:
+            ana = ana_candidates.iloc[0]
+            ana_num = int(ana['馬番'])
+        else:
+            ana = opponents.iloc[-1]
+            ana_num = int(ana['馬番'])
 
     st.markdown(f"""
     <div class='recom-panel-go'>
