@@ -180,7 +180,6 @@ def clean_str(val):
     if pd.isnull(val): return ""
     return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
-# 1. 最初にヘルパー関数群を正確に定義（NameError防止）
 def get_cushion_category(cushion_val, venue_name):
     c_val = float(cushion_val)
     if venue_name == "札幌":
@@ -521,7 +520,6 @@ def main():
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
     
-    # 完全に修正されたループ構文（タプルアンパックの括弧エラー解消）
     sakaro_dict = {}
     if not sakaro_raw.empty:
         s_df = sakaro_raw.copy()
@@ -609,8 +607,12 @@ def main():
                 'Fup2': fup, 'Fup2順位': fup_rk, 'F': f_val, 'F順位': f_rk, 'ARM': arm_val, 'ARM順位': arm_rk,
                 'TUA': tua_val, 'TUA順位': tua_rk, 'S': s_val, 'S順位': s_rk,
                 's_row': s_row, 'w_row': w_row,
-                '坂路T1': s_row.get('Time1', ''), '坂路L2': s_row.get('Lap2', ''), '坂路L1': s_row.get('Lap1', ''),
-                '坂路T4': s_row.get('Time4', ''), 'ウッド5F': w_row.get('5F', ''), 'ウッドL2': w_row.get('Lap2', ''), 'ウッドL1': w_row.get('Lap1', ''),
+                '坂路T4': pd.to_numeric(s_row.get('Time4', np.nan), errors='coerce'),
+                '坂路L2': pd.to_numeric(s_row.get('Lap2', np.nan), errors='coerce'),
+                '坂路L1': pd.to_numeric(s_row.get('Lap1', np.nan), errors='coerce'),
+                '坂路加速': pd.to_numeric(s_row.get('Lap2', np.nan), errors='coerce') - pd.to_numeric(s_row.get('Lap1', np.nan), errors='coerce'),
+                'ウッド5F': pd.to_numeric(w_row.get('5F', np.nan), errors='coerce'),
+                'ウッドL1': pd.to_numeric(w_row.get('Lap1', np.nan), errors='coerce'),
                 '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
                 'コース連順位': c_rk, '血統連順位': k_rk, 'バランス順位': b_rk,
                 '芝ダート変わり': track_change, '前走脚質': run_style, '前走決手': pass_style,
@@ -803,24 +805,25 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("### 🏇 出走馬詳細カルテ")
+    st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
     sort_col1, sort_col2 = st.columns(2)
     with sort_col1:
-        sort_criterion = st.selectbox('📊 並び替え基準（指数・調教・脚質）', [
-            '総合動的評価スコア順', 'F指数 降順', 'ARM指数 降順', 'TUA指数 降順', 'S指数 降順', 'Fup2点数 降順', '調教順（坂路調順位 昇順）', '脚質順（前走脚質別）', '馬番順'
+        sort_criterion = st.selectbox('📊 並び替え基準（指数・調教比較）', [
+            '総合動的評価スコア順', '坂路全体タイム順（速い順）', '坂路ラスト1F順（速い順）', '坂路加速量順（切れ味順）', 'ウッド全体タイム(5F)順', 'ウッドラスト1F順',
+            'F指数 降順', 'ARM指数 降順', 'TUA指数 降順', 'S指数 降順', 'Fup2点数 降順', '馬番順'
         ], index=0)
 
     if sort_criterion == '総合動的評価スコア順': sorted_df = race_df.sort_values('dynamic_score', ascending=False)
+    elif sort_criterion == '坂路全体タイム順（速い順）': sorted_df = race_df.sort_values('坂路T4', ascending=True, na_position='last')
+    elif sort_criterion == '坂路ラスト1F順（速い順）': sorted_df = race_df.sort_values('坂路L1', ascending=True, na_position='last')
+    elif sort_criterion == '坂路加速量順（切れ味順）': sorted_df = race_df.sort_values('坂路加速', ascending=False, na_position='last')
+    elif sort_criterion == 'ウッド全体タイム(5F)順': sorted_df = race_df.sort_values('ウッド5F', ascending=True, na_position='last')
+    elif sort_criterion == 'ウッドラスト1F順': sorted_df = race_df.sort_values('ウッドL1', ascending=True, na_position='last')
     elif sort_criterion == 'F指数 降順': sorted_df = race_df.sort_values(['F', 'F順位'], ascending=[False, True])
     elif sort_criterion == 'ARM指数 降順': sorted_df = race_df.sort_values(['ARM', 'ARM順位'], ascending=[False, True])
     elif sort_criterion == 'TUA指数 降順': sorted_df = race_df.sort_values(['TUA', 'TUA順位'], ascending=[False, True])
     elif sort_criterion == 'S指数 降順': sorted_df = race_df.sort_values(['S', 'S順位'], ascending=[False, True])
     elif sort_criterion == 'Fup2点数 降順': sorted_df = race_df.sort_values(['Fup2', 'Fup2順位'], ascending=[False, True])
-    elif sort_criterion == '調教順（坂路調順位 昇順）': sorted_df = race_df.sort_values('坂路調順位', ascending=True)
-    elif sort_criterion == '脚質順（前走脚質別）':
-        style_order = {'逃': 1, '先': 2, '中': 3, '後': 4}
-        race_df['style_rank'] = race_df['前走脚質'].map(style_order).fillna(99)
-        sorted_df = race_df.sort_values(['style_rank', '馬番'], ascending=[True, True])
     else: sorted_df = race_df.sort_values('馬番', ascending=True)
 
     for _, h in sorted_df.iterrows():
@@ -873,16 +876,15 @@ def main():
         arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
         tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
 
-        s_t4 = h.get('坂路T4', '')
-        s_l2 = h.get('坂路L2', '')
-        s_l1 = h.get('坂路L1', '')
-        w_5f = h.get('ウッド5F', '')
-        w_l2 = h.get('ウッドL2', '')
-        w_l1 = h.get('ウッドL1', '')
+        s_t4 = h.get('坂路T4', np.nan)
+        s_l2 = h.get('坂路L2', np.nan)
+        s_l1 = h.get('坂路L1', np.nan)
+        w_5f = h.get('ウッド5F', np.nan)
+        w_l1 = h.get('ウッドL1', np.nan)
 
         judge_label, judge_color = parse_and_judge_lap(s_l1, s_l2, s_t4)
-        sakaro_str = f"坂路[4F:{s_t4 or '---'} | L2:{s_l2 or '---'} → L1:{s_l1 or '---'}]" if s_t4 else "坂路データなし"
-        wood_str = f"ウッド[5F:{w_5f or '---'} | L2:{w_l2 or '---'} → L1:{w_l1 or '---'}]" if w_5f else "ウッドデータなし"
+        sakaro_str = f"坂路[4F:{s_t4 if pd.notnull(s_t4) else '---'} | L2:{s_l2 if pd.notnull(s_l2) else '---'} → L1:{s_l1 if pd.notnull(s_l1) else '---'}]" if pd.notnull(s_t4) else "坂路データなし"
+        wood_str = f"ウッド[5F:{w_5f if pd.notnull(w_5f) else '---'} → L1:{w_l1 if pd.notnull(w_l1) else '---'}]" if pd.notnull(w_5f) else "ウッドデータなし"
         choukyou_summary = f"{sakaro_str} ｜ {wood_str}"
 
         m_uid = re.search(r'\d+', str(h['race_uid']))
