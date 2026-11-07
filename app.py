@@ -180,6 +180,53 @@ def clean_str(val):
     if pd.isnull(val): return ""
     return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
 
+# 1. 最初にヘルパー関数群を正確に定義（NameError防止）
+def get_cushion_category(cushion_val, venue_name):
+    c_val = float(cushion_val)
+    if venue_name == "札幌":
+        if c_val <= 7.3: return "場内低<=7.3"
+        elif c_val >= 7.7: return "場内高>=7.7"
+        else: return "場内中7.4-7.6"
+    elif venue_name == "函館":
+        if c_val <= 7.2: return "場内低<=7.2"
+        elif c_val >= 7.5: return "場内高>=7.5"
+        else: return "場内中7.3-7.4"
+    elif venue_name == "京都":
+        if c_val <= 9.7: return "推奨低め<=9.7"
+        elif c_val >= 10.5: return ">=10.5 超高"
+        else: return "10.0-10.4 高"
+    elif venue_name in ["中山", "中京"]:
+        if c_val <= 9.3: return "やや低め8.6-9.4"
+        elif c_val >= 10.0: return ">=10.5 超高" if c_val >= 10.5 else "10.0-10.4 高"
+        else: return "9.5-9.9 標準高"
+    elif venue_name == "福島":
+        if c_val <= 8.7: return "<=8.5低"
+        elif c_val >= 9.2: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+    elif venue_name in ["新潟", "東京", "阪神", "小倉"]:
+        if c_val <= 9.2: return "やや低め8.6-9.4"
+        elif c_val >= 9.5: return "9.5-9.9 標準高"
+        else: return "8.6-9.4 やや低"
+
+    if c_val <= 8.5: return "<=8.5低"
+    elif c_val <= 9.4: return "8.6-9.4 やや低"
+    elif c_val <= 9.9: return "9.5-9.9 標準高"
+    elif c_val <= 10.4: return "10.0-10.4高"
+    else: return ">=10.5 超高"
+
+CUSHION_DATA_BOOK = {
+    ("阪神", "芝", 1800, "キズナ", "9.5-9.9 標準高"): ("最重要", "N56 勝19.6% 複41.1% 単421"),
+    ("東京", "芝", 1600, "エピファネイア", "9.5-9.9 標準高"): ("最重要", "N98 勝13.3% 複39.8% 単277"),
+    ("東京", "芝", 1400, "モーリス", "9.5-9.9 標準高"): ("最重要", "N69 勝10.1% 複29.0% 単408"),
+    ("東京", "芝", 1800, "ディープインパクト", "9.5-9.9 標準高"): ("最重要", "N57 勝15.8% 複38.6% 単228"),
+    ("東京", "芝", 2000, "キズナ", "8.6-9.4 やや低"): ("最重要", "N66 勝19.7% 複42.4% 単200"),
+    ("中京", "芝", 2000, "ディープインパクト", "8.6-9.4 やや低"): ("最重要", "N61 勝18.0% 複42.6% 単178"),
+    ("小倉", "芝", 1200, "ダイワメジャー", "9.5-9.9 標準高"): ("最重要", "N66 勝13.6% 複30.3% 単173"),
+    ("函館", "芝", 1800, "キズナ", "<=8.5低"): ("最重要", "N62 勝17.7% 複38.7% 単143"),
+    ("札幌", "芝", 2000, "オルフェーヴル", "<=8.5低"): ("最重要", "N57 勝15.8% 複35.1% 単136"),
+    ("京都", "芝", 2000, "キタサンブラック", ">=10.5 超高"): ("最重要", "N38 勝21.1% 複50.0% 単149"),
+}
+
 def load_external_training_csvs():
     sakaro_df, wood_df = pd.DataFrame(), pd.DataFrame()
     for enc in ['utf-8-sig', 'utf-8', 'cp932', 'shift-jis']:
@@ -474,7 +521,7 @@ def main():
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
     
-    # 修正済み：タプルアンパックの括弧エラーを完全に解消
+    # 完全に修正されたループ構文（タプルアンパックの括弧エラー解消）
     sakaro_dict = {}
     if not sakaro_raw.empty:
         s_df = sakaro_raw.copy()
