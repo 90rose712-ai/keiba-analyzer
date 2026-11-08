@@ -699,7 +699,7 @@ def main():
         banner_txt = f"🔥🌟【S級絶対勝負レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 極限合致の最優先勝負レース（単勝・軸馬鉄板）"
     elif sel_rating == "A":
         banner_cls = "race-type-a-class"
-        banner_txt = f"🎯👑【A級準勝負レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 黄金クロス・特注条件合致の狙い目レース"
+        banner_txt = f"🎯👑【A級準勝負レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 黄金クロス・特条件合致の狙い目レース"
     elif sel_rating == "B":
         banner_cls = "race-type-b-class"
         banner_txt = f"⚖️🎯【B級標準レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 的中重視レース"
@@ -826,7 +826,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. 出走馬詳細カルテの表示用データフレーム作成（チェックBOXがオンの時だけ絞り込み、オフの時は全頭表示）
+    # 2. カルテ表示用データフレーム（チェックBOXがオンの時のみ絞り込み、オフの時は全頭表示を完全保証）
     display_df = race_df.copy()
     if filter_target_sakaro_a3:
         filtered = display_df[display_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
@@ -839,8 +839,8 @@ def main():
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
         if not filtered.empty: display_df = filtered
 
-    # 3. 同一レース内での同一騎手重複（乗り鞍）の自動検知集計
-    jockey_counts = display_df['騎手'].value_dict() if hasattr(display_df['騎手'], 'value_dict') else display_df['騎手'].value_counts().to_dict()
+    # 3. 騎手ごとの同日騎乗鞍数の自動集計（エラー防止策として安全な辞書変換）
+    jockey_counts = df['騎手'].value_counts().to_dict() if '騎手' in df.columns else {}
 
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
     sort_col1, sort_col2 = st.columns(2)
@@ -870,7 +870,7 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
-        # 同日・同一レース内騎手重複チェック（複数騎乗している場合の勝負バッジ点灯）
+        # 同日開催内での騎手複数騎乗（乗り鞍多め）の勝負バッジ点灯
         j_name = h['騎手']
         if j_name and j_name in jockey_counts and jockey_counts[j_name] >= 2:
             badges.append(f"<span class='badge-jockey-busy'>👑 騎手多鞍(勝負): {j_name}({jockey_counts[j_name]}鞍)</span>")
