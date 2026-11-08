@@ -168,7 +168,7 @@ st.markdown("""
     .badge-f-eval-s { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c2d12 0%, #dc2626 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f87171; margin-right: 4px; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
     .badge-f-eval-a { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-f-eval-b { display: inline-flex; align-items: center; background: #2563eb; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
-    .badge-jockey-busy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #38bdf8; margin-right: 4px; }
+    .badge-jockey-busy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; box-shadow: 0 0 8px rgba(245,158,11,0.6); }
 
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
@@ -678,7 +678,7 @@ def main():
     race_df = df[df['race_uid'] == selected_race_uid].copy()
     c_cat = get_cushion_category(cushion_val, chosen_venue)
 
-    # 1. まず全頭の状態でレース評価パネルや第3の馬券・モードA/Bの計算を完全実行
+    # 1. 全頭ベースでレース評価パネルや第3の馬券、モードA/Bの計算を実行
     scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
     for _, r in race_df.iterrows():
         sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
@@ -699,7 +699,7 @@ def main():
         banner_txt = f"🔥🌟【S級絶対勝負レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 極限合致の最優先勝負レース（単勝・軸馬鉄板）"
     elif sel_rating == "A":
         banner_cls = "race-type-a-class"
-        banner_txt = f"🎯👑【A級準勝負レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 黄金クロス・特条件合致の狙い目レース"
+        banner_txt = f"🎯👑【A級準勝負レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 黄金クロス・特注条件合致の狙い目レース"
     elif sel_rating == "B":
         banner_cls = "race-type-b-class"
         banner_txt = f"⚖️🎯【B級標準レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 的中重視レース"
@@ -826,7 +826,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. カルテ表示用データフレーム（チェックBOXがオンの時のみ絞り込み、オフの時は全頭表示を完全保証）
+    # 2. 出走馬詳細カルテ表示用データフレーム（チェックBOXオンの時だけ絞り込み、オフの時は全頭表示を完全保証）
     display_df = race_df.copy()
     if filter_target_sakaro_a3:
         filtered = display_df[display_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
@@ -839,7 +839,7 @@ def main():
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
         if not filtered.empty: display_df = filtered
 
-    # 3. 騎手ごとの同日騎乗鞍数の自動集計（エラー防止策として安全な辞書変換）
+    # 3. 開催日全体（df全体）における騎手ごとの騎乗数を正確に集計
     jockey_counts = df['騎手'].value_counts().to_dict() if '騎手' in df.columns else {}
 
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
@@ -870,10 +870,11 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
-        # 同日開催内での騎手複数騎乗（乗り鞍多め）の勝負バッジ点灯
+        # 同日開催内での騎手複数騎乗（2鞍以上）の勝負バッジ点灯
         j_name = h['騎手']
-        if j_name and j_name in jockey_counts and jockey_counts[j_name] >= 2:
-            badges.append(f"<span class='badge-jockey-busy'>👑 騎手多鞍(勝負): {j_name}({jockey_counts[j_name]}鞍)</span>")
+        j_cnt = jockey_counts.get(j_name, 1)
+        if j_name and j_cnt >= 2:
+            badges.append(f"<span class='badge-jockey-busy'>👑 騎手多鞍(勝負): {j_name}({j_cnt}鞍)</span>")
 
         in_v = h['印']
         m2_v = h['M2']
