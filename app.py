@@ -168,6 +168,7 @@ st.markdown("""
     .badge-f-eval-s { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c2d12 0%, #dc2626 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f87171; margin-right: 4px; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
     .badge-f-eval-a { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-f-eval-b { display: inline-flex; align-items: center; background: #2563eb; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
+    .badge-jockey-busy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%); color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #38bdf8; margin-right: 4px; }
 
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
@@ -677,7 +678,7 @@ def main():
     race_df = df[df['race_uid'] == selected_race_uid].copy()
     c_cat = get_cushion_category(cushion_val, chosen_venue)
 
-    # まず元データの状態でレース評価・スコアリングを実施（全頭ベース）
+    # 1. まず全頭の状態でレース評価パネルや第3の馬券・モードA/Bの計算を完全実行
     scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
     for _, r in race_df.iterrows():
         sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
@@ -715,8 +716,9 @@ def main():
 
     f_top3_nums = f_top3_df['馬番'].tolist()
     s_top3_nums = s_top3_df['馬番'].tolist()
-    arm_top3_nums = arm_top3_df['馬番'].tolist()
-    tua_top3_nums = tua_top3_df['馬番'].tolist()
+    arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in race_df.columns else []
+    tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in race_df.columns else []
+    
     safe_race_df = race_df[race_df['印'] > 0] if filter_danger_in0 else race_df
     f_safe_top3 = safe_race_df.sort_values('F順位').head(3)['馬番'].tolist()
     s_safe_top3 = safe_race_df.sort_values('S順位').head(3)['馬番'].tolist()
@@ -824,7 +826,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 任意：チェックBOXによるビュー用フィルタリング（ここに配置することで上部のパネルと馬券パックが正常描画される）
+    # 2. 出走馬詳細カルテの表示用データフレーム作成（チェックBOXがオンの時だけ絞り込み、オフの時は全頭表示）
     display_df = race_df.copy()
     if filter_target_sakaro_a3:
         filtered = display_df[display_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
@@ -836,6 +838,9 @@ def main():
         ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
         if not filtered.empty: display_df = filtered
+
+    # 3. 同一レース内での同一騎手重複（乗り鞍）の自動検知集計
+    jockey_counts = display_df['騎手'].value_dict() if hasattr(display_df['騎手'], 'value_dict') else display_df['騎手'].value_counts().to_dict()
 
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
     sort_col1, sort_col2 = st.columns(2)
@@ -864,6 +869,11 @@ def main():
         if u_no == honmei_num: badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
+
+        # 同日・同一レース内騎手重複チェック（複数騎乗している場合の勝負バッジ点灯）
+        j_name = h['騎手']
+        if j_name and j_name in jockey_counts and jockey_counts[j_name] >= 2:
+            badges.append(f"<span class='badge-jockey-busy'>👑 騎手多鞍(勝負): {j_name}({jockey_counts[j_name]}鞍)</span>")
 
         in_v = h['印']
         m2_v = h['M2']
