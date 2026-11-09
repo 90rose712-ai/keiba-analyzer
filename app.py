@@ -870,7 +870,7 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
-        # 同日開催内での騎手複数騎乗（2鞍以上）の勝負バッジ点灯
+        # 同日開催内での騎手複数騎乗（2鞍以上＝菅原騎手の7鞍や、戸崎騎手の8鞍など）の勝負バッジを輝かせて点灯
         j_name = h['騎手']
         j_cnt = jockey_counts.get(j_name, 1)
         if j_name and j_cnt >= 2:
