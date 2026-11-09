@@ -168,12 +168,11 @@ st.markdown("""
     .badge-f-eval-s { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c2d12 0%, #dc2626 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f87171; margin-right: 4px; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
     .badge-f-eval-a { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-f-eval-b { display: inline-flex; align-items: center; background: #2563eb; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
-    .badge-jockey-same-umaban { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; box-shadow: 0 0 10px rgba(245,158,11,0.7); }
 
-    .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
-    .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
-    .val-arms-top { color: #083344; background-color: #38bdf8; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #0284c7; }
-    .val-tua-top { color: #022c22; background-color: #34d399; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #059669; }
+    /* 指数ハイライト用スタイル（1位〜3位） */
+    .val-rank-1 { color: #ffffff; background-color: #d97706; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
+    .val-rank-2 { color: #ffffff; background-color: #2563eb; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #93c5fd; }
+    .val-rank-3 { color: #ffffff; background-color: #047857; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #6ee7b7; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -474,6 +473,16 @@ def evaluate_race_rating(r_subset):
     else:
         return "C"
 
+def get_rank_class(rank_val):
+    try:
+        r = int(rank_val)
+        if r == 1: return "val-rank-1"
+        elif r == 2: return "val-rank-2"
+        elif r == 3: return "val-rank-3"
+    except:
+        pass
+    return ""
+
 def main():
     st.sidebar.markdown("## 📂 CSVデータ読込管理")
     df_raw, loaded_filename = read_csv_robust()
@@ -620,6 +629,8 @@ def main():
                 'ウッドL1': pd.to_numeric(w_row.get('Lap1', np.nan), errors='coerce'),
                 '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
                 'コース連順位': c_rk, '血統連順位': k_rk, 'バランス順位': b_rk,
+                '坂路調': row.get('坂路調', ''), '坂路血': row.get('坂路血', ''), '時計血': row.get('時計血', ''),
+                'コース連': row.get('コース連', ''), '血統連': row.get('血統連', ''), 'バランス': row.get('バランス', ''),
                 '芝ダート変わり': track_change, '前走脚質': run_style, '前走決手': pass_style,
                 '間隔': interval, '前場体重': weight_val, '日付': race_date
             })
@@ -840,7 +851,7 @@ def main():
         if not filtered.empty: display_df = filtered
 
     # 3. 開催日全体（df全体）における「(騎手, 馬番)」ごとの組合せ回数を正確に集計
-    jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', 'ISSUE'}.issubset(df.columns) or ('騎手' in df.columns and '馬番' in df.columns) else {}
+    jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', '馬番'}.issubset(df.columns) else {}
 
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
     sort_col1, sort_col2 = st.columns(2)
@@ -914,10 +925,19 @@ def main():
         elif fup_val >= 5: fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{fup_rk})</span>"
         else: fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{fup_rk})</span>"
 
-        f_style = "val-f-top" if h['F順位'] <= 3 else ""
-        s_style = "val-s-top" if h['S順位'] <= 3 else ""
-        arm_style = "val-arms-top" if h['ARM順位'] <= 3 else ""
-        tua_style = "val-tua-top" if h['TUA順位'] <= 3 else ""
+        # 各種指数の順位によるカラーハイライト用クラス取得
+        f_rk_cls = get_rank_class(h['F順位'])
+        s_rk_cls = get_rank_class(h['S順位'])
+        arm_rk_cls = get_rank_class(h['ARM順位'])
+        tua_rk_cls = get_rank_class(h['TUA順位'])
+        
+        # 適性・補正順位の順位カラークラス取得
+        hc_rk_cls = get_rank_class(h['坂路調順位'])
+        hk_rk_cls = get_rank_class(h['坂路血順位'])
+        tk_rk_cls = get_rank_class(h['時計血順位'])
+        c_rk_cls = get_rank_class(h['コース連順位'])
+        k_rk_cls = get_rank_class(h['血統連順位'])
+        b_rk_cls = get_rank_class(h['バランス順位'])
 
         s_t4 = h.get('坂路T4', np.nan)
         s_l2 = h.get('坂路L2', np.nan)
@@ -944,16 +964,16 @@ def main():
             <div style='margin-bottom: 8px;'>{' '.join(badges)}</div>
             <ul class='horse-card-list'>
                 <li><strong>主要5大指数</strong>: 
-                    F指数: <span class='{f_style}'>{h['F']}</span> (順位{h['F順位']}) / 
+                    F指数: <span class='{f_rk_cls}'>{h['F']} (順位{h['F順位']})</span> / 
                     Fup2: {fup_badge} / 
-                    ARM: <span class='{arm_style}'>{h['ARM']}</span> (順位{h['ARM順位']}) / 
-                    TUA: <span class='{tua_style}'>{h['TUA']}</span> (順位{h['TUA順位']}) / 
-                    S指数: <span class='{s_style}'>{h['S']}</span> (順位{h['S順位']})
+                    ARM: <span class='{arm_rk_cls}'>{h['ARM']} (順位{h['ARM順位']})</span> / 
+                    TUA: <span class='{tua_rk_cls}'>{h['TUA']} (順位{h['TUA順位']})</span> / 
+                    S指数: <span class='{s_rk_cls}'>{h['S']} (順位{h['S順位']})</span>
                 </li>
                 <li><strong>対戦レベル評価</strong>: 前走馬券内頭数(印): <strong>{in_v}頭</strong> ｜ 前走掲示板内頭数(M2): <strong>{m2_v}頭</strong></li>
                 <li><strong>調教ラップ＆判定</strong>: <span style='background-color: {judge_color}; color: #fff; padding: 2px 6px; border-radius: 4px; font-weight: bold;'>{judge_label}</span><br>
-                    <span style='font-size: 12.5px; color: #94a3b8;'>{choukyou_summary}</span> ｜ 坂路血: {h['坂路血順位']}位 / 時計血: {h['時計血順位']}位</li>
-                <li><strong>適性・補正順位</strong>: コース連: {h['コース連順位']}位 / 血統連: {h['血統連順位']}位 / Balance: {h['バランス順位']}位</li>
+                    <span style='font-size: 12.5px; color: #94a3b8;'>{choukyou_summary}</span> ｜ 坂路血: <span class='{hk_rk_cls}'>{h['坂路血順位']}位</span> / 時計血: <span class='{tk_rk_cls}'>{h['時計血順位']}位</span></li>
+                <li><strong>適性・補正順位</strong>: コース連: <span class='{c_rk_cls}'>{h['コース連順位']}位</span> / 血統連: <span class='{k_rk_cls}'>{h['血統連順位']}位</span> / Balance: <span class='{b_rk_cls}'>{h['バランス順位']}位</span></li>
                 <li><strong>血統＆展開</strong>: 父 {h['種牡馬']} ｜ トラック替: {h['芝ダート変わり']} ｜ 前走脚質: {h['前走脚質']}（決手: {h['前走決手']}）｜ 間隔: {h['間隔']}週 ｜ 前場体重: {h['前場体重']}kg</li>
                 <li><strong>総合動的評価スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span></li>
             </ul>
