@@ -168,7 +168,7 @@ st.markdown("""
     .badge-f-eval-s { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c2d12 0%, #dc2626 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f87171; margin-right: 4px; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
     .badge-f-eval-a { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-f-eval-b { display: inline-flex; align-items: center; background: #2563eb; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
-    .badge-jockey-busy { display: inline-flex; align-items: center; background: linear-gradient(135deg, #d97706 0%, #b45309 100%); color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; box-shadow: 0 0 8px rgba(245,158,11,0.6); }
+    .badge-jockey-same-umaban { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; box-shadow: 0 0 10px rgba(245,158,11,0.7); }
 
     .val-f-top { color: #ffffff; background-color: #ea580c; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fb923c; }
     .val-s-top { color: #ffffff; background-color: #8b5cf6; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #c4b5fd; }
@@ -839,8 +839,8 @@ def main():
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
         if not filtered.empty: display_df = filtered
 
-    # 3. 開催日全体（df全体）における騎手ごとの騎乗数を正確に集計
-    jockey_counts = df['騎手'].value_counts().to_dict() if '騎手' in df.columns else {}
+    # 3. 開催日全体（df全体）における「(騎手, 馬番)」ごとの組合せ回数を正確に集計
+    jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', 'ISSUE'}.issubset(df.columns) or ('騎手' in df.columns and '馬番' in df.columns) else {}
 
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
     sort_col1, sort_col2 = st.columns(2)
@@ -870,11 +870,11 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
-        # 同日開催内での騎手複数騎乗（2鞍以上＝菅原騎手の7鞍や、戸崎騎手の8鞍など）の勝負バッジを輝かせて点灯
+        # 同一騎手が「同じ馬番」に2回以上騎乗している場合のみ、その馬番にバッジを輝かせて点灯
         j_name = h['騎手']
-        j_cnt = jockey_counts.get(j_name, 1)
-        if j_name and j_cnt >= 2:
-            badges.append(f"<span class='badge-jockey-busy'>👑 騎手多鞍(勝負): {j_name}({j_cnt}鞍)</span>")
+        pair_cnt = jockey_umaban_counts.get((j_name, u_no), 1)
+        if j_name and pair_cnt >= 2:
+            badges.append(f"<span class='badge-jockey-same-umaban'>🔥 同馬番複数騎乗(勝負): {j_name}({pair_cnt}回・{u_no}番)</span>")
 
         in_v = h['印']
         m2_v = h['M2']
