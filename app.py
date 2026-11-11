@@ -174,6 +174,14 @@ st.markdown("""
     .val-rank-1 { color: #ffffff; background-color: #d97706; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
     .val-rank-2 { color: #ffffff; background-color: #2563eb; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #93c5fd; }
     .val-rank-3 { color: #ffffff; background-color: #047857; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #6ee7b7; }
+    
+    .filter-result-box {
+        background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
+        border: 2px solid #3b82f6;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 20px;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -515,22 +523,6 @@ def main():
 
     st.sidebar.success(f"✅ 指数CSV読込成功: {loaded_filename} (全{len(df_raw)}頭)")
 
-    st.sidebar.markdown("---")
-    st.sidebar.markdown("### 🎯 チェックBOX 狙い目・レベルフィルタ")
-    filter_high_level_in = st.sidebar.checkbox("👑 前走馬券内3頭以上 (ハイレベル特注)")
-    filter_high_level_m2 = st.sidebar.checkbox("⭐ 前走掲示板5頭以上 (出世レース特注)")
-    filter_danger_in0 = st.sidebar.checkbox("🚨 前走馬券内0頭 (凡戦危険馬を除外)")
-    filter_nb_dart = st.sidebar.checkbox("🐎 ノートブック: ダートで食う(S1位・大型)")
-    filter_nb_nagori = st.sidebar.checkbox("🔥 ノートブック: Z11/Nなごり(休み明け12週+A3)")
-    filter_c_horse = st.sidebar.checkbox("🌲 ノートブック: Ｃ馬特注(ウッド鉄則)")
-    filter_arms_fup = st.sidebar.checkbox("✨ 指数特注: ARMS×FUP黄金クロス")
-    filter_as_cross = st.sidebar.checkbox("👑 指数特注: AS交差馬(F&S上位)")
-    
-    st.sidebar.markdown("### 🏆 狙い目調教・特選フィルター")
-    filter_target_sakaro_a3 = st.sidebar.checkbox("🔥 坂路A3（終い11秒台加速）該当馬のみ")
-    filter_target_c_horse = st.sidebar.checkbox("🌲 Ｃ馬特注（ウッド鉄則）該当馬のみ")
-    filter_target_stable_ace = st.sidebar.checkbox("👑 特選厩舎（矢作・杉山・木村等）該当馬のみ")
-
     venue_dict = {"東": "東京", "中": "中山", "京": "京都", "阪": "阪神", "名": "中京", "小": "小倉", "新": "新潟", "福": "福島", "函": "函館", "札": "札幌"}
     records = []
     
@@ -647,6 +639,114 @@ def main():
 
     st.markdown(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 クッション値Vr」</div>", unsafe_allow_html=True)
 
+    # -------------------------------------------------------------
+    # ★ サイドバー：フィルタチェックボックス ＆ リアルタイム該当馬リスト表示
+    # -------------------------------------------------------------
+    st.sidebar.markdown("---")
+    st.sidebar.markdown("### 🎯 チェックBOX 狙い目・レベルフィルタ")
+
+    # 全データにおける各フィルタの該当馬を事前に集計してカウント表示するヘルパー関数
+    jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', '馬番'}.issubset(df.columns) else {}
+
+    def get_filter_matches(filter_type):
+        matched_records = []
+        for _, r in df.iterrows():
+            is_match = False
+            u_no = int(r['馬番'])
+            j_name = r['騎手']
+            pair_cnt = jockey_umaban_counts.get((j_name, u_no), 1)
+
+            if filter_type == "high_in":
+                if pd.notnull(r['印']) and float(r['印']) >= 3: is_match = True
+            elif filter_type == "high_m2":
+                if pd.notnull(r['M2']) and float(r['M2']) >= 5: is_match = True
+            elif filter_type == "danger_in0":
+                if pd.notnull(r['印']) and float(r['印']) == 0: is_match = True
+            elif filter_type == "arms_fup":
+                if pd.notnull(r['ARM順位']) and int(r['ARM順位']) == 1 and pd.notnull(r['Fup2']) and int(r['Fup2']) >= 6: is_match = True
+            elif filter_type == "as_cross":
+                if pd.notnull(r['F順位']) and int(r['F順位']) <= 3 and pd.notnull(r['S順位']) and int(r['S順位']) <= 3: is_match = True
+            elif filter_type == "sakaro_a3":
+                s_row = r['s_row']
+                if isinstance(s_row, pd.Series) and not s_row.empty:
+                    try:
+                        l1 = float(s_row.get('Lap1', 99) or 99)
+                        l2 = float(s_row.get('Lap2', 99) or 99)
+                        if l1 <= 11.9 and l1 < l2: is_match = True
+                    except: pass
+            elif filter_type == "c_horse":
+                s_row, w_row = r['s_row'], r['w_row']
+                if isinstance(s_row, pd.Series) and isinstance(w_row, pd.Series):
+                    try:
+                        arm_rk = int(r['ARM順位'])
+                        w_5f = float(w_row.get('5F', 99) or 99)
+                        s_t1 = float(s_row.get('Time1', 99) or 99)
+                        if arm_rk <= 3 and w_5f <= 69.0 and s_t1 <= 59.9: is_match = True
+                    except: pass
+            elif filter_type == "stable_ace":
+                ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
+                if any(ac in str(r['調教師']) for ac in ace_trainers): is_match = True
+            elif filter_type == "same_umaban":
+                if j_name and pair_cnt >= 2: is_match = True
+
+            if is_match:
+                matched_records.append(f"【{r['競馬場名']}{re.search(r'\\d+', str(r['race_id'])).group() if re.search(r'\\d+', str(r['race_id'])) else ''}R】 {u_no}番 {r['馬名']} ({r['騎手']})")
+        return matched_records
+
+    # チェックBOXの定義 ＆ カウント表示
+    c_high_in_matches = get_filter_matches("high_in")
+    filter_high_level_in = st.sidebar.checkbox(f"👑 前走馬券内3頭以上 ({len(c_high_in_matches)}頭)")
+
+    c_high_m2_matches = get_filter_matches("high_m2")
+    filter_high_level_m2 = st.sidebar.checkbox(f"⭐ 前走掲示板5頭以上 ({len(c_high_m2_matches)}頭)")
+
+    c_danger_matches = get_filter_matches("danger_in0")
+    filter_danger_in0 = st.sidebar.checkbox(f"🚨 前走馬券内0頭 ({len(c_danger_matches)}頭)")
+
+    c_arms_fup_matches = get_filter_matches("arms_fup")
+    filter_arms_fup = st.sidebar.checkbox(f"✨ ARMS×FUP黄金クロス ({len(c_arms_fup_matches)}頭)")
+
+    c_as_matches = get_filter_matches("as_cross")
+    filter_as_cross = st.sidebar.checkbox(f"👑 AS交差馬(F&S上位) ({len(c_as_matches)}頭)")
+
+    c_sakaro_matches = get_filter_matches("sakaro_a3")
+    filter_target_sakaro_a3 = st.sidebar.checkbox(f"🔥 坂路A3(終い11秒台加速) ({len(c_sakaro_matches)}頭)")
+
+    c_c_horse_matches = get_filter_matches("c_horse")
+    filter_target_c_horse = st.sidebar.checkbox(f"🌲 Ｃ馬特注(ウッド鉄則) ({len(c_c_horse_matches)}頭)")
+
+    c_stable_matches = get_filter_matches("stable_ace")
+    filter_target_stable_ace = st.sidebar.checkbox(f"👑 特選厩舎該当馬 ({len(c_stable_matches)}頭)")
+
+    c_same_umaban_matches = get_filter_matches("same_umaban")
+    filter_target_same_umaban = st.sidebar.checkbox(f"🔥 同馬番複数騎乗馬 ({len(c_same_umaban_matches)}頭)")
+
+    # -------------------------------------------------------------
+    # 💡 サイドバーでチェックされたフィルターの該当馬リストを右側上部に一発表示
+    # -------------------------------------------------------------
+    active_filters = []
+    if filter_high_level_in: active_filters.append(("👑 前走馬券内3頭以上", c_high_in_matches))
+    if filter_high_level_m2: active_filters.append(("⭐ 前走掲示板5頭以上", c_high_m2_matches))
+    if filter_danger_in0: active_filters.append(("🚨 前走馬券内0頭", c_danger_matches))
+    if filter_arms_fup: active_filters.append(("✨ ARMS×FUP黄金クロス", c_arms_fup_matches))
+    if filter_as_cross: active_filters.append(("👑 AS交差馬(F&S上位)", c_as_matches))
+    if filter_target_sakaro_a3: active_filters.append(("🔥 坂路A3(終い11秒台加速)", c_sakaro_matches))
+    if filter_target_c_horse: active_filters.append(("🌲 Ｃ馬特注(ウッド鉄則)", c_c_horse_matches))
+    if filter_target_stable_ace: active_filters.append(("👑 特選厩舎該当馬", c_stable_matches))
+    if filter_target_same_umaban: active_filters.append(("🔥 同馬番複数騎乗馬", c_same_umaban_matches))
+
+    if active_filters:
+        st.markdown("<div class='filter-result-box'>", unsafe_allow_html=True)
+        st.markdown("### 📌 選択中フィルターの該当馬一覧（リアルタイム抽出）", unsafe_allow_html=True)
+        for f_name, f_list in active_filters:
+            st.markdown(f"**{f_name}** (計 {len(f_list)}頭)")
+            if f_list:
+                formatted_items = " ｜ ".join([f"<span style='background:#1f2937; padding:2px 8px; border-radius:4px; border:1px solid #374151; color:#60a5fa;'>{item}</span>" for item in f_list])
+                st.markdown(f"<div style='margin: 6px 0 12px 0; line-height: 2.2;'>{formatted_items}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='color: #9ca3af; margin: 4px 0 10px 0;'>該当馬なし</div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
+
     venue_sort_order = ["東京", "中山", "京都", "阪神", "中京", "小倉", "新潟", "福島", "函館", "札幌", "新"]
     existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()]
     chosen_venue = st.radio("開催場選択", options=existing_venues, horizontal=True)
@@ -674,10 +774,6 @@ def main():
         else: race_tags.append("📌【見送り推奨】")
 
         race_tags.append(f"水準[S:{s_lvl}/F:{f_lvl}]")
-
-        if filter_high_level_in and (r_subset['印'] >= 3).any(): race_tags.append("👑印≧3")
-        if filter_high_level_m2 and (r_subset['M2'] >= 5).any(): race_tags.append("⭐M2≧5")
-        if filter_danger_in0 and (r_subset['印'] == 0).any(): race_tags.append("🚨印0除外")
 
         tag_str = f" [{' '.join(race_tags)}]"
         race_options[r_uid] = f"{r['race_uid']} ({r['track']}{r['dist']}m){tag_str}"
@@ -723,7 +819,7 @@ def main():
     tua_top3_df = race_df.sort_values('TUA順位').head(3)
 
     f_top3_nums = f_top3_df['馬番'].tolist()
-    s_top3_nums = s_top3_df['馬番'].tolist()
+    s_top3_nums = s_top3_df['S順位'].tolist()
     arm_top3_nums = arm_top3_df['ARM順位'].tolist() if 'ARM順位' in race_df.columns else []
     tua_top3_nums = tua_top3_df['TUA順位'].tolist() if 'TUA順位' in race_df.columns else []
     
@@ -834,6 +930,7 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
+    # 2. 出走馬詳細カルテ表示用データフレーム（チェックBOXオンの時だけ絞り込み、オフの時は全頭表示を完全保証）
     display_df = race_df.copy()
     if filter_target_sakaro_a3:
         filtered = display_df[display_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
@@ -844,6 +941,10 @@ def main():
     if filter_target_stable_ace:
         ace_trainers = ['藤原', '杉山', '矢作', '中内田', '木村', '堀', '友道', '池添', '吉岡', '大竹', '斉藤', '音無', '国枝']
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
+        if not filtered.empty: display_df = filtered
+    if filter_target_same_umaban:
+        j_counts = df.groupby(['騎手', '馬番']).size().to_dict()
+        filtered = display_df[display_df.apply(lambda r: j_counts.get((r['騎手'], r['馬番']), 1) >= 2, axis=1)]
         if not filtered.empty: display_df = filtered
 
     jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', '馬番'}.issubset(df.columns) else {}
@@ -876,7 +977,6 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
-        # 同一騎手が「同じ馬番」に2回以上騎乗している場合のみバッジ点灯（例: 6番同番2回）
         j_name = h['騎手']
         pair_cnt = jockey_umaban_counts.get((j_name, u_no), 1)
         if j_name and pair_cnt >= 2:
