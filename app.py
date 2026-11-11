@@ -168,8 +168,9 @@ st.markdown("""
     .badge-f-eval-s { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c2d12 0%, #dc2626 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #f87171; margin-right: 4px; box-shadow: 0 0 8px rgba(239,68,68,0.5); }
     .badge-f-eval-a { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 4px; }
     .badge-f-eval-b { display: inline-flex; align-items: center; background: #2563eb; color: #fff; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #93c5fd; margin-right: 4px; }
+    .badge-jockey-same-umaban { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b45309 0%, #d97706 100%); color: #fff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 1px solid #fde68a; margin-right: 6px; box-shadow: 0 0 10px rgba(245,158,11,0.7); }
 
-    /* 指数ハイライト用スタイル（1位〜3位） */
+    /* 指数・適性順位ハイライト用スタイル（1位〜3位） */
     .val-rank-1 { color: #ffffff; background-color: #d97706; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
     .val-rank-2 { color: #ffffff; background-color: #2563eb; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #93c5fd; }
     .val-rank-3 { color: #ffffff; background-color: #047857; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #6ee7b7; }
@@ -415,7 +416,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3:
         score += 30.0; nb_hits.append("🔄 トラック変わり激走特注")
 
-    # 厩舎20選・30選の主要バイアス＆勝負パターン加点
     if '藤原' in trainer: score += 30.0; stable_hits.append("厩舎: 藤原英昭(A3/B3特注)")
     if '杉山' in trainer: score += 30.0; stable_hits.append("厩舎: 杉山晴紀(A3黄金)")
     if '矢作' in trainer: score += 30.0; stable_hits.append("厩舎: 矢作芳人(A2真髄)")
@@ -629,8 +629,6 @@ def main():
                 'ウッドL1': pd.to_numeric(w_row.get('Lap1', np.nan), errors='coerce'),
                 '坂路調順位': hc_rk, '坂路血順位': hk_rk, '時計血順位': tk_rk,
                 'コース連順位': c_rk, '血統連順位': k_rk, 'バランス順位': b_rk,
-                '坂路調': row.get('坂路調', ''), '坂路血': row.get('坂路血', ''), '時計血': row.get('時計血', ''),
-                'コース連': row.get('コース連', ''), '血統連': row.get('血統連', ''), 'バランス': row.get('バランス', ''),
                 '芝ダート変わり': track_change, '前走脚質': run_style, '前走決手': pass_style,
                 '間隔': interval, '前場体重': weight_val, '日付': race_date
             })
@@ -689,7 +687,6 @@ def main():
     race_df = df[df['race_uid'] == selected_race_uid].copy()
     c_cat = get_cushion_category(cushion_val, chosen_venue)
 
-    # 1. 全頭ベースでレース評価パネルや第3の馬券、モードA/Bの計算を実行
     scores, rescued_flags, sss_flags, nb_hits_list, stable_hits_list, f_eval_labels = [], [], [], [], [], []
     for _, r in race_df.iterrows():
         sc, res, sss, nb, stbl, f_lbl = calc_upgraded_dynamic_score(r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'], r['s_row'], r['w_row'])
@@ -837,7 +834,6 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # 2. 出走馬詳細カルテ表示用データフレーム（チェックBOXオンの時だけ絞り込み、オフの時は全頭表示を完全保証）
     display_df = race_df.copy()
     if filter_target_sakaro_a3:
         filtered = display_df[display_df['s_row'].apply(lambda x: isinstance(x, pd.Series) and not x.empty and float(x.get('Lap1', 99) or 99) <= 11.9 and float(x.get('Lap1', 99) or 99) < float(x.get('Lap2', 99) or 99))]
@@ -850,7 +846,6 @@ def main():
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in t for ac in ace_trainers))]
         if not filtered.empty: display_df = filtered
 
-    # 3. 開催日全体（df全体）における「(騎手, 馬番)」ごとの組合せ回数を正確に集計
     jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', '馬番'}.issubset(df.columns) else {}
 
     st.markdown("### 🏇 出走馬詳細カルテ ＆ レース内調教比較")
@@ -881,7 +876,7 @@ def main():
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
 
-        # 同一騎手が「同じ馬番」に2回以上騎乗している場合のみ、その馬番にバッジを輝かせて点灯
+        # 同一騎手が「同じ馬番」に2回以上騎乗している場合のみバッジ点灯（例: 6番同番2回）
         j_name = h['騎手']
         pair_cnt = jockey_umaban_counts.get((j_name, u_no), 1)
         if j_name and pair_cnt >= 2:
@@ -925,14 +920,11 @@ def main():
         elif fup_val >= 5: fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{fup_rk})</span>"
         else: fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{fup_rk})</span>"
 
-        # 各種指数の順位によるカラーハイライト用クラス取得
         f_rk_cls = get_rank_class(h['F順位'])
         s_rk_cls = get_rank_class(h['S順位'])
         arm_rk_cls = get_rank_class(h['ARM順位'])
         tua_rk_cls = get_rank_class(h['TUA順位'])
         
-        # 適性・補正順位の順位カラークラス取得
-        hc_rk_cls = get_rank_class(h['坂路調順位'])
         hk_rk_cls = get_rank_class(h['坂路血順位'])
         tk_rk_cls = get_rank_class(h['時計血順位'])
         c_rk_cls = get_rank_class(h['コース連順位'])
