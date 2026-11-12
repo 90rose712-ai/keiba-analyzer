@@ -176,6 +176,13 @@ st.markdown("""
     .val-rank-1 { color: #ffffff; background-color: #d97706; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
     .val-rank-2 { color: #ffffff; background-color: #2563eb; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #93c5fd; }
     .val-rank-3 { color: #ffffff; background-color: #047857; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #6ee7b7; }
+
+    /* ★ Fup2専用ハイライト（順位1位は必ず色付け、5点以上も順位関係なく必ず色付け） */
+    .fup-badge-rank1-high { color: #ffffff; background: linear-gradient(135deg, #dc2626 0%, #d97706 100%); font-weight: 900; padding: 1px 7px; border-radius: 4px; border: 1px solid #fef08a; box-shadow: 0 0 8px rgba(245,158,11,0.6); }
+    .fup-badge-rank1 { color: #ffffff; background-color: #d97706; font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fde68a; }
+    .fup-badge-top { color: #ffffff; background: linear-gradient(135deg, #991b1b 0%, #dc2626 100%); font-weight: 900; padding: 1px 7px; border-radius: 4px; border: 1px solid #fca5a5; box-shadow: 0 0 6px rgba(239,68,68,0.5); }
+    .fup-badge-mid { color: #ffffff; background: linear-gradient(135deg, #b45309 0%, #ea580c 100%); font-weight: bold; padding: 1px 6px; border-radius: 4px; border: 1px solid #fdba74; }
+    .fup-badge-low { color: #c9d1d9; }
     
     .filter-result-box {
         background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
@@ -400,7 +407,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     # -------------------------------------------------------------
     # ★ 実証データに基づく超高確率・高期待値パターンの動的加点＆バッジ付与
     # -------------------------------------------------------------
-    # 1. F≧72 鉄板級条件 (複勝率88.9% / 連対率66.7%)
     if f_val >= 72.0:
         score += 65.0
         combo_hits.append(("golden", "👑 鉄板級 F≧72(複88.9%)"))
@@ -408,7 +414,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         score += 45.0
         combo_hits.append(("golden", "🔥 極限クロス(F≧70×S上位)"))
 
-    # 2. F1位 × S1〜3位 × コース連1〜3位 (勝率66.7% / 連対率83.3%) ＆ F1位 × コース連1〜3位 (勝率44.4% / 複勝率77.8%)
     if f_rk == 1 and s_rk <= 3 and c_rk <= 3:
         score += 75.0
         combo_hits.append(("golden", "🌟 極限3重交差(F1位×S上位×コース連上位)[勝66.7%/連83.3%]"))
@@ -416,12 +421,10 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         score += 50.0
         combo_hits.append(("golden", "🎯 F1位×コース連上位[勝44.4%/複77.8%]"))
 
-    # ピンポイント F1位 × コース連1位 (勝率100%)
     if f_rk == 1 and c_rk == 1:
         score += 25.0
         combo_hits.append(("golden", "💯 F1位×コース連1位(完全一致)"))
 
-    # 3. F≧70 × 血統連1〜3位 (連対率72.7%) ＆ F1位 × 血統連1〜3位 (複勝率66.7%)
     if f_val >= 70.0 and k_rk <= 3:
         score += 45.0
         combo_hits.append(("golden", "🧬 F≧70×血統連上位[連72.7%]"))
@@ -429,7 +432,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         score += 35.0
         combo_hits.append(("golden", "🧬 F1位×血統連上位[複66.7%]"))
 
-    # 4. ダート最強軸 TUA1位 × F1〜3位 (ダート勝率37.5% / 連対率75.0% / 全場複勝率63.6%)
     if track_type == 'ダ' and tua_rk == 1 and f_rk <= 3:
         score += 65.0
         combo_hits.append(("golden", "🚀 ダート最強軸(TUA1位×F上位)[勝37.5%/連75.0%]"))
@@ -437,17 +439,14 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         score += 40.0
         combo_hits.append(("value", "🌐 TUA1位×F上位[複63.6%]"))
 
-    # ダート F1位 × TUA1〜3位 (ダート複勝率75.0%)
     if track_type == 'ダ' and f_rk == 1 and tua_rk <= 3 and tua_rk != 1:
         score += 45.0
         combo_hits.append(("golden", "🔥 ダート黄金(F1位×TUA上位)[複75.0%]"))
 
-    # 5. コース連1位 × S1〜3位 (中穴激走パターン：勝率35.7% / 複勝率57.1% / 平均3.9人気)
     if c_rk == 1 and s_rk <= 3:
         score += 45.0
         combo_hits.append(("value", "💣 歪み激走特注(コース連1位×S上位)[勝35.7%/複57.1%]"))
 
-    # 6. 3指数上位複合 (F・コース連・血統連 1〜3位 [複72.7%] / F・坂路調・コース連 1〜3位 [連66.7%])
     if f_rk <= 3 and c_rk <= 3 and k_rk <= 3:
         score += 40.0
         combo_hits.append(("value", "💎 3複合上位(F×コース連×血統連)[複72.7%]"))
@@ -455,7 +454,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         score += 40.0
         combo_hits.append(("value", "⚡ 3複合上位(F×坂路調×コース連)[連66.7%]"))
 
-    # 7. 芝中穴ヒモ特注 S1〜3位 × Fup2 1〜3位 (複勝率50.0% / 平均4.2人気) ＆ S≧60 (連対率52.6%)
     if track_type == '芝' and s_rk <= 3 and fup_rk <= 3:
         score += 30.0
         combo_hits.append(("value", "🌱 芝ヒモ特注(S上位×Fup2上位)[複50.0%]"))
@@ -640,7 +638,6 @@ def main():
         c_horse = clean_str(row.get('C(馬)', ''))
         track_change = clean_str(row.get('芝ダート変わり', ''))
 
-        # 距離列（例: ダ1150, 芝2000）やC列から確実に芝・ダートを自動判定
         dist_str = clean_str(dist_raw)
         if "ダ" in dist_str or "ダ" in raw_c or track_change.endswith("ダ"):
             track = "ダ"
@@ -787,7 +784,10 @@ def main():
                 if j_name and pair_cnt >= 2: is_match = True
 
             if is_match:
-                matched_records.append(f"【{r['競馬場名']}{re.search(r'\\d+', str(r['race_id'])).group() if re.search(r'\\d+', str(r['race_id'])) else ''}R】 {u_no}番 {r['馬名']} ({r['騎手']})")
+                # ★ 修正1：レース番号（1R〜12R）を確実に抽出して【東京1R】のように表示
+                m_rnum = re.search(r'\d+', str(r['race_id']))
+                r_num_txt = m_rnum.group() if m_rnum else ""
+                matched_records.append(f"【{r['競馬場名']}{r_num_txt}R】 {u_no}番 {r['馬名']} ({r['騎手']})")
         return matched_records
 
     # チェックBOXの定義 ＆ カウント表示
@@ -942,7 +942,6 @@ def main():
     f_safe_top3 = safe_race_df[safe_race_df['F順位'] <= 3]['馬番'].tolist() if (safe_race_df['F順位'] <= 3).any() else safe_race_df.sort_values('F順位').head(3)['馬番'].tolist()
     s_safe_top3 = safe_race_df[safe_race_df['S順位'] <= 3]['馬番'].tolist() if (safe_race_df['S順位'] <= 3).any() else safe_race_df.sort_values('S順位').head(3)['馬番'].tolist()
 
-    # 実証された高確率パターン該当馬番の抽出
     f1_cb_nums = safe_race_df[(safe_race_df['F順位'] == 1) & ((safe_race_df['コース連順位'] <= 3) | (safe_race_df['血統連順位'] <= 3))]['馬番'].tolist()
     tua1_f_nums = safe_race_df[(safe_race_df['TUA順位'] == 1) & (safe_race_df['F順位'] <= 3)]['馬番'].tolist()
     c1_s_nums = safe_race_df[(safe_race_df['コース連順位'] == 1) & (safe_race_df['S順位'] <= 3)]['馬番'].tolist()
@@ -993,14 +992,12 @@ def main():
     if has_f65:
         mode_name = "👑 モードA：F指数65以上【絶対主役モード】"
         mode_desc = "F指数65以上の抜けた馬を不動の連軸とし、実証高確率クロス（コース連・血統連・TUA・S上位）へ網を張る構成"
-        # F65以上の中でF≧72やF1位×コース連/血統連上位など動的スコアが高い馬・F最上位馬を本命に選定
         honmei = f65_horses.iloc[0]
         honmei_num = int(honmei['馬番'])
         opponents = race_df[race_df['馬番'] != honmei_num].copy()
         taikou = opponents.sort_values(['dynamic_score', 'F順位', 'コース連順位', 'TUA順位'], ascending=[False, True, True, True]).iloc[0] if not opponents.empty else honmei
         taikou_num = int(taikou['馬番'])
         
-        # 2列目：F上位2頭 ＋ TUA1位×F上位 ＋ コース連1位×S上位 ＋ ARM1位/TUA1位
         high_prob_2nd = [n for n in (tua1_f_nums + c1_s_nums + f1_cb_nums) if n != honmei_num]
         second_row = list(set(
             opponents.sort_values('F順位').head(2)['馬番'].tolist() +
@@ -1009,7 +1006,6 @@ def main():
             opponents.sort_values('TUA順位').head(1)['馬番'].tolist()
         )) if not opponents.empty else [honmei_num]
         
-        # 3列目：2列目 ＋ コース連上位2頭 ＋ 血統連上位2頭 ＋ 芝S×Fup2上位 ＋ バランス上位
         third_row = list(set(
             second_row +
             [n for n in turf_s_fup_nums if n != honmei_num] +
@@ -1018,7 +1014,6 @@ def main():
             opponents.sort_values('バランス順位').head(1)['馬番'].tolist()
         )) if not opponents.empty else [honmei_num]
         
-        # 穴特注（4番人気以下で「コース連1位×S上位」「TUA1位×F上位」「芝S×Fup2上位」または動的スコア上位を最優先）
         ana_candidates = opponents[opponents['人気順位'] >= 4].sort_values(['dynamic_score', 'コース連順位', 'TUA順位', 'ARM順位'], ascending=[False, True, True, True]) if not opponents.empty else pd.DataFrame()
         if not ana_candidates.empty:
             ana = ana_candidates.iloc[0]
@@ -1166,7 +1161,6 @@ def main():
         elif f_eval == "A評価": badges.append("<span class='badge-f-eval-a'>⭐ F指数 A評価</span>")
         elif f_eval == "B評価": badges.append("<span class='badge-f-eval-b'>📌 F指数 B評価</span>")
 
-        # ★ 実証高確率コンボバッジの表示
         for c_type, c_text in h.get('combo_hits', []):
             if c_type == "golden":
                 badges.append(f"<span class='badge-golden-combo'>{c_text}</span>")
@@ -1191,12 +1185,23 @@ def main():
             judg, stat_txt = CUSHION_DATA_BOOK[c_key]
             if judg == '最重要': badges.append(f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>")
 
-        fup_val = h['Fup2']
-        fup_rk = h['Fup2順位']
-        if fup_rk == 1: fup_badge = f"<span class='fup-badge-rank1'>👑 {fup_val}点 (順位1位)</span>"
-        elif fup_val >= 7: fup_badge = f"<span class='fup-badge-top'>⚡ {fup_val}点 (順位{fup_rk})</span>"
-        elif fup_val >= 5: fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{fup_rk})</span>"
-        else: fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{fup_rk})</span>"
+        # ★ 修正2：Fup2は「順位1位は必ず色付け」「5点以上は順位関係なく必ず色付け」（それ以外の2〜3位も通常ハイライト）
+        fup_val = int(h['Fup2'])
+        fup_rk = int(h['Fup2順位'])
+        if fup_rk == 1 and fup_val >= 5:
+            fup_badge = f"<span class='fup-badge-rank1-high'>👑🔥 {fup_val}点 (順位1位)</span>"
+        elif fup_rk == 1:
+            fup_badge = f"<span class='fup-badge-rank1'>👑 {fup_val}点 (順位1位)</span>"
+        elif fup_val >= 7:
+            fup_badge = f"<span class='fup-badge-top'>⚡ {fup_val}点 (順位{fup_rk})</span>"
+        elif fup_val >= 5:
+            fup_badge = f"<span class='fup-badge-mid'>🔥 {fup_val}点 (順位{fup_rk})</span>"
+        elif fup_rk == 2:
+            fup_badge = f"<span class='val-rank-2'>{fup_val}点 (順位2)</span>"
+        elif fup_rk == 3:
+            fup_badge = f"<span class='val-rank-3'>{fup_val}点 (順位3)</span>"
+        else:
+            fup_badge = f"<span class='fup-badge-low'>{fup_val}点 (順位{fup_rk})</span>"
 
         f_rk_cls = get_rank_class(h['F順位'])
         s_rk_cls = get_rank_class(h['S順位'])
