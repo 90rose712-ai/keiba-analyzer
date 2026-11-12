@@ -33,7 +33,7 @@ st.markdown("""
     .race-type-banner {
         padding: 12px 18px;
         border-radius: 8px;
-        margin-bottom: 14px;
+        margin-bottom: 10px;
         font-size: 15px;
         font-weight: bold;
         display: flex;
@@ -61,6 +61,33 @@ st.markdown("""
         background: #374151;
         color: #9ca3af;
         border: 1px solid #4b5563;
+    }
+    /* ★ 堅い／荒れる（波乱度）判定バナー専用スタイル */
+    .vol-banner-solid {
+        background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+        border: 2px solid #38bdf8;
+        color: #e0f2fe;
+        padding: 12px 18px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        box-shadow: 0 0 12px rgba(56, 189, 248, 0.35);
+    }
+    .vol-banner-std {
+        background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+        border: 2px solid #fbbf24;
+        color: #fef3c7;
+        padding: 12px 18px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+    }
+    .vol-banner-chaos {
+        background: linear-gradient(135deg, #450a0a 0%, #7f1d1d 50%, #581c87 100%);
+        border: 2px solid #f43f5e;
+        color: #ffe4e6;
+        padding: 12px 18px;
+        border-radius: 8px;
+        margin-bottom: 14px;
+        box-shadow: 0 0 14px rgba(244, 63, 94, 0.45);
     }
     .recom-panel-go {
         background: linear-gradient(135deg, #111827 0%, #1f2937 100%);
@@ -329,28 +356,40 @@ def evaluate_f_index_strict(r, race_subset):
 
 def get_race_balance_level(race_subset, track_type, class_name):
     try:
-        s_vals = pd.to_numeric(race_subset['S'], errors='coerce').dropna().sort_values(ascending=False)
-        f_vals = pd.to_numeric(race_subset['F'], errors='coerce').dropna().sort_values(ascending=False)
-        s_avg_top3 = s_vals.head(3).mean() if len(s_vals) >= 3 else s_vals.mean() if len(s_vals) > 0 else 50.0
-        f_avg_top3 = f_vals.head(3).mean() if len(f_vals) >= 3 else f_vals.mean() if len(f_vals) > 0 else 60.0
+        # ノートブックP.3準拠：指数順位1〜3位の指数平均値で計算
+        s_top3_df = race_subset[pd.to_numeric(race_subset['S順位'], errors='coerce') <= 3]
+        f_top3_df = race_subset[pd.to_numeric(race_subset['F順位'], errors='coerce') <= 3]
+        s_vals = pd.to_numeric(s_top3_df['S'], errors='coerce').dropna()
+        f_vals = pd.to_numeric(f_top3_df['F'], errors='coerce').dropna()
+        if s_vals.empty:
+            s_vals = pd.to_numeric(race_subset['S'], errors='coerce').dropna().sort_values(ascending=False).head(3)
+        if f_vals.empty:
+            f_vals = pd.to_numeric(race_subset['F'], errors='coerce').dropna().sort_values(ascending=False).head(3)
+        s_avg_top3 = s_vals.mean() if len(s_vals) > 0 else 50.0
+        f_avg_top3 = f_vals.mean() if len(f_vals) > 0 else 60.0
     except:
         return "標準", "標準"
+
+    # レース番号からもクラス基準（9-10R:2〜3勝、11R:OP/重賞）を自動補完
+    r_uid_str = str(race_subset['race_uid'].iloc[0]) if not race_subset.empty and 'race_uid' in race_subset.columns else ""
+    m_rn = re.search(r'\d+', r_uid_str)
+    r_no = int(m_rn.group()) if m_rn else 1
 
     if track_type == "芝":
         if "重賞" in class_name or "G" in class_name:
             s_low, s_high, f_low, f_high = 53.7, 56.7, 66.0, 68.3
-        elif "OP" in class_name or "L" in class_name or "オープン" in class_name:
+        elif "OP" in class_name or "L" in class_name or "オープン" in class_name or r_no == 11:
             s_low, s_high, f_low, f_high = 53.3, 56.0, 62.7, 65.0
-        elif "2勝" in class_name or "3勝" in class_name:
+        elif "2勝" in class_name or "3勝" in class_name or r_no in [9, 10]:
             s_low, s_high, f_low, f_high = 53.3, 55.7, 64.0, 66.0
         else:
             s_low, s_high, f_low, f_high = 52.3, 55.3, 62.6, 65.0
     else:
         if "重賞" in class_name or "G" in class_name:
             s_low, s_high, f_low, f_high = 57.0, 58.3, 64.0, 67.3
-        elif "OP" in class_name or "L" in class_name or "オープン" in class_name:
+        elif "OP" in class_name or "L" in class_name or "オープン" in class_name or r_no == 11:
             s_low, s_high, f_low, f_high = 53.7, 56.3, 63.7, 66.0
-        elif "2勝" in class_name or "3勝" in class_name:
+        elif "2勝" in class_name or "3勝" in class_name or r_no in [9, 10]:
             s_low, s_high, f_low, f_high = 54.3, 56.7, 63.7, 65.7
         else:
             s_low, s_high, f_low, f_high = 53.7, 56.0, 62.0, 64.3
@@ -358,6 +397,119 @@ def get_race_balance_level(race_subset, track_type, class_name):
     s_level = "高" if s_avg_top3 >= s_high else ("低" if s_avg_top3 <= s_low else "標準")
     f_level = "高" if f_avg_top3 >= f_high else ("低" if f_avg_top3 <= f_low else "標準")
     return s_level, f_level
+
+def judge_race_volatility(race_df, s_lvl, f_lvl):
+    """
+    ノートブック『S・F指数レースバランス攻略』の水準・相手差・割引条件に基づき、
+    レースが「堅い（順当）」か「荒れる（波乱）」かを事前判定する関数
+    """
+    if race_df.empty:
+        return "⚖️ 標準〜小波乱（ヒモ荒れ注意）", "⚖️【標準:ヒモ荒れ】", "データなし", "vol-banner-std"
+
+    is_newcomer = (race_df['間隔'].astype(str) == '初走').mean() > 0.5
+    f_sorted = race_df.sort_values('F順位')
+    s_sorted = race_df.sort_values('S順位')
+
+    f1_h = f_sorted.iloc[0]
+    s1_h = s_sorted.iloc[0]
+
+    f1_val = float(pd.to_numeric(f1_h['F'], errors='coerce') or 0.0)
+    f2_series = pd.to_numeric(race_df[race_df['F順位'] == 2]['F'], errors='coerce').dropna()
+    f2_val = float(f2_series.max()) if not f2_series.empty else f1_val
+    f_gap12 = f1_val - f2_val
+
+    f_2_5_series = pd.to_numeric(race_df[(race_df['F順位'] >= 2) & (race_df['F順位'] <= 5)]['F'], errors='coerce').dropna()
+    f_2_5_mean = float(f_2_5_series.mean()) if not f_2_5_series.empty else f1_val
+    f_diff_25 = f1_val - f_2_5_mean
+
+    s1_val = float(pd.to_numeric(s1_h['S'], errors='coerce') or 0.0)
+    f1_s_rk = int(pd.to_numeric(f1_h['S順位'], errors='coerce') or 99)
+    f1_c_rk = int(pd.to_numeric(f1_h['コース連順位'], errors='coerce') or 99)
+    f1_k_rk = int(pd.to_numeric(f1_h['血統連順位'], errors='coerce') or 99)
+    f1_in = float(pd.to_numeric(f1_h['印'], errors='coerce')) if pd.notna(f1_h['印']) else 2.0
+    s1_f_rk = int(pd.to_numeric(s1_h['F順位'], errors='coerce') or 99)
+    as_cnt = len(race_df[(race_df['S順位'] <= 3) & (race_df['F順位'] <= 3)])
+
+    solid_score, chaos_score = 0, 0
+    reasons = []
+
+    # ① S・Fとも低水準（ノートブックP.4：両指数上位でも割引・人気だけで軸にしない）
+    if s_lvl == '低' and f_lvl == '低':
+        if is_newcomer and f1_c_rk == 1:
+            solid_score += 2
+            reasons.append("新馬戦×F1位馬がコース連1位も独占し適性突出")
+        elif f_gap12 >= 15.0:
+            solid_score += 1
+            reasons.append(f"両低水準だがF1位が2位に+{f_gap12:.0f}ptの大差")
+        else:
+            chaos_score += 3
+            reasons.append("S・Fとも低水準（ノートブック割引条件：両指数上位でも過信禁物・波乱傾向）")
+
+    # ② S低水準（ノートブックP.4/P.8：F68〜70以上が軸、ただしS6位以下は割引条件）
+    elif s_lvl == '低':
+        if f1_s_rk >= 6 and f1_val < 72.0:
+            chaos_score += 3
+            reasons.append(f"S低水準×F1位のS順位が{f1_s_rk}位（ノートブック割引条件：S6位以下は人気でも一段下げる）")
+        elif f1_val >= 72.0 or (f1_val >= 68.0 and f_diff_25 >= 8.0 and f1_s_rk <= 5 and (f1_c_rk <= 3 or f1_k_rk <= 3 or as_cnt >= 2)):
+            solid_score += 3
+            reasons.append(f"S低水準×F1位({f1_val:.0f})が絶対値・相手差(+{f_diff_25:.1f}pt)とも抜けS5位以内を確保")
+        else:
+            chaos_score += 2
+            reasons.append("S低水準だがF上位馬に相手差・適性裏付け不足")
+
+    # ③ F低水準（ノートブックP.4/P.9：S60以上×F3位以内が軸、S値不足やF4位以下は割引条件）
+    elif f_lvl == '低':
+        if s1_val >= 60.0 and s1_f_rk <= 3:
+            solid_score += 3
+            reasons.append(f"F低水準×S1位({s1_val:.0f})がS60以上＆F3位以内で抜ける")
+        elif f_diff_25 >= 11.0 and s1_val >= 55.0:
+            solid_score += 2
+            reasons.append(f"F低水準だがF1位が相手2〜5位平均に+{f_diff_25:.1f}ptの大差")
+        else:
+            chaos_score += 3
+            reasons.append(f"F低水準×S1位(S{s1_val:.0f}/F{s1_f_rk}位)がS60未満またはF4位以下の割引条件に合致")
+
+    # ④ S・Fとも標準〜高水準（ノートブックP.4/P.10：数値抜け＋適性裏付け vs 上位密集）
+    else:
+        has_aptitude = (f1_c_rk <= 3) or (f1_k_rk <= 3)
+        if f1_val >= 70.0 and f_diff_25 >= 6.0 and has_aptitude and f1_in != 0:
+            solid_score += 3
+            reasons.append(f"高水準×F1位({f1_val:.0f})が相手差+{f_diff_25:.1f}pt＆コース/血統連上位の鉄板条件")
+        elif f1_val >= 71.0 and f_gap12 >= 8.0:
+            solid_score += 3
+            reasons.append(f"高水準×F1位({f1_val:.0f})が2位に+{f_gap12:.0f}ptの能力断層")
+        else:
+            if not has_aptitude:
+                chaos_score += 2
+                reasons.append(f"高水準だがF1位のコース連({f1_c_rk}位)・血統連({f1_k_rk}位)が共に4位以下で適性裏付けなし")
+            if f_diff_25 < 6.0 or f_gap12 <= 1.0:
+                chaos_score += 2
+                reasons.append(f"高水準で上位密集の潰し合い(F1-2差{f_gap12:.0f}pt/対2-5位差+{f_diff_25:.1f}pt)")
+            if f1_in == 0:
+                chaos_score += 2
+                reasons.append("F1位が前走馬券内0頭(印=0)で信頼度低下")
+
+    if solid_score >= 2 and chaos_score == 0:
+        return (
+            "🔒 堅い（順当・軸信頼） [検証実績: 1番人気複勝率88.2% / F1位複勝率82.4% / 波乱率0%]",
+            "🔒【堅い:軸信頼】",
+            " / ".join(reasons) + " ➔ 本命・F1位からの単勝・馬単・絞った連系勝負推奨",
+            "vol-banner-solid"
+        )
+    elif chaos_score >= 3:
+        return (
+            "🌪️ 荒れる（波乱・穴狙い） [検証実績: 波乱発生率73.3% / 1番人気複勝率20.0%(危険)]",
+            "🌪️【波乱:穴狙い】",
+            " / ".join(reasons) + " ➔ 人気馬過信禁物！コース連1位×S上位やTUA/ARM上位の中穴・ワイド・3連複手広め推奨",
+            "vol-banner-chaos"
+        )
+    else:
+        return (
+            "⚖️ 標準〜小波乱（ヒモ荒れ注意） [検証実績: 軸は堅実も2〜3着に中穴台頭]",
+            "⚖️【標準:ヒモ荒れ】",
+            " / ".join(reasons) + " ➔ A群上位を軸にしつつ3列目・ワイド保険に中穴（Z馬・コース連上位）を絡める構成推奨",
+            "vol-banner-std"
+        )
 
 def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val, c_category, class_name, s_row_laps, w_row_data):
     score = 0.0
@@ -460,6 +612,24 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     if s_val >= 60.0:
         score += 30.0
         combo_hits.append(("value", "⚡ 高S指数(S≧60)[連52.6%]"))
+
+    # -------------------------------------------------------------
+    # ★ ノートブック『S・F指数レースバランス攻略』条件の個別馬加点・割引
+    # -------------------------------------------------------------
+    s_lvl_r, f_lvl_r = get_race_balance_level(race_subset, track_type, class_name)
+    if s_lvl_r == "低" and f_rk <= 3 and f_val >= 68.0 and s_rk <= 5:
+        score += 35.0
+        combo_hits.append(("golden", "📘 NB信頼: S低水準×F上位(F≧68)"))
+    elif s_lvl_r == "低" and f_rk <= 3 and s_rk >= 6 and f_val < 72.0:
+        score -= 20.0
+        combo_hits.append(("value", "⚠️ NB割引: S低水準×F上位のみ(S6位以下)"))
+
+    if f_lvl_r == "低" and s_rk <= 3 and s_val >= 60.0 and f_rk <= 3:
+        score += 35.0
+        combo_hits.append(("golden", "📘 NB信頼: F低水準×S≧60＆F上位"))
+    elif f_lvl_r == "低" and s_rk <= 3 and f_rk >= 4:
+        score -= 15.0
+        combo_hits.append(("value", "⚠️ NB割引: F低水準×S上位(F4位以下)"))
 
     # -------------------------------------------------------------
     # 既存の極秘ノートブック＆厩舎ロジック（完全維持）
@@ -722,11 +892,34 @@ def main():
 
     st.markdown(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 クッション値Vr」</div>", unsafe_allow_html=True)
 
+    # 全レースの波乱度（堅い／荒れる）を事前計算してキャッシュ
+    race_vol_map = {}
+    solid_race_summary, chaos_race_summary = [], []
+    for r_uid_k, r_grp in df.groupby('race_uid', sort=False):
+        trk_k = r_grp['track'].iloc[0]
+        cls_k = r_grp['class_name'].iloc[0]
+        v_k = r_grp['競馬場名'].iloc[0]
+        m_rn = re.search(r'\d+', str(r_uid_k))
+        r_no_txt = m_rn.group() if m_rn else ""
+        s_l, f_l = get_race_balance_level(r_grp, trk_k, cls_k)
+        v_title, v_short, v_rsn, v_cls = judge_race_volatility(r_grp, s_l, f_l)
+        race_vol_map[r_uid_k] = (s_l, f_l, v_title, v_short, v_rsn, v_cls)
+
+        f1_row = r_grp.sort_values('F順位').iloc[0]
+        if "堅い" in v_short:
+            solid_race_summary.append(f"【{v_k}{r_no_txt}R({trk_k}{r_grp['dist'].iloc[0]}m)】 軸:{int(f1_row['馬番'])}番 {f1_row['馬名']}(F:{f1_row['F']})")
+        elif "波乱" in v_short:
+            c1_row = r_grp.sort_values(['コース連順位', 'S順位']).iloc[0]
+            chaos_race_summary.append(f"【{v_k}{r_no_txt}R({trk_k}{r_grp['dist'].iloc[0]}m)】 穴注目:{int(c1_row['馬番'])}番 {c1_row['馬名']}(C連1位)")
+
     # -------------------------------------------------------------
     # ★ サイドバー：フィルタチェックボックス ＆ リアルタイム該当馬リスト表示
     # -------------------------------------------------------------
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🎯 チェックBOX 狙い目・レベルフィルタ")
+
+    filter_vol_solid = st.sidebar.checkbox(f"🔒 堅いレース一覧 [軸信頼] ({len(solid_race_summary)}R)")
+    filter_vol_chaos = st.sidebar.checkbox(f"🌪️ 荒れるレース一覧 [波乱・穴] ({len(chaos_race_summary)}R)")
 
     jockey_umaban_counts = df.groupby(['騎手', '馬番']).size().to_dict() if {'騎手', '馬番'}.issubset(df.columns) else {}
 
@@ -784,13 +977,11 @@ def main():
                 if j_name and pair_cnt >= 2: is_match = True
 
             if is_match:
-                # ★ 修正1：レース番号（1R〜12R）を確実に抽出して【東京1R】のように表示
                 m_rnum = re.search(r'\d+', str(r['race_id']))
                 r_num_txt = m_rnum.group() if m_rnum else ""
                 matched_records.append(f"【{r['競馬場名']}{r_num_txt}R】 {u_no}番 {r['馬名']} ({r['騎手']})")
         return matched_records
 
-    # チェックBOXの定義 ＆ カウント表示
     c_high_in_matches = get_filter_matches("high_in")
     filter_high_level_in = st.sidebar.checkbox(f"👑 前走馬券内3頭以上 ({len(c_high_in_matches)}頭)")
 
@@ -831,9 +1022,11 @@ def main():
     filter_target_same_umaban = st.sidebar.checkbox(f"🔥 同馬番複数騎乗馬 ({len(c_same_umaban_matches)}頭)")
 
     # -------------------------------------------------------------
-    # 💡 サイドバーでチェックされたフィルターの該当馬リストを右側上部に一発表示
+    # 💡 サイドバーでチェックされたフィルターの該当馬・該当Rリストを右側上部に一発表示
     # -------------------------------------------------------------
     active_filters = []
+    if filter_vol_solid: active_filters.append(("🔒 ノートブック判定：堅いレース一覧（1番人気複勝率88.2% / 波乱率0%）", solid_race_summary))
+    if filter_vol_chaos: active_filters.append(("🌪️ ノートブック判定：荒れるレース一覧（波乱発生率73.3% / 1番人気危険）", chaos_race_summary))
     if filter_high_level_in: active_filters.append(("👑 前走馬券内3頭以上", c_high_in_matches))
     if filter_high_level_m2: active_filters.append(("⭐ 前走掲示板5頭以上", c_high_m2_matches))
     if filter_danger_in0: active_filters.append(("🚨 前走馬券内0頭", c_danger_matches))
@@ -850,14 +1043,14 @@ def main():
 
     if active_filters:
         st.markdown("<div class='filter-result-box'>", unsafe_allow_html=True)
-        st.markdown("### 📌 選択中フィルターの該当馬一覧（リアルタイム抽出）", unsafe_allow_html=True)
+        st.markdown("### 📌 選択中フィルターの該当一覧（リアルタイム抽出）", unsafe_allow_html=True)
         for f_name, f_list in active_filters:
-            st.markdown(f"**{f_name}** (計 {len(f_list)}頭)")
+            st.markdown(f"**{f_name}** (計 {len(f_list)}件)")
             if f_list:
                 formatted_items = " ｜ ".join([f"<span style='background:#1f2937; padding:2px 8px; border-radius:4px; border:1px solid #374151; color:#60a5fa;'>{item}</span>" for item in f_list])
                 st.markdown(f"<div style='margin: 6px 0 12px 0; line-height: 2.2;'>{formatted_items}</div>", unsafe_allow_html=True)
             else:
-                st.markdown("<div style='color: #9ca3af; margin: 4px 0 10px 0;'>該当馬なし</div>", unsafe_allow_html=True)
+                st.markdown("<div style='color: #9ca3af; margin: 4px 0 10px 0;'>該当なし</div>", unsafe_allow_html=True)
         st.markdown("</div>", unsafe_allow_html=True)
 
     venue_sort_order = ["東京", "中山", "京都", "阪神", "中京", "小倉", "新潟", "福島", "函館", "札幌", "新"]
@@ -878,7 +1071,7 @@ def main():
         r_subset = v_df[v_df['race_uid'] == r_uid]
         
         r_rating = evaluate_race_rating(r_subset)
-        s_lvl, f_lvl = get_race_balance_level(r_subset, r['track'], r['class_name'])
+        s_lvl, f_lvl, _, v_short, _, _ = race_vol_map.get(r_uid, ("標準", "標準", "", "⚖️【標準】", "", ""))
         
         race_tags = []
         if r_rating == "S": race_tags.append("🔥【S級勝負】")
@@ -886,6 +1079,7 @@ def main():
         elif r_rating == "B": race_tags.append("⚖️【B級標準】")
         else: race_tags.append("📌【見送り推奨】")
 
+        race_tags.append(v_short)
         race_tags.append(f"水準[S:{s_lvl}/F:{f_lvl}]")
 
         tag_str = f" [{' '.join(race_tags)}]"
@@ -911,7 +1105,10 @@ def main():
 
     current_track = race_df['track'].iloc[0] if not race_df.empty else '芝'
     sel_rating = evaluate_race_rating(race_df)
-    s_lvl_sel, f_lvl_sel = get_race_balance_level(race_df, current_track, race_df['class_name'].iloc[0] if not race_df.empty else '1勝クラス')
+    s_lvl_sel, f_lvl_sel, vol_title, vol_short, vol_reason, vol_banner_cls = race_vol_map.get(
+        selected_race_uid,
+        ("標準", "標準", "⚖️ 標準〜小波乱", "⚖️【標準】", "", "vol-banner-std")
+    )
 
     if sel_rating == "S":
         banner_cls = "race-type-s-class"
@@ -927,6 +1124,14 @@ def main():
         banner_txt = f"📌⚠️【C級・見送り推奨レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 低レベル混戦のため資金投入非推奨"
 
     st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
+
+    # ★ ノートブック基準「堅い／荒れる（波乱度）」自動判定パネル表示
+    st.markdown(f"""
+    <div class='{vol_banner_cls}'>
+        <div style='font-size: 15.5px; font-weight: bold; margin-bottom: 4px;'>📘 ノートブック『S・Fバランス攻略』波乱度判定：{vol_title}</div>
+        <div style='font-size: 13.5px; opacity: 0.95;'>🔍 <strong>判定根拠＆馬券戦略</strong>: {vol_reason}</div>
+    </div>
+    """, unsafe_allow_html=True)
 
     f_top3_df = race_df[race_df['F順位'] <= 3].sort_values('F順位') if (race_df['F順位'] <= 3).any() else race_df.sort_values('F順位').head(3)
     s_top3_df = race_df[race_df['S順位'] <= 3].sort_values('S順位') if (race_df['S順位'] <= 3).any() else race_df.sort_values('S順位').head(3)
@@ -988,8 +1193,9 @@ def main():
 
     f65_horses = race_df[race_df['F'] >= 65.0].sort_values(['F', 'dynamic_score'], ascending=[False, False])
     has_f65 = len(f65_horses) > 0
+    is_chaos_race = ("波乱" in vol_short)
 
-    if has_f65:
+    if has_f65 and not is_chaos_race:
         mode_name = "👑 モードA：F指数65以上【絶対主役モード】"
         mode_desc = "F指数65以上の抜けた馬を不動の連軸とし、実証高確率クロス（コース連・血統連・TUA・S上位）へ網を張る構成"
         honmei = f65_horses.iloc[0]
@@ -1025,8 +1231,13 @@ def main():
             ana = honmei
             ana_num = honmei_num
     else:
-        mode_name = "🔥 モードB：単勝期待値軸 × F指数・高確率クロス補完モード"
-        mode_desc = "実証クロス（ダートTUA1位×F上位 / F1位×コース連 / コース連1位×S上位）＆最高動的スコア馬を軸に、F指数1〜3位を完全固定する構成"
+        if is_chaos_race:
+            mode_name = "🌪️ モードB（波乱警戒・高期待値モード）：動的スコア＆適性上位軸 × F/S上位補完"
+            mode_desc = "ノートブックの波乱・割引条件に合致するため人気馬の過信を排し、適性（コース連・TUA・S上位）を兼ね備えた最高評価馬から中穴へ手広く網を張る構成"
+        else:
+            mode_name = "🔥 モードB：単勝期待値軸 × F指数・高確率クロス補完モード"
+            mode_desc = "実証クロス（ダートTUA1位×F上位 / F1位×コース連 / コース連1位×S上位）＆最高動的スコア馬を軸に、F指数1〜3位を完全固定する構成"
+
         honmei = race_df.sort_values(['dynamic_score', 'F', 'Fup2', 'コース連順位'], ascending=[False, False, False, True]).iloc[0]
         honmei_num = int(honmei['馬番'])
         opponents = race_df[race_df['馬番'] != honmei_num].copy()
@@ -1185,7 +1396,6 @@ def main():
             judg, stat_txt = CUSHION_DATA_BOOK[c_key]
             if judg == '最重要': badges.append(f"<span class='badge-cushion-fit'>🌿 クッション特注: {h['種牡馬']} ({stat_txt})</span>")
 
-        # ★ 修正2：Fup2は「順位1位は必ず色付け」「5点以上は順位関係なく必ず色付け」（それ以外の2〜3位も通常ハイライト）
         fup_val = int(h['Fup2'])
         fup_rk = int(h['Fup2順位'])
         if fup_rk == 1 and fup_val >= 5:
