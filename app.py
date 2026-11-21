@@ -11,6 +11,11 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+def render_html(html_str):
+    """空行・過剰インデントによるMarkdownコードブロック誤爆を完全に防ぐHTML描画ヘルパー"""
+    cleaned = "\n".join(line.strip() for line in html_str.splitlines() if line.strip())
+    st.markdown(cleaned, unsafe_allow_html=True)
+
 st.markdown("""
 <style>
     div[data-baseweb="select"] input {
@@ -184,7 +189,7 @@ st.markdown("""
     .badge-course-place { display: inline-flex; align-items: center; background: linear-gradient(135deg, #047857 0%, #10b981 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #6ee7b7; margin-right: 4px; box-shadow: 0 0 8px rgba(16, 185, 129, 0.5); width: auto; height: auto; }
     .badge-course-ana { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #8b5cf6 100%); color: #fff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c4b5fd; margin-right: 4px; box-shadow: 0 0 8px rgba(139, 92, 246, 0.5); width: auto; height: auto; }
 
-    /* ★ 新規追加：新・同馬番狙い目（調教CSV連動）バッジ */
+    /* 新・同馬番狙い目（調教CSV連動）バッジ */
     .badge-new-same-hit { display: inline-flex; align-items: center; background: linear-gradient(135deg, #be123c 0%, #f59e0b 100%); color: #ffffff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 6px; border: 2px solid #fef08a; margin-right: 5px; box-shadow: 0 0 12px rgba(245, 158, 11, 0.75); width: auto; height: auto; }
     .badge-new-same-axis { display: inline-flex; align-items: center; background: linear-gradient(135deg, #0f766e 0%, #0284c7 100%); color: #ffffff; font-weight: 900; font-size: 12px; padding: 2px 9px; border-radius: 5px; border: 1px solid #7dd3fc; margin-right: 4px; box-shadow: 0 0 8px rgba(14, 165, 233, 0.55); width: auto; height: auto; }
 
@@ -429,7 +434,7 @@ def build_training_summaries(sakaro_raw, wood_raw):
     return sakaro_latest, sakaro_main_accel, wood_latest, wood_has, wood_best_l1, wood_main_accel_11
 
 # ==============================================================
-# ★ 新規追加：新・同馬番騎手狙い目（3日間検証：調教CSV連動）判定関数
+# 新・同馬番騎手狙い目（3日間検証：調教CSV連動）判定関数
 # ==============================================================
 def evaluate_new_same_umaban_targets(r, same_umaban_cnt):
     """
@@ -684,7 +689,7 @@ def calc_empirical_place_rate(r, same_umaban_cnt=1):
     win_rk, _, win_fuku, _ = evaluate_top3_win_pattern(r)
     if win_rk > 0: rates.append(win_fuku)
 
-    # ★ 新・同馬番狙い目の実証複勝率を反映
+    # 新・同馬番狙い目の実証複勝率を反映
     if same_umaban_cnt >= 2:
         w_best_rk = pd.to_numeric(r.get('ウッド最速L1順位', np.nan), errors='coerce')
         if pd.notnull(w_best_rk) and int(w_best_rk) == 1:
@@ -785,7 +790,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     for lbl_text, lbl_type in c_labels:
         combo_hits.append((lbl_type, lbl_text))
 
-    # ★ 新・同馬番騎手狙い目（調教CSV連動・3回以上）の判定と動的スコア加算 ★
+    # 新・同馬番騎手狙い目（調教CSV連動・3回以上）の判定と動的スコア加算
     new_same_pts, is_same_strike, is_same_axis, same_labels, same_short_tags = evaluate_new_same_umaban_targets(r, same_umaban_cnt)
     score += new_same_pts
     combo_hits.extend(same_labels)
@@ -950,7 +955,7 @@ def main():
                 continue
 
     if df_raw.empty:
-        st.markdown("<div class='race-type-banner race-type-c-class'>⚠️ マスターCSVが見つかりません。サイドバーからCSVを指定してください。</div>", unsafe_allow_html=True)
+        render_html("<div class='race-type-banner race-type-c-class'>⚠️ マスターCSVが見つかりません。サイドバーからCSVを指定してください。</div>")
         st.stop()
 
     if '日付' in df_raw.columns:
@@ -1025,11 +1030,9 @@ def main():
         h_clean = clean_str(horse)
         t_clean = clean_str(trainer)
 
-        # 調教師名一致優先、見つからなければ馬名のみでフォールバック
         s_row = sakaro_dict.get((h_clean, t_clean), sakaro_dict.get(h_clean, pd.Series()))
         w_row = wood_dict.get((h_clean, t_clean), wood_dict.get(h_clean, pd.Series()))
 
-        # 坂路4F全体時計は Time1（なければ Time4）を使用
         s_4f_val = pd.to_numeric(s_row.get('Time1', s_row.get('Time4', np.nan)), errors='coerce') if isinstance(s_row, pd.Series) and not s_row.empty else np.nan
         s_l2_val = pd.to_numeric(s_row.get('Lap2', np.nan), errors='coerce') if isinstance(s_row, pd.Series) and not s_row.empty else np.nan
         s_l1_val = pd.to_numeric(s_row.get('Lap1', np.nan), errors='coerce') if isinstance(s_row, pd.Series) and not s_row.empty else np.nan
@@ -1076,7 +1079,7 @@ def main():
     track_cond = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重", "不良"], index=0)
     cushion_val = st.sidebar.slider("当日クッション値", min_value=6.0, max_value=12.5, value=9.5, step=0.1, format="%.1f")
 
-    st.markdown(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 完全版・新同馬番統合Vr」</div>", unsafe_allow_html=True)
+    render_html(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 完全版・新同馬番統合Vr」</div>")
 
     race_vol_map = {}
     solid_race_summary, chaos_race_summary = [], []
@@ -1264,16 +1267,16 @@ def main():
     if filter_target_same_umaban: active_filters.append(("🔥 同馬番複数騎乗馬", c_same_umaban_matches))
 
     if active_filters:
-        st.markdown("<div class='filter-result-box'>", unsafe_allow_html=True)
-        st.markdown("### 📌 選択中フィルターの該当一覧（リアルタイム抽出）", unsafe_allow_html=True)
+        filter_blocks = ["<div class='filter-result-box'>", "<h3 style='margin-top:0; color:#f8fafc;'>📌 選択中フィルターの該当一覧（リアルタイム抽出）</h3>"]
         for f_name, f_list in active_filters:
-            st.markdown(f"**{f_name}** (計 {len(f_list)}件)")
+            filter_blocks.append(f"<div style='font-weight:bold; color:#e2e8f0; margin-top:6px;'>{f_name} (計 {len(f_list)}件)</div>")
             if f_list:
                 formatted_items = " ｜ ".join([f"<span style='background:#1f2937; padding:2px 8px; border-radius:4px; border:1px solid #374151; color:#60a5fa;'>{item}</span>" for item in f_list])
-                st.markdown(f"<div style='margin: 6px 0 12px 0; line-height: 2.2;'>{formatted_items}</div>", unsafe_allow_html=True)
+                filter_blocks.append(f"<div style='margin: 6px 0 12px 0; line-height: 2.2;'>{formatted_items}</div>")
             else:
-                st.markdown("<div style='color: #9ca3af; margin: 4px 0 10px 0;'>該当なし</div>", unsafe_allow_html=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+                filter_blocks.append("<div style='color: #9ca3af; margin: 4px 0 10px 0;'>該当なし</div>")
+        filter_blocks.append("</div>")
+        render_html("\n".join(filter_blocks))
 
     venue_sort_order = ["東京", "中山", "京都", "阪神", "中京", "小倉", "新潟", "福島", "函館", "札幌", "新"]
     existing_venues = [v for v in venue_sort_order if v in df['競馬場名'].unique()]
@@ -1363,8 +1366,8 @@ def main():
         banner_cls = "race-type-c-class"
         banner_txt = f"📌⚠️【C級・見送り推奨レース】レース水準[S:{s_lvl_sel}/F:{f_lvl_sel}] 低レベル混戦のため資金投入非推奨"
 
-    st.markdown(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>", unsafe_allow_html=True)
-    st.markdown(f"<div class='{vol_banner_cls}'><div style='font-size: 15.5px; font-weight: bold; margin-bottom: 4px;'>📘 ノートブック『S・Fバランス攻略』波乱度判定：{vol_title}</div><div style='font-size: 13.5px; opacity: 0.95;'>🔍 <strong>判定根拠＆馬券戦略</strong>: {vol_reason}</div></div>", unsafe_allow_html=True)
+    render_html(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>")
+    render_html(f"<div class='{vol_banner_cls}'><div style='font-size: 15.5px; font-weight: bold; margin-bottom: 4px;'>📘 ノートブック『S・Fバランス攻略』波乱度判定：{vol_title}</div><div style='font-size: 13.5px; opacity: 0.95;'>🔍 <strong>判定根拠＆馬券戦略</strong>: {vol_reason}</div></div>")
 
     safe_race_df = race_df[race_df['印'] > 0].copy() if filter_danger_in0 else race_df.copy()
     if safe_race_df.empty: safe_race_df = race_df.copy()
@@ -1377,7 +1380,7 @@ def main():
     course_place_nums = safe_race_df[safe_race_df['course_place']]['馬番'].tolist()
     course_ana_nums = safe_race_df[safe_race_df['course_ana']]['馬番'].tolist()
 
-    # ★ 新・同馬番狙い目の該当馬抽出（第3の馬券＆ハイブリッド連動）
+    # 新・同馬番狙い目の該当馬抽出（第3の馬券＆ハイブリッド連動）
     new_same_strike_df = safe_race_df[safe_race_df['same_strike']].sort_values(['dynamic_score', 'emp_place_rate'], ascending=[False, False])
     new_same_axis_df = safe_race_df[safe_race_df['same_axis']].sort_values(['emp_place_rate', 'dynamic_score'], ascending=[False, False])
     new_same_strike_nums = new_same_strike_df['馬番'].tolist()
@@ -1447,7 +1450,7 @@ def main():
             "</div>"
         )
 
-    st.markdown(f"""
+    render_html(f"""
     <div class='recom-block' style='border: 2px solid #3b82f6;'>
         <h4 style='color: #60a5fa; margin-top: 0;'>🎯 第3の馬券パターン：特注コース＆新同馬番＆馬券内率順フォーメーション</h4>
         {new_same_html_block}
@@ -1471,7 +1474,7 @@ def main():
             <div style='margin-top: 6px; font-size: 12px; color: #9ca3af;'>※波乱判定時は【3連複/馬連 5〜6頭BOX】({", ".join(map(str, ranked_prob_nums[:6]))})への切り替えを推奨</div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
     # ハイブリッド馬券パック（期待値軸 × 保険網完備）
     honmei = safe_race_df.sort_values(['dynamic_score', 'emp_place_rate', 'F順位'], ascending=[False, False, True]).iloc[0]
@@ -1506,7 +1509,7 @@ def main():
 
     third_row = list(set(second_row + [n for n in (turf_s_fup_nums + same_f_nums + course_ana_nums + new_same_all_nums) if n != honmei_num] + opponents.sort_values('コース連順位').head(2)['馬番'].tolist() + opponents.sort_values('血統連順位').head(2)['馬番'].tolist()))
 
-    st.markdown(f"""
+    render_html(f"""
     <div class='recom-panel-go'>
         <div class='recom-title-go'>🔥 ハイブリッド馬券パック（期待値軸 × 保険網完備）</div>
         <div class='recom-row'>🥇 <strong>本命・連軸</strong>: <span class='recom-val-num'>{honmei_num}番 {honmei['馬名']}</span>（F指数: {honmei['F']} / 実証複勝率: {honmei['emp_place_rate']:.1f}% / 動的スコア: {honmei['dynamic_score']:.1f}）</div>
@@ -1522,7 +1525,7 @@ def main():
             <li><strong>【第4の網：万馬券網】</strong> 3連単F: <span style='color: #fbbf24; font-weight: bold;'>{honmei_num}</span> ⇄ <span style='color: #38bdf8;'>{taikou_num}</span> → <span style='color: #a78bfa;'>{", ".join(map(str, sorted(third_row)))}</span></li>
         </ul>
     </div>
-    """, unsafe_allow_html=True)
+    """)
 
     # カルテ表示
     display_df = race_df.copy()
@@ -1664,7 +1667,7 @@ def main():
         r_num_str = m_uid.group() if m_uid else ''
         race_place_num_str = f"【{chosen_venue}{r_num_str}R】" if r_num_str else f"【{chosen_venue}】"
 
-        st.markdown(f"""
+        render_html(f"""
         <div class='horse-card'>
             <div class='horse-card-header'>
                 <span class='race-badge-title'>{race_place_num_str} {u_no}番</span>
@@ -1688,7 +1691,7 @@ def main():
                 <li><strong>総合動的スコア</strong>: <span style='color: #facc15; font-weight: bold; font-size: 15px;'>{h['dynamic_score']:.1f}点</span> ｜ <strong>実証馬券内率</strong>: <span style='color: #38bdf8; font-weight: bold; font-size: 14.5px;'>{h['emp_place_rate']:.1f}%</span></li>
             </ul>
         </div>
-        """, unsafe_allow_html=True)
+        """)
 
 if __name__ == "__main__":
     main()
