@@ -6,7 +6,7 @@ import glob
 import re
 
 st.set_page_config(
-    page_title="競馬予想10 完全版 - 2026年間実証ランキング＆AS交差統合Vr",
+    page_title="競馬予想10 完全版 - 2026年間実証ランキング＆完全消し自動判定Vr",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -173,6 +173,33 @@ st.markdown("""
         border-radius: 8px;
         margin-bottom: 14px;
         border: 1px solid #30363d;
+        transition: opacity 0.2s ease;
+    }
+    /* 主要5指数0個（かつN印なし・4〜9番人気）を薄く表示 */
+    .horse-card-fade {
+        background-color: #111621;
+        border-left: 5px solid #4b5563;
+        padding: 12px 16px;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        border: 1px solid #272e3a;
+        opacity: 0.45;
+    }
+    .horse-card-fade:hover {
+        opacity: 0.85;
+    }
+    /* 10番人気以下×主要5指数0個（かつN印なし）：完全消し表示 */
+    .horse-card-cut {
+        background-color: #0d1117;
+        border-left: 5px solid #374151;
+        padding: 10px 16px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        border: 1px dashed #374151;
+        opacity: 0.30;
+    }
+    .horse-card-cut:hover {
+        opacity: 0.78;
     }
     .horse-card-header {
         display: flex;
@@ -223,6 +250,11 @@ st.markdown("""
     .badge-rescued { display: inline-flex; align-items: center; background-color: #581c87; color: #f0abfc; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #c084fc; margin-right: 4px; width: auto; height: auto; }
     .badge-as-intersect { display: inline-flex; align-items: center; background: linear-gradient(135deg, #7c3aed 0%, #4c1d95 100%); color: #f5f3ff; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #a78bfa; margin-right: 4px; width: auto; height: auto; }
     .badge-top3-win { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b91c1c 0%, #7c2d12 50%, #d97706 100%); color: #ffffff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 4px; border: 2px solid #fef08a; margin-right: 5px; box-shadow: 0 0 12px rgba(250,204,21,0.8); width: auto; height: auto; }
+
+    /* 完全消し・薄表示・例外残しバッジ */
+    .badge-complete-cut { display: inline-flex; align-items: center; background: #1f2937; color: #9ca3af; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px dashed #6b7280; margin-right: 4px; }
+    .badge-zero5-fade { display: inline-flex; align-items: center; background: #374151; color: #d1d5db; font-weight: bold; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #6b7280; margin-right: 4px; }
+    .badge-zero5-keep { display: inline-flex; align-items: center; background: linear-gradient(135deg, #0f766e 0%, #059669 100%); color: #ecfdf5; font-weight: 900; font-size: 12px; padding: 2px 8px; border-radius: 4px; border: 1px solid #6ee7b7; margin-right: 4px; }
 
     /* コース・距離別特注バッジ */
     .badge-course-win { display: inline-flex; align-items: center; background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%); color: #fff; font-weight: 900; font-size: 12.5px; padding: 3px 10px; border-radius: 6px; border: 2px solid #fca5a5; margin-right: 5px; box-shadow: 0 0 10px rgba(239, 68, 68, 0.7); width: auto; height: auto; }
@@ -699,6 +731,7 @@ def evaluate_course_specific_patterns(r, venue_name, track_type, dist_val):
 
 # ==============================================================
 # 2026年年間通算（3,030R・41,354頭）狙い目別 複勝率ランキング評価
+# ＝ 主要5指数0個の完全消し・例外残しも反映
 # ==============================================================
 def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     """
@@ -715,6 +748,7 @@ def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     c_rk = int(pd.to_numeric(r.get('コース連順位', 99), errors='coerce') or 99)
     k_rk = int(pd.to_numeric(r.get('血統連順位', 99), errors='coerce') or 99)
     in_v = float(pd.to_numeric(r.get('印', 2), errors='coerce') or 2.0)
+    pop = int(pd.to_numeric(r.get('人気順位', 99), errors='coerce') or 99)
     c_mark = clean_str(r.get('C(マーク)', '')).upper()
     trainer = clean_str(r.get('調教師', ''))
     track = r.get('track', '芝')
@@ -723,6 +757,19 @@ def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     is_ace = any(ac in trainer for ac in ACE_TRAINERS)
     is_cnzm = c_mark in ['C', 'N', 'Z', 'M']
     cnt5 = sum([1 for x in [f_rk, s_rk, fup_rk, arm_rk, tua_rk] if x <= 3])
+
+    # 主要5指数0個（17,018頭）の実証データを最優先判定
+    if cnt5 == 0:
+        if c_mark == 'N':
+            return 47.1, "例外残し:指数0×N印[複47.1%]", 0
+        if pop <= 3:
+            return 46.1, "例外残し:指数0×1〜3人気[複46.1%]", 0
+        if pop >= 10:
+            return 3.9, "完全消し:10人気以下×主5指数0個[複3.9%]", 0
+        elif pop >= 7:
+            return 12.1, "薄表示:7〜9人気×主5指数0個[複12.1%]", 0
+        else:
+            return 22.5, "薄表示:4〜6人気×主5指数0個[複22.5%]", 0
 
     hits = []
     if is_as and f_val >= 72.0: hits.append((71.5, "1位:AS交差×F≧72"))
@@ -756,7 +803,8 @@ def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
             hits.append((43.6, "特注:同馬番×W最速L1-1位[単265%]"))
 
     if not hits:
-        return 15.0, "該当なし", cnt5
+        base_by_cnt5 = {1: (19.3, "主5指数1個"), 2: (33.3, "主5指数2個"), 3: (41.3, "主5指数3個")}.get(cnt5, (15.0, "該当なし"))
+        return base_by_cnt5[0], base_by_cnt5[1], cnt5
 
     hits.sort(key=lambda x: x[0], reverse=True)
     top_rate, top_label = hits[0]
@@ -785,6 +833,13 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     weight = float(pd.to_numeric(str(r.get('前場体重', '480')).replace('kg', ''), errors='coerce') or 480.0)
     c_mark_str = clean_str(r.get('C(マーク)', '')).upper()
 
+    # 主要5指数（1〜3位）重なり数と「完全消し／薄表示／例外残し」判定
+    cnt5 = sum([1 for x in [f_rk, s_rk, fup_rk, arm_rk, tua_rk] if x <= 3])
+    is_zero5_n_keep = (cnt5 == 0) and (c_mark_str == 'N')
+    is_zero5_pop_keep = (cnt5 == 0) and (c_mark_str != 'N') and (pop <= 3)
+    is_complete_cut = (cnt5 == 0) and (c_mark_str != 'N') and (pop >= 10)
+    is_zero5_fade = (cnt5 == 0) and (c_mark_str != 'N') and (pop >= 4) and (not is_complete_cut)
+
     f_eval_label, _ = evaluate_f_index_strict(r, race_subset)
     if f_eval_label == "S評価": score += 60.0
     elif f_eval_label == "A評価": score += 40.0
@@ -811,6 +866,14 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     nb_hits, stable_hits, combo_hits = [], [], []
     is_as_cross = (f_rk <= 3) and (s_rk <= 3)
     is_ace_stbl = any(ac in trainer for ac in ACE_TRAINERS)
+
+    # 2026年年間実証に基づく「主要5指数重なり」の動的スコア再計算
+    if cnt5 >= 4 and f_rk == 1:
+        score += 45.0
+        combo_hits.append(("golden", "👑 主5重なり4個+×F1位 [年間複61.4%]"))
+    elif cnt5 >= 4:
+        score += 25.0
+        combo_hits.append(("value", f"⭐ 主5指数{cnt5}個重なり [年間複50.4%]"))
 
     top3_win_rk, _, _, top3_lbl = evaluate_top3_win_pattern(r)
     if top3_win_rk == 1: score += 85.0; combo_hits.append(("top3_win", top3_lbl))
@@ -904,29 +967,48 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     if k_rk <= 3: score += 20.0
     if b_rk <= 3: score += 30.0
 
-    is_sss = (f_val >= 65.0) and (arm_val >= 120.0) and (tua_val >= 200.0)
-    is_quad_crown = (f_rk <= 3) and (arm_rk <= 3) and (tua_rk <= 3) and (fup >= 5)
-    is_solid_axis = (f_rk == 1) and (fup >= 5)
-    is_kakugen = (fup == 7)
-    is_f65_top = (f_val >= 65.0) or (f_eval_label == "S評価")
-    has_strong_bonus = (
-        is_sss or is_quad_crown or is_solid_axis or is_kakugen or is_f65_top
-        or len(nb_hits) > 0 or len(stable_hits) > 0 or len(combo_hits) > 0
-        or (fup >= 6) or (arm_rk <= 2) or is_same_strike or is_same_axis
-    )
+    # ==============================================================
+    # 主要5指数0個（17,018頭検証）に基づく動的スコアの厳格再計算
+    # ==============================================================
+    if is_complete_cut:
+        # 10番人気以下 × 主要5指数0個（N印なし）：勝率0.7% / 複勝率3.9% → 大幅減点＆救済不可
+        score -= 80.0
+        is_rescued = False
+    elif is_zero5_fade:
+        # 4〜9番人気 × 主要5指数0個（N印なし）：薄表示対象 → 減点
+        score -= 35.0
+        is_rescued = False
+    else:
+        if is_zero5_n_keep:
+            score += 35.0  # 指数0個でもN印は複47.1%（平均7.7人気）
+        elif is_zero5_pop_keep:
+            score += 15.0  # 指数0個でも1〜3人気は複46.1%
 
-    is_rescued = has_strong_bonus
-    if not is_rescued:
-        if c_rk >= 6: score -= 10.0
-        if b_rk >= 6: score -= 5.0
-        if pop <= 3 and fup <= 1: score -= 15.0
+        is_sss = (f_val >= 65.0) and (arm_val >= 120.0) and (tua_val >= 200.0)
+        is_quad_crown = (f_rk <= 3) and (arm_rk <= 3) and (tua_rk <= 3) and (fup >= 5)
+        is_solid_axis = (f_rk == 1) and (fup >= 5)
+        is_kakugen = (fup == 7)
+        is_f65_top = (f_val >= 65.0) or (f_eval_label == "S評価")
+        has_strong_bonus = (
+            is_sss or is_quad_crown or is_solid_axis or is_kakugen or is_f65_top
+            or len(nb_hits) > 0 or len(stable_hits) > 0 or len(combo_hits) > 0
+            or (fup >= 6) or (arm_rk <= 2) or is_same_strike or is_same_axis
+            or is_zero5_n_keep or is_zero5_pop_keep
+        )
+        is_rescued = has_strong_bonus
+        if not is_rescued:
+            if c_rk >= 6: score -= 10.0
+            if b_rk >= 6: score -= 5.0
+            if pop <= 3 and fup <= 1: score -= 15.0
 
+    is_sss_flag = (f_val >= 65.0) and (arm_val >= 120.0) and (tua_val >= 200.0)
     emp_place_rate, annual_top_lbl, cnt5_val = evaluate_annual_2026_ranking(r, same_umaban_cnt=same_umaban_cnt)
 
     return (
-        score, is_rescued, is_sss, nb_hits, stable_hits, f_eval_label,
+        score, is_rescued, is_sss_flag, nb_hits, stable_hits, f_eval_label,
         combo_hits, top3_win_rk, emp_place_rate, annual_top_lbl, cnt5_val,
-        is_c_win, is_c_place, is_c_ana, is_same_strike, is_same_axis, same_short_tags
+        is_c_win, is_c_place, is_c_ana, is_same_strike, is_same_axis, same_short_tags,
+        is_complete_cut, is_zero5_fade, is_zero5_n_keep, is_zero5_pop_keep
     )
 
 def evaluate_race_rating(r_subset):
@@ -1109,7 +1191,7 @@ def main():
     track_cond = st.sidebar.selectbox("芝馬場状態", ["良", "稍重", "重", "不良"], index=0)
     cushion_val = st.sidebar.slider("当日クッション値", min_value=6.0, max_value=12.5, value=9.5, step=0.1, format="%.1f")
 
-    render_html(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 完全版・2026年間実証ランキング統合Vr」</div>")
+    render_html(f"<div class='date-header-badge'>📅 開催日: 2026年{race_date_str} | JRAデータ解析エンジン「競馬予想10 完全版・完全消し自動判定＆2026年間実証Vr」</div>")
 
     race_vol_map = {}
     solid_race_summary, chaos_race_summary = [], []
@@ -1136,6 +1218,7 @@ def main():
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🎯 チェックBOX 狙い目・レベルフィルタ")
 
+    hide_complete_cut = st.sidebar.checkbox("👻 完全消し馬（10人気以下×主5指数0個×N印なし）をカルテから隠す", value=False)
     filter_vol_solid = st.sidebar.checkbox(f"🔒 堅いレース一覧 [軸信頼] ({len(solid_race_summary)}R)")
     filter_vol_chaos = st.sidebar.checkbox(f"🌪️ 荒れるレース一覧 [波乱・穴] ({len(chaos_race_summary)}R)")
 
@@ -1222,7 +1305,6 @@ def main():
                 matched_records.append(f"【{r['競馬場名']}{r_num_txt}R】 {u_no}番 {r['馬名']} ({r['騎手']}){extra_tag}")
         return matched_records
 
-    # ① F1のAS交差馬の検索項目 ＋ ② 今まで通りのAS交差検索項目
     c_f1_as_matches = get_filter_matches("f1_as_cross")
     filter_f1_as_cross = st.sidebar.checkbox(f"🌟 F1のAS交差馬 (F1位×S1〜3位) ({len(c_f1_as_matches)}頭)")
 
@@ -1331,7 +1413,6 @@ def main():
     races_in_v = v_df[['race_uid', 'race_id', 'track', 'dist', 'class_name']].drop_duplicates('race_uid')
     races_sorted = sorted(races_in_v.to_dict('records'), key=lambda x: extract_race_number(x['race_uid']))
 
-    # ③ レース選択欄の色付け（AS交差レース色分けマップ ＋ 選択肢先頭カラータグ）
     race_options = {}
     as_race_chips = []
     for r in races_sorted:
@@ -1384,11 +1465,13 @@ def main():
     top3_win_rks, emp_place_rates, annual_top_lbls, cnt5_list = [], [], [], []
     c_wins, c_places, c_anas = [], [], []
     same_strikes, same_axes, same_tags_list = [], [], []
+    complete_cuts, zero5_fades, zero5_n_keeps, zero5_pop_keeps = [], [], [], []
 
     for _, r in race_df.iterrows():
         u_cnt = jockey_umaban_counts.get((r['騎手'], int(r['馬番'])), 1)
         (sc, res, sss, nb, stbl, f_lbl, cmb, t3_rk, emp_pr, ann_lbl, c5_v,
-         c_win, c_place, c_ana, s_st, s_ax, s_tags) = calc_upgraded_dynamic_score(
+         c_win, c_place, c_ana, s_st, s_ax, s_tags,
+         is_cut, is_fade, is_n_keep, is_p_keep) = calc_upgraded_dynamic_score(
             r, race_df, chosen_venue, r['track'], r['dist'], c_cat, r['class_name'],
             r['s_row'], r['w_row'], same_umaban_cnt=u_cnt
         )
@@ -1398,6 +1481,8 @@ def main():
         annual_top_lbls.append(ann_lbl); cnt5_list.append(c5_v)
         c_wins.append(c_win); c_places.append(c_place); c_anas.append(c_ana)
         same_strikes.append(s_st); same_axes.append(s_ax); same_tags_list.append(s_tags)
+        complete_cuts.append(is_cut); zero5_fades.append(is_fade)
+        zero5_n_keeps.append(is_n_keep); zero5_pop_keeps.append(is_p_keep)
 
     race_df['dynamic_score'] = scores
     race_df['is_rescued'] = rescued_flags
@@ -1416,6 +1501,10 @@ def main():
     race_df['same_strike'] = same_strikes
     race_df['same_axis'] = same_axes
     race_df['same_tags'] = same_tags_list
+    race_df['is_complete_cut'] = complete_cuts
+    race_df['is_zero5_fade'] = zero5_fades
+    race_df['is_zero5_n_keep'] = zero5_n_keeps
+    race_df['is_zero5_pop_keep'] = zero5_pop_keeps
 
     sel_rating = evaluate_race_rating(race_df)
     s_lvl_sel, f_lvl_sel, vol_title, vol_short, vol_reason, vol_banner_cls = race_vol_map.get(
@@ -1439,8 +1528,17 @@ def main():
     render_html(f"<div class='race-type-banner {banner_cls}'><div>{banner_txt}</div><div>クッション値帯: {c_cat}</div></div>")
     render_html(f"<div class='{vol_banner_cls}'><div style='font-size: 15.5px; font-weight: bold; margin-bottom: 4px;'>📘 ノートブック『S・Fバランス攻略』波乱度判定：{vol_title}</div><div style='font-size: 13.5px; opacity: 0.95;'>🔍 <strong>判定根拠＆馬券戦略</strong>: {vol_reason}</div></div>")
 
-    safe_race_df = race_df[race_df['印'] > 0].copy() if filter_danger_in0 else race_df.copy()
-    if safe_race_df.empty: safe_race_df = race_df.copy()
+    # ==============================================================
+    # 買い目計算プール：完全消し（10人気以下×主5指数0個×N印なし）を自動除外
+    # ==============================================================
+    complete_cut_nums = sorted(race_df[race_df['is_complete_cut']]['馬番'].tolist())
+    zero5_keep_nums = sorted(race_df[race_df['is_zero5_n_keep'] | race_df['is_zero5_pop_keep']]['馬番'].tolist())
+
+    safe_race_df = race_df[~race_df['is_complete_cut']].copy()
+    if filter_danger_in0:
+        safe_race_df = safe_race_df[safe_race_df['印'] > 0].copy()
+    if safe_race_df.empty:
+        safe_race_df = race_df.copy()
 
     f_safe_top3 = safe_race_df[safe_race_df['F順位'] <= 3]['馬番'].tolist() if (safe_race_df['F順位'] <= 3).any() else safe_race_df.sort_values('F順位').head(3)['馬番'].tolist()
     s_safe_top3 = safe_race_df[safe_race_df['S順位'] <= 3]['馬番'].tolist() if (safe_race_df['S順位'] <= 3).any() else safe_race_df.sort_values('S順位').head(3)['馬番'].tolist()
@@ -1460,29 +1558,31 @@ def main():
     ]
 
     f1_cb_nums = safe_race_df[(safe_race_df['F順位'] == 1) & ((safe_race_df['コース連順位'] <= 3) | (safe_race_df['血統連順位'] <= 3))]['馬番'].tolist()
-    cmark_f_nums = safe_race_df[(safe_race_df['C(マーク)'].astype(str).str.strip() != '') & (safe_race_df['F順位'] <= 3)]['馬番'].tolist()
     cnzm_all_nums = safe_race_df[safe_race_df['C(マーク)'].astype(str).str.strip().str.upper().isin(['C', 'N', 'Z', 'M'])]['馬番'].tolist()
 
     a_group_nums = sorted(list(set(f_safe_top3 + s_safe_top3)))
     as_intersect_nums = sorted(list(set(f_safe_top3) & set(s_safe_top3)))
     f1_as_nums = safe_race_df[(safe_race_df['F順位'] == 1) & (safe_race_df['S順位'] <= 3)]['馬番'].tolist()
 
-    # 厳選Z馬（3列目特化候補）の抽出を復活
-    z_candidates = safe_race_df[~safe_race_df['馬番'].isin(a_group_nums)].sort_values(
+    # 厳選Z馬（3列目特化候補）：完全消し除外済みの safe_race_df（さらに薄表示も優先度下げ）から抽出
+    z_pool = safe_race_df[(~safe_race_df['馬番'].isin(a_group_nums)) & (~safe_race_df['is_zero5_fade'])]
+    if len(z_pool) < 3:
+        z_pool = safe_race_df[~safe_race_df['馬番'].isin(a_group_nums)]
+    z_candidates = z_pool.sort_values(
         ['コース連順位', '血統連順位', '坂路調順位', 'dynamic_score'],
         ascending=[True, True, True, False]
     )
     z_nums = z_candidates.head(3)['馬番'].tolist()
 
     # ==============================================================
-    # ⑥ 第3の馬券：2026年年間通算（3,030R・41,354頭）複勝率ランキング連動馬券
-    #    ※④従来ロジック・馬券内率最上位順モードの買い目は廃止
+    # 第3の馬券：2026年年間通算（3,030R・41,354頭）複勝率ランキング連動馬券
+    # （完全消し自動除外 ＋ 例外残し自動連動）
     # ==============================================================
     annual_ranked_df = safe_race_df.sort_values(['emp_place_rate', 'dynamic_score', 'F'], ascending=[False, False, False])
     axis_row = annual_ranked_df.iloc[0]
     axis_num = int(axis_row['馬番'])
 
-    # 相手A（馬連・ワイド絞り）：主要5指数の1位馬 ＋ 年間複勝率55%以上（軸除く）
+    # 相手A（馬連・ワイド絞り）：主要5指数の1位馬 ＋ 年間複勝率55%以上 ＋ 主5指数0個×N印例外残し（軸除く）
     opp_top1_df = safe_race_df[
         (safe_race_df['馬番'] != axis_num) & (
             (safe_race_df['F順位'] == 1) |
@@ -1490,22 +1590,22 @@ def main():
             (safe_race_df['Fup2順位'] == 1) |
             (safe_race_df['ARM順位'] == 1) |
             (safe_race_df['TUA順位'] == 1) |
-            (safe_race_df['emp_place_rate'] >= 55.0)
+            (safe_race_df['emp_place_rate'] >= 55.0) |
+            (safe_race_df['is_zero5_n_keep'])
         )
     ].sort_values(['emp_place_rate', 'dynamic_score'], ascending=[False, False])
     opp_top1_nums = opp_top1_df['馬番'].tolist()[:4]
     if not opp_top1_nums:
         opp_top1_nums = annual_ranked_df[annual_ranked_df['馬番'] != axis_num]['馬番'].tolist()[:3]
 
-    # 相手B（3連複・ワイド押さえ）：主要5指数のうち2個以上1〜3位 ＋ C/N/Z/M印 ＋ 新同馬番特注 ＋ 厳選Z馬
+    # 相手B（3連複・ワイド押さえ）：主要5指数のうち2個以上1〜3位 ＋ 例外残し(N印/1〜3人気) ＋ C/N/Z/M印 ＋ 新同馬番 ＋ 厳選Z馬
     opp_2plus_nums = safe_race_df[
         (safe_race_df['馬番'] != axis_num) & (safe_race_df['cnt5'] >= 2)
     ].sort_values(['emp_place_rate', 'dynamic_score'], ascending=[False, False])['馬番'].tolist()
     opp_wide_pool = list(dict.fromkeys(
-        opp_top1_nums + opp_2plus_nums + [n for n in (cnzm_all_nums + new_same_all_nums + z_nums) if n != axis_num]
+        opp_top1_nums + opp_2plus_nums + [n for n in (zero5_keep_nums + cnzm_all_nums + new_same_all_nums + z_nums) if n != axis_num]
     ))[:7]
 
-    # 年間ランキング上位5頭の表示文字列
     rank_order_str = " ➔ ".join([
         f"<strong>{int(r_row['馬番'])}番</strong>(複{r_row['emp_place_rate']:.1f}%:{r_row['annual_top_lbl']})"
         for _, r_row in annual_ranked_df.head(5).iterrows()
@@ -1531,21 +1631,21 @@ def main():
             📊 <strong>【2026年間実証 複勝率上位】</strong>: <span style='color: #93c5fd;'>{rank_order_str}</span><br>
             <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: {', '.join([f"<strong>{n}番</strong>" for n in a_group_nums])} ｜ 🌟 <strong>【F1×AS交差馬】</strong>: <span style='color: #fde047; font-weight: bold;'>{", ".join(map(str, f1_as_nums)) if f1_as_nums else "なし"}</span> ｜ 👑 <strong>【AS交差馬全体】</strong>: {", ".join(map(str, as_intersect_nums)) if as_intersect_nums else "なし"}<br>
             🔥 <strong>【驚異の高勝率パターン】</strong>: <span style='color: #fef08a;'>{", ".join(map(str, top3_win_nums)) if top3_win_nums else "なし"}</span> ｜ 👑 <strong>【コース1着特注】</strong>: <span style='color: #fca5a5;'>{", ".join(map(str, course_win_nums)) if course_win_nums else "なし"}</span> ｜ 🎯 <strong>【コース連軸】</strong>: <span style='color: #6ee7b7;'>{", ".join(map(str, course_place_nums)) if course_place_nums else "なし"}</span> ｜ 💣 <strong>【コース穴覚醒】</strong>: <span style='color: #c4b5fd;'>{", ".join(map(str, course_ana_nums)) if course_ana_nums else "なし"}</span><br>
-            🎯 <strong>【F1位×コース/血統連】</strong>: <span style='color: #fde047;'>{", ".join(map(str, f1_cb_nums)) if f1_cb_nums else "なし"}</span> ｜ 🏷️ <strong>【C/N/Z/M印】</strong>: <span style='color: #fde047;'>{", ".join(map(str, cnzm_all_nums)) if cnzm_all_nums else "なし"}</span><br>
-            🎯 <strong>【厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{", ".join(map(str, z_nums)) if z_nums else "なし"}</span>
+            🎯 <strong>【F1位×コース/血統連】</strong>: <span style='color: #fde047;'>{", ".join(map(str, f1_cb_nums)) if f1_cb_nums else "なし"}</span> ｜ 🏷️ <strong>【C/N/Z/M印】</strong>: <span style='color: #fde047;'>{", ".join(map(str, cnzm_all_nums)) if cnzm_all_nums else "なし"}</span> ｜ 🎯 <strong>【厳選Z馬（3列目特化）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{", ".join(map(str, z_nums)) if z_nums else "なし"}</span><br>
+            ⚡ <strong>【主5指数0個・例外残し（N印 / 1〜3人気）】</strong>: <span style='color: #6ee7b7; font-weight: bold;'>{", ".join(map(str, zero5_keep_nums)) if zero5_keep_nums else "なし"}</span> ｜ 👻 <strong>【自動除外（完全消し：10人気以下×主5指数0個）】</strong>: <span style='color: #9ca3af;'>{", ".join(map(str, complete_cut_nums)) if complete_cut_nums else "なし"}</span>
         </div>
         <div style='background: rgba(59, 130, 246, 0.12); border: 1px solid #3b82f6; border-radius: 6px; padding: 10px 14px; margin-top: 6px;'>
             <div style='font-size: 13.5px; color: #fde047; font-weight: bold; margin-bottom: 6px;'>{axis_judge_txt}</div>
             <div style='font-size: 14.5px; line-height: 1.85;'>
                 🥇 <strong>単勝・複勝（年間ランキング最上位軸）</strong>: <span style='color: #fbbf24; font-weight: bold; font-size: 15.5px;'>{axis_num}番 {axis_row['馬名']}</span>（年間複勝率 {axis_row['emp_place_rate']:.1f}% / {axis_row['annual_top_lbl']}）<br>
                 🥈 <strong>馬連・ワイド（主要5指数1位＋年間複55%超へ絞り流し・{len(opp_top1_nums)}点）</strong>: <span style='color: #34d399; font-weight: bold; font-size: 15px;'>{axis_num} － {", ".join(map(str, opp_top1_nums))}</span><br>
-                🥉 <strong>3連複 軸1頭流し（主要5指数2個以上＋印・新同馬番・厳選Z馬・計{len(opp_wide_pool)}頭へ）</strong>: <span style='color: #38bdf8; font-weight: bold;'>{axis_num} － {", ".join(map(str, opp_wide_pool))}</span>
+                🥉 <strong>3連複 軸1頭流し（主5指数2個以上＋例外残し・印・新同馬番・厳選Z馬・計{len(opp_wide_pool)}頭へ）</strong>: <span style='color: #38bdf8; font-weight: bold;'>{axis_num} － {", ".join(map(str, opp_wide_pool))}</span>
             </div>
         </div>
     </div>
     """)
 
-    # ハイブリッド注目馬ピックアップ（本命・対抗・穴特注パネルのみ維持 ／ ⑤標準フォーメーション買い目は廃止）
+    # ハイブリッド注目馬ピックアップ（完全消し除外済みの safe_race_df から選定）
     honmei = safe_race_df.sort_values(['dynamic_score', 'emp_place_rate', 'F順位'], ascending=[False, False, True]).iloc[0]
     honmei_num = int(honmei['馬番'])
     opponents = safe_race_df[safe_race_df['馬番'] != honmei_num].copy()
@@ -1554,15 +1654,19 @@ def main():
     taikou = taikou_df.iloc[0] if not taikou_df.empty else honmei
     taikou_num = int(taikou['馬番'])
 
-    ana_cands = opponents[opponents['馬番'].isin(course_ana_nums)].sort_values('dynamic_score', ascending=False)
+    ana_pool = opponents[~opponents['is_zero5_fade']].copy()
+    if ana_pool.empty:
+        ana_pool = opponents.copy()
+
+    ana_cands = ana_pool[ana_pool['馬番'].isin(course_ana_nums)].sort_values('dynamic_score', ascending=False)
     if not ana_cands.empty:
         ana = ana_cands.iloc[0]
     else:
-        ana_cands_same = opponents[opponents['馬番'].isin(new_same_strike_nums)].sort_values('dynamic_score', ascending=False)
+        ana_cands_same = ana_pool[ana_pool['馬番'].isin(new_same_strike_nums)].sort_values('dynamic_score', ascending=False)
         if not ana_cands_same.empty:
             ana = ana_cands_same.iloc[0]
         else:
-            ana_cands2 = opponents[opponents['人気順位'] >= 4].sort_values(['dynamic_score', 'コース連順位', 'TUA順位'], ascending=[False, True, True]) if not opponents.empty else pd.DataFrame()
+            ana_cands2 = ana_pool[ana_pool['人気順位'] >= 4].sort_values(['dynamic_score', 'コース連順位', 'TUA順位'], ascending=[False, True, True]) if not ana_pool.empty else pd.DataFrame()
             if not ana_cands2.empty:
                 ana = ana_cands2.iloc[0]
             elif not opponents.empty:
@@ -1582,6 +1686,8 @@ def main():
 
     # カルテ表示
     display_df = race_df.copy()
+    if hide_complete_cut:
+        display_df = display_df[~display_df['is_complete_cut']]
     if filter_f1_as_cross:
         filtered = display_df[(display_df['F順位'] == 1) & (display_df['S順位'] <= 3)]
         if not filtered.empty: display_df = filtered
@@ -1644,6 +1750,21 @@ def main():
     for _, h in sorted_df.iterrows():
         u_no = int(h['馬番'])
         badges = []
+
+        # カードの表示クラス判定（完全消し / 薄く表示 / 通常）
+        if h['is_complete_cut']:
+            card_cls = "horse-card-cut"
+            badges.append("<span class='badge-complete-cut'>👻 完全消し（10人気以下×主5指数0個 / 複3.9%）</span>")
+        elif h['is_zero5_fade']:
+            card_cls = "horse-card-fade"
+            badges.append("<span class='badge-zero5-fade'>🌫️ 主5指数0個（N印なし・薄表示）</span>")
+        else:
+            card_cls = "horse-card"
+            if h['is_zero5_n_keep']:
+                badges.append("<span class='badge-zero5-keep'>⚡ 例外残し：主5指数0個×N印（複47.1%）</span>")
+            elif h['is_zero5_pop_keep']:
+                badges.append("<span class='badge-zero5-keep'>⚡ 例外残し：主5指数0個×1〜3人気（複46.1%）</span>")
+
         if u_no == honmei_num: badges.append("<span class='badge-mark-honmei'>◎ 本命</span>")
         elif u_no == taikou_num: badges.append("<span class='badge-mark-taikou'>◯ 対抗</span>")
         elif u_no == ana_num: badges.append("<span class='badge-mark-ana'>🔥 穴特注(保険)</span>")
@@ -1656,7 +1777,6 @@ def main():
         in_v = h['印']
         m2_v = h['M2']
         if h['C(マーク)']: badges.append(f"<span class='badge-c-mark'>🏷️ C(マーク): {h['C(マーク)']}</span>")
-        # ⑦ ブリンカー馬は B のみの表示に変更
         if h['C(馬)']:
             c_h_txt = "B" if str(h['C(馬)']).strip().upper() == "B" else str(h['C(馬)']).strip()
             badges.append(f"<span class='badge-c-horse'>{c_h_txt}</span>")
@@ -1733,7 +1853,7 @@ def main():
         race_place_num_str = f"【{chosen_venue}{r_num_str}R】" if r_num_str else f"【{chosen_venue}】"
 
         render_html(f"""
-        <div class='horse-card'>
+        <div class='{card_cls}'>
             <div class='horse-card-header'>
                 <span class='race-badge-title'>{race_place_num_str} {u_no}番</span>
                 <span class='horse-card-title'>{h['馬番']}番 {h['馬名']}</span>
