@@ -703,7 +703,7 @@ def evaluate_course_specific_patterns(r, venue_name, track_type, dist_val):
 def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     """
     2026年年間通算（3,030R・41,354頭）の実証複勝率ランキングに基づき、
-    その馬の最高複勝率と該当ランキング項目名を返す。
+    その馬の最高複勝率・該当ランキング項目名・主要5指数重なり数を返す。
     """
     f_val = float(pd.to_numeric(r.get('F', 0.0), errors='coerce') or 0.0)
     f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
@@ -725,7 +725,6 @@ def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     cnt5 = sum([1 for x in [f_rk, s_rk, fup_rk, arm_rk, tua_rk] if x <= 3])
 
     hits = []
-    # 2026年年間3,030R（41,354頭）実測 複勝率ランキング順
     if is_as and f_val >= 72.0: hits.append((71.5, "1位:AS交差×F≧72"))
     if f_val >= 72.0: hits.append((68.8, "2位:F≧72[鉄板級]"))
     if f_rk == 1 and s_rk == 1: hits.append((62.3, "3位:F1位×S1位"))
@@ -751,14 +750,13 @@ def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     if c_rk == 1 and s_rk <= 3: hits.append((41.6, "24位:コース連1位×S上位"))
     if is_cnzm: hits.append((41.5, f"25位:{c_mark}印"))
 
-    # 調教連動の新同馬番特注
     if same_umaban_cnt >= 2:
         w_best_rk = pd.to_numeric(r.get('ウッド最速L1順位', np.nan), errors='coerce')
         if pd.notnull(w_best_rk) and int(w_best_rk) == 1:
             hits.append((43.6, "特注:同馬番×W最速L1-1位[単265%]"))
 
     if not hits:
-        return 15.0, "該当なし", 0
+        return 15.0, "該当なし", cnt5
 
     hits.sort(key=lambda x: x[0], reverse=True)
     top_rate, top_label = hits[0]
@@ -1469,6 +1467,13 @@ def main():
     as_intersect_nums = sorted(list(set(f_safe_top3) & set(s_safe_top3)))
     f1_as_nums = safe_race_df[(safe_race_df['F順位'] == 1) & (safe_race_df['S順位'] <= 3)]['馬番'].tolist()
 
+    # 厳選Z馬（3列目特化候補）の抽出を復活
+    z_candidates = safe_race_df[~safe_race_df['馬番'].isin(a_group_nums)].sort_values(
+        ['コース連順位', '血統連順位', '坂路調順位', 'dynamic_score'],
+        ascending=[True, True, True, False]
+    )
+    z_nums = z_candidates.head(3)['馬番'].tolist()
+
     # ==============================================================
     # ⑥ 第3の馬券：2026年年間通算（3,030R・41,354頭）複勝率ランキング連動馬券
     #    ※④従来ロジック・馬券内率最上位順モードの買い目は廃止
@@ -1492,13 +1497,15 @@ def main():
     if not opp_top1_nums:
         opp_top1_nums = annual_ranked_df[annual_ranked_df['馬番'] != axis_num]['馬番'].tolist()[:3]
 
-    # 相手B（3連複・ワイド押さえ）：主要5指数のうち2個以上1〜3位 ＋ C/N/Z/M印 ＋ 新同馬番特注
+    # 相手B（3連複・ワイド押さえ）：主要5指数のうち2個以上1〜3位 ＋ C/N/Z/M印 ＋ 新同馬番特注 ＋ 厳選Z馬
     opp_2plus_nums = safe_race_df[
         (safe_race_df['馬番'] != axis_num) & (safe_race_df['cnt5'] >= 2)
     ].sort_values(['emp_place_rate', 'dynamic_score'], ascending=[False, False])['馬番'].tolist()
-    opp_wide_pool = list(dict.fromkeys(opp_top1_nums + opp_2plus_nums + [n for n in (cnzm_all_nums + new_same_all_nums) if n != axis_num]))[:6]
+    opp_wide_pool = list(dict.fromkeys(
+        opp_top1_nums + opp_2plus_nums + [n for n in (cnzm_all_nums + new_same_all_nums + z_nums) if n != axis_num]
+    ))[:7]
 
-    # 年間ランキング上位6頭の表示文字列
+    # 年間ランキング上位5頭の表示文字列
     rank_order_str = " ➔ ".join([
         f"<strong>{int(r_row['馬番'])}番</strong>(複{r_row['emp_place_rate']:.1f}%:{r_row['annual_top_lbl']})"
         for _, r_row in annual_ranked_df.head(5).iterrows()
@@ -1522,22 +1529,23 @@ def main():
         {new_same_html_block}
         <div style='font-size: 13.5px; color: #cbd5e1; margin-bottom: 8px;'>
             📊 <strong>【2026年間実証 複勝率上位】</strong>: <span style='color: #93c5fd;'>{rank_order_str}</span><br>
-            🌟 <strong>【F1×AS交差馬】</strong>: <span style='color: #fde047; font-weight: bold;'>{", ".join(map(str, f1_as_nums)) if f1_as_nums else "なし"}</span> ｜ 👑 <strong>【AS交差馬全体】</strong>: {", ".join(map(str, as_intersect_nums)) if as_intersect_nums else "なし"}<br>
+            <strong>A群（F上位1〜3位 ＋ S上位1〜3位）</strong>: {', '.join([f"<strong>{n}番</strong>" for n in a_group_nums])} ｜ 🌟 <strong>【F1×AS交差馬】</strong>: <span style='color: #fde047; font-weight: bold;'>{", ".join(map(str, f1_as_nums)) if f1_as_nums else "なし"}</span> ｜ 👑 <strong>【AS交差馬全体】</strong>: {", ".join(map(str, as_intersect_nums)) if as_intersect_nums else "なし"}<br>
             🔥 <strong>【驚異の高勝率パターン】</strong>: <span style='color: #fef08a;'>{", ".join(map(str, top3_win_nums)) if top3_win_nums else "なし"}</span> ｜ 👑 <strong>【コース1着特注】</strong>: <span style='color: #fca5a5;'>{", ".join(map(str, course_win_nums)) if course_win_nums else "なし"}</span> ｜ 🎯 <strong>【コース連軸】</strong>: <span style='color: #6ee7b7;'>{", ".join(map(str, course_place_nums)) if course_place_nums else "なし"}</span> ｜ 💣 <strong>【コース穴覚醒】</strong>: <span style='color: #c4b5fd;'>{", ".join(map(str, course_ana_nums)) if course_ana_nums else "なし"}</span><br>
-            🎯 <strong>【F1位×コース/血統連】</strong>: <span style='color: #fde047;'>{", ".join(map(str, f1_cb_nums)) if f1_cb_nums else "なし"}</span> ｜ 🏷️ <strong>【C/N/Z/M印】</strong>: <span style='color: #fde047;'>{", ".join(map(str, cnzm_all_nums)) if cnzm_all_nums else "なし"}</span>
+            🎯 <strong>【F1位×コース/血統連】</strong>: <span style='color: #fde047;'>{", ".join(map(str, f1_cb_nums)) if f1_cb_nums else "なし"}</span> ｜ 🏷️ <strong>【C/N/Z/M印】</strong>: <span style='color: #fde047;'>{", ".join(map(str, cnzm_all_nums)) if cnzm_all_nums else "なし"}</span><br>
+            🎯 <strong>【厳選Z馬（3列目特化候補）】</strong>: <span style='color: #38bdf8; font-weight: bold;'>{", ".join(map(str, z_nums)) if z_nums else "なし"}</span>
         </div>
         <div style='background: rgba(59, 130, 246, 0.12); border: 1px solid #3b82f6; border-radius: 6px; padding: 10px 14px; margin-top: 6px;'>
             <div style='font-size: 13.5px; color: #fde047; font-weight: bold; margin-bottom: 6px;'>{axis_judge_txt}</div>
             <div style='font-size: 14.5px; line-height: 1.85;'>
                 🥇 <strong>単勝・複勝（年間ランキング最上位軸）</strong>: <span style='color: #fbbf24; font-weight: bold; font-size: 15.5px;'>{axis_num}番 {axis_row['馬名']}</span>（年間複勝率 {axis_row['emp_place_rate']:.1f}% / {axis_row['annual_top_lbl']}）<br>
                 🥈 <strong>馬連・ワイド（主要5指数1位＋年間複55%超へ絞り流し・{len(opp_top1_nums)}点）</strong>: <span style='color: #34d399; font-weight: bold; font-size: 15px;'>{axis_num} － {", ".join(map(str, opp_top1_nums))}</span><br>
-                🥉 <strong>3連複 軸1頭流し（主要5指数2個以上＋印・新同馬番・計{len(opp_wide_pool)}頭へ）</strong>: <span style='color: #38bdf8; font-weight: bold;'>{axis_num} － {", ".join(map(str, opp_wide_pool))}</span>
+                🥉 <strong>3連複 軸1頭流し（主要5指数2個以上＋印・新同馬番・厳選Z馬・計{len(opp_wide_pool)}頭へ）</strong>: <span style='color: #38bdf8; font-weight: bold;'>{axis_num} － {", ".join(map(str, opp_wide_pool))}</span>
             </div>
         </div>
     </div>
     """)
 
-    # ハイブリッド馬券パック（本命・対抗・穴特注パネルのみ維持 ／ ⑤標準フォーメーション買い目は廃止）
+    # ハイブリッド注目馬ピックアップ（本命・対抗・穴特注パネルのみ維持 ／ ⑤標準フォーメーション買い目は廃止）
     honmei = safe_race_df.sort_values(['dynamic_score', 'emp_place_rate', 'F順位'], ascending=[False, False, True]).iloc[0]
     honmei_num = int(honmei['馬番'])
     opponents = safe_race_df[safe_race_df['馬番'] != honmei_num].copy()
@@ -1677,6 +1685,7 @@ def main():
         is_as = h['F順位'] <= 3 and h['S順位'] <= 3
         if is_f1_as: badges.append("<span class='badge-as-intersect'>🌟 F1×AS交差馬</span>")
         elif is_as: badges.append("<span class='badge-as-intersect'>👑 AS交差馬 (F&S上位)</span>")
+        if u_no in z_nums: badges.append("<span class='badge-value-combo'>🎯 厳選Z馬</span>")
         if h['is_rescued']: badges.append("<span class='badge-rescued'>🛡️ 強力加点・保険救済馬</span>")
         for nb in h['nb_hits']: badges.append(f"<span class='badge-notebook-hit'>{nb}</span>")
         for stbl in h['stable_hits']: badges.append(f"<span class='badge-stable-hit'>{stbl}</span>")
