@@ -4,6 +4,7 @@ import numpy as np
 import os
 import glob
 import re
+import unicodedata
 
 st.set_page_config(
     page_title="競馬予想10 完全版 - 的中重視厳選＆2026年間実証Vr",
@@ -323,6 +324,11 @@ COURSE_ANA_PATTERNS = [
 def clean_str(val):
     if pd.isnull(val): return ""
     return str(val).strip().replace("*", "").replace("$", "").replace(" ", "").replace(" ", "")
+
+def norm_mark(val):
+    """全角のＣ・Ｎ・Ｚ・ＭやＢを半角大文字に確実に正規化"""
+    if pd.isnull(val): return ""
+    return unicodedata.normalize('NFKC', str(val)).strip().upper()
 
 def get_cushion_category(cushion_val, venue_name):
     c_val = float(cushion_val)
@@ -664,7 +670,7 @@ def evaluate_top3_win_pattern(r):
     f_rk = int(pd.to_numeric(r.get('F順位', 99), errors='coerce') or 99)
     s_rk = int(pd.to_numeric(r.get('S順位', 99), errors='coerce') or 99)
     c_rk = int(pd.to_numeric(r.get('コース連順位', 99), errors='coerce') or 99)
-    c_mark = clean_str(r.get('C(マーク)', ''))
+    c_mark = norm_mark(r.get('C(マーク)', ''))
     style = clean_str(r.get('前走脚質', ''))
     w_raw = pd.to_numeric(str(r.get('前場体重', '')).replace('kg', ''), errors='coerce')
     weight = float(w_raw) if pd.notnull(w_raw) else 470.0
@@ -730,7 +736,7 @@ def evaluate_annual_2026_ranking(r, same_umaban_cnt=1):
     k_rk = int(pd.to_numeric(r.get('血統連順位', 99), errors='coerce') or 99)
     in_v = float(pd.to_numeric(r.get('印', 2), errors='coerce') or 2.0)
     pop = int(pd.to_numeric(r.get('人気順位', 99), errors='coerce') or 99)
-    c_mark = clean_str(r.get('C(マーク)', '')).upper()
+    c_mark = norm_mark(r.get('C(マーク)', ''))
     trainer = clean_str(r.get('調教師', ''))
     track = r.get('track', '芝')
 
@@ -811,7 +817,7 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
     run_style = clean_str(r.get('前走脚質', ''))
     interval = str(r.get('間隔', ''))
     weight = float(pd.to_numeric(str(r.get('前場体重', '480')).replace('kg', ''), errors='coerce') or 480.0)
-    c_mark_str = clean_str(r.get('C(マーク)', '')).upper()
+    c_mark_str = norm_mark(r.get('C(マーク)', ''))
 
     cnt5 = sum([1 for x in [f_rk, s_rk, fup_rk, arm_rk, tua_rk] if x <= 3])
     is_zero5_n_keep = (cnt5 == 0) and (c_mark_str == 'N')
@@ -921,7 +927,6 @@ def calc_upgraded_dynamic_score(r, race_subset, venue_name, track_type, dist_val
         if arm_rk <= 3 and w_5f_val <= 69.0 and s_time1 <= 59.9: score += 55.0; nb_hits.append("🌲 Ｃ馬特注(ウッド鉄則)")
     except: pass
 
-    # 動的スコア・馬情報には ARMS×FUP黄金クロス・ARMS・Fup2 等をそのまま保持
     if arm_rk == 1 and fup >= 6: score += 50.0; nb_hits.append("✨ ARMS×FUP(黄金クロス:単勝特化)")
     if track_type == 'ダ' and tua_val >= 190.0 and tua_rk <= 3 and s_rk <= 8: score += 40.0; nb_hits.append("💎 TUAダート特注")
     if ('芝→ダ' in track_change or 'ダ→芝' in track_change) and tua_rk <= 3: score += 30.0; nb_hits.append("🔄 トラック変わり激走特注")
@@ -1070,8 +1075,9 @@ def main():
         raw_c = clean_str(row.get('C', row.get('C(馬)', '')))
         mark = row.get('印', 2)
         m2_raw = row.get('M2', 0)
-        c_mark = clean_str(row.get('C(マーク)', ''))
-        c_horse = clean_str(row.get('C(馬)', ''))
+        # 全角のＣ・Ｎ・Ｚ・Ｍ・Ｂを半角大文字へ確実に正規化
+        c_mark = norm_mark(row.get('C(マーク)', ''))
+        c_horse = norm_mark(row.get('C(馬)', ''))
         track_change = clean_str(row.get('芝ダート変わり', ''))
 
         dist_str = clean_str(dist_raw)
@@ -1194,8 +1200,7 @@ def main():
             chaos_race_summary.append(f"【{v_k}{r_no_txt}R({trk_k}{r_grp['dist'].iloc[0]}m)】 穴注目:{int(c1_row['馬番'])}番 {c1_row['馬名']}(C連1位)")
 
     # -------------------------------------------------------------
-    # サイドバー：的中重視・厳選チェックBOXフィルタ（スッキリ版）
-    # ※ ARMS×FUP黄金クロス・ARMS120+・Fup2 6+・同馬番単体・ブリンカー単体は削除
+    # サイドバー：的中重視・厳選チェックBOXフィルタ
     # -------------------------------------------------------------
     st.sidebar.markdown("---")
     st.sidebar.markdown("### 🎯 的中重視・厳選フィルタ")
@@ -1218,7 +1223,7 @@ def main():
             s_rk_v = int(r['S順位']) if pd.notnull(r['S順位']) else 99
             cnt5_v = int(r['cnt5_all']) if pd.notnull(r['cnt5_all']) else 0
             is_ace = any(ac in str(r['調教師']) for ac in ACE_TRAINERS)
-            c_mk = str(r['C(マーク)']).strip().upper() if pd.notnull(r['C(マーク)']) else ""
+            c_mk = norm_mark(r['C(マーク)'])
             extra_tag = ""
 
             if filter_type == "f72_plus":
@@ -1500,7 +1505,7 @@ def main():
     ]
 
     f1_cb_nums = safe_race_df[(safe_race_df['F順位'] == 1) & ((safe_race_df['コース連順位'] <= 3) | (safe_race_df['血統連順位'] <= 3))]['馬番'].tolist()
-    cnzm_all_nums = safe_race_df[safe_race_df['C(マーク)'].astype(str).str.strip().str.upper().isin(['C', 'N', 'Z', 'M'])]['馬番'].tolist()
+    cnzm_all_nums = safe_race_df[safe_race_df['C(マーク)'].apply(norm_mark).isin(['C', 'N', 'Z', 'M'])]['馬番'].tolist()
 
     a_group_nums = sorted(list(set(f_safe_top3 + s_safe_top3)))
     as_intersect_nums = sorted(list(set(f_safe_top3) & set(s_safe_top3)))
@@ -1618,7 +1623,7 @@ def main():
     </div>
     """)
 
-    # カルテ表示フィルタ連動（厳選フィルタのみ）
+    # カルテ表示フィルタ連動
     display_df = race_df.copy()
     if hide_complete_cut:
         display_df = display_df[~display_df['is_complete_cut']]
@@ -1632,7 +1637,7 @@ def main():
         filtered = display_df[(display_df['cnt5'] >= 4) & (display_df['F順位'] == 1)]
         if not filtered.empty: display_df = filtered
     if filter_n_mark:
-        filtered = display_df[display_df['C(マーク)'].astype(str).str.strip().str.upper() == 'N']
+        filtered = display_df[display_df['C(マーク)'].apply(norm_mark) == 'N']
         if not filtered.empty: display_df = filtered
     if filter_f1_as_cross:
         filtered = display_df[(display_df['F順位'] == 1) & (display_df['S順位'] <= 3)]
@@ -1644,7 +1649,7 @@ def main():
         filtered = display_df[(display_df['F順位'] == 1) & ((display_df['コース連順位'] <= 3) | (display_df['血統連順位'] <= 3))]
         if not filtered.empty: display_df = filtered
     if filter_cmark_f_top3:
-        filtered = display_df[display_df['C(マーク)'].astype(str).str.strip().str.upper().isin(['C', 'N', 'Z', 'M']) & (display_df['F順位'] <= 3)]
+        filtered = display_df[display_df['C(マーク)'].apply(norm_mark).isin(['C', 'N', 'Z', 'M']) & (display_df['F順位'] <= 3)]
         if not filtered.empty: display_df = filtered
     if filter_stable_as_cross:
         filtered = display_df[display_df['調教師'].apply(lambda t: any(ac in str(t) for ac in ACE_TRAINERS)) & (display_df['F順位'] <= 3) & (display_df['S順位'] <= 3)]
@@ -1709,9 +1714,11 @@ def main():
 
         in_v = h['印']
         m2_v = h['M2']
-        if h['C(マーク)']: badges.append(f"<span class='badge-c-mark'>🏷️ C(マーク): {h['C(マーク)']}</span>")
-        if h['C(馬)']:
-            c_h_txt = "B" if str(h['C(馬)']).strip().upper() == "B" else str(h['C(馬)']).strip()
+        c_mk_disp = norm_mark(h['C(マーク)'])
+        if c_mk_disp: badges.append(f"<span class='badge-c-mark'>🏷️ C(マーク): {c_mk_disp}</span>")
+        c_h_disp = norm_mark(h['C(馬)'])
+        if c_h_disp:
+            c_h_txt = "B" if c_h_disp == "B" else c_h_disp
             badges.append(f"<span class='badge-c-horse'>{c_h_txt}</span>")
 
         f_eval = h['f_eval']
